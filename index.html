@@ -47,10 +47,14 @@
   <section class="card">
     <div class="row between">
       <h1>Historique des parties <span id="hist-user" class="muted"></span></h1>
-      <button id="load" class="btn">Actualiser</button>
+      <div class="row">
+        <button id="analyze-all" class="btn" disabled>Tout analyser</button>
+        <button id="load" class="btn">Actualiser</button>
+      </div>
     </div>
     <p id="hist-nouser" class="hidden">Indiquez d'abord votre pseudo chess.com dans <a href="#/settings/profile">Paramètres → Profil chess.com</a>.</p>
     <p id="load-progress" class="muted small">Seules les parties terminées sont récupérées (jamais une partie en cours).</p>
+    <p id="batch-progress" class="small hidden"></p>
   </section>
   <section class="card">
     <div class="row filters">
@@ -62,7 +66,7 @@
         <option value="rapid">Rapide</option>
         <option value="daily">Par jour</option>
       </select>
-      <label><input type="checkbox" id="only-analyzed"> Déjà analysées</label>
+      <select id="op" title="Ouverture jouée (parties analysées)"><option value="">Toutes ouvertures</option></select>
       <span id="count" class="muted"></span>
     </div>
     <div class="table-wrap">

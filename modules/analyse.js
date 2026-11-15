@@ -20,6 +20,7 @@ const S = {
   shown: 100,
   g: null, // partie ouverte
   cycle: {},
+  batch: null, // « Tout analyser » en cours : { stop, done, total, cur, failed }
 };
 
 export const getUser = () => S.user;
@@ -55,6 +56,7 @@ function showUser() {
   $('#hist-user').textContent = has ? S.user : '';
   $('#hist-nouser').classList.toggle('hidden', has);
   $('#load').classList.toggle('hidden', !has);
+  $('#analyze-all').classList.toggle('hidden', !has);
   $('#load-progress').classList.toggle('hidden', !has);
 }
 
@@ -84,17 +86,21 @@ export async function loadGames() {
   } catch (e) {
     if (token === S.loadToken) prog.textContent = 'Erreur : ' + e.message;
   } finally {
-    if (token === S.loadToken) renderList();
+    if (token === S.loadToken) { await backfillOpenings(); renderList(); renderBatch(); }
   }
 }
 
 function renderList() {
   const q = $('#filter').value.trim().toLowerCase();
   const tc = $('#tc').value;
-  const onlyAnalyzed = $('#only-analyzed').checked;
+  const op = $('#op').value;
+  renderOpeningFilter();
   const list = S.games.filter((g) => {
     if (tc && g.timeClass !== tc) return false;
-    if (onlyAnalyzed && !S.index[g.id]) return false;
+    if (op) {
+      const name = S.index[g.id] && S.index[g.id].opening;
+      if (!name || (op[0] === 'f' ? family(name) !== op.slice(2) : name !== op.slice(2))) return false;
+    }
     if (q) {
       const opp = (g.white.name.toLowerCase() === S.user.toLowerCase() ? g.black.name : g.white.name).toLowerCase();
       if (!opp.includes(q)) return false;
@@ -124,12 +130,126 @@ function renderList() {
   $('#games tbody').innerHTML = rows || `<tr><td colspan="6" class="muted">${S.games.length ? 'Aucune partie ne correspond.' : 'Aucune partie pour le moment.'}</td></tr>`;
   $('#more').classList.toggle('hidden', list.length <= S.shown);
   $('#count').textContent = S.games.length ? `${list.length} partie(s)` : '';
+  renderBatch();
 }
 
 async function loadIndex() {
   const rows = await store.all('analysisIndex').catch(() => []);
   S.index = {};
   for (const r of rows) S.index[r.id] = r.data;
+}
+
+// ----- ouvertures jouées (enregistrées avec chaque analyse)
+const family = (name) => name.split(':')[0].trim();
+
+// Liste déroulante : une entrée par famille (« Italian Game »), suivie de ses variantes.
+function renderOpeningFilter() {
+  const sel = $('#op');
+  const fams = new Map();
+  for (const g of S.games) {
+    const name = S.index[g.id] && S.index[g.id].opening;
+    if (!name) continue;
+    const f = family(name);
+    if (!fams.has(f)) fams.set(f, { n: 0, vars: new Map() });
+    const e = fams.get(f);
+    e.n++;
+    if (name !== f) e.vars.set(name, (e.vars.get(name) || 0) + 1);
+  }
+  let html = '<option value="">Toutes ouvertures</option>';
+  for (const [f, e] of [...fams].sort((a, b) => b[1].n - a[1].n || a[0].localeCompare(b[0]))) {
+    html += `<option value="f:${esc(f)}">${esc(f)} (${e.n})</option>`;
+    for (const [v, n] of [...e.vars].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))) {
+      html += `<option value="v:${esc(v)}">   ${esc(v.slice(f.length + 1).trim())} (${n})</option>`;
+    }
+  }
+  if (sel.dataset.html === html) return;
+  const cur = sel.value;
+  sel.innerHTML = html;
+  sel.dataset.html = html;
+  sel.value = [...sel.options].some((o) => o.value === cur) ? cur : '';
+}
+
+// Dernière position de la partie connue de la théorie → nom de l'ouverture (sans code ECO).
+function openingOfMoves(moves) {
+  let name = null;
+  for (const m of moves) { const o = BOOK[epd(m.after)]; if (o && o.length) name = o[1]; }
+  return name;
+}
+
+// Analyses faites avant que l'ouverture soit mémorisée : on la complète à partir du PGN.
+async function backfillOpenings() {
+  if (!Object.keys(BOOK).length) return;
+  let changed = false;
+  for (const game of S.games) {
+    const a = S.index[game.id];
+    if (!a || a.opening !== undefined) continue;
+    let name = null;
+    try { const c = new Chess(); c.loadPgn(game.pgn); name = openingOfMoves(c.history({ verbose: true })); } catch { /* PGN illisible */ }
+    const summary = { ...a, opening: name };
+    S.index[game.id] = summary;
+    await store.put('analysisIndex', game.id, summary, { file: 'analyses/index.json' }).catch(() => {});
+    changed = true;
+  }
+  if (changed && !S.g) renderList();
+}
+
+// ----- « Tout analyser » : analyse une par une toutes les parties pas encore (complètement) analysées.
+// Les résultats sont enregistrés comme une analyse normale, donc synchronisés sur GitHub.
+// Pause quand on ouvre une autre partie, reprise au retour à la liste.
+const needsAnalysis = (game) => !S.index[game.id] || !S.index[game.id].complete;
+
+function renderBatch() {
+  const b = S.batch;
+  const btn = $('#analyze-all');
+  const todo = S.games.filter(needsAnalysis).length;
+  btn.textContent = b ? 'Arrêter l\'analyse' : 'Tout analyser';
+  btn.disabled = !b && !todo;
+  btn.title = b ? '' : todo ? `Analyser les ${todo} partie(s) pas encore analysées` : 'Toutes les parties sont analysées';
+  const el = $('#batch-progress');
+  el.classList.toggle('hidden', !b);
+  if (!b) return;
+  const c = b.cur;
+  el.textContent = S.g && S.g !== c
+    ? `Analyse de toutes les parties en pause pendant que vous consultez une partie (${b.done}/${b.total} terminées).`
+    : `Analyse de toutes les parties : ${b.done}/${b.total} terminées${c ? ` — en cours : ${c.game.white.name} – ${c.game.black.name} (${c.positions.filter(Boolean).length}/${c.moves.length} coups)` : ''}.`;
+}
+
+async function analyzeAll() {
+  if (S.batch) { // deuxième clic : arrêt (la partie en cours garde ce qui est déjà analysé)
+    S.batch.stop = true;
+    if (S.batch.cur && S.batch.cur !== S.g) S.batch.cur.abort = true;
+    renderBatch();
+    return;
+  }
+  if (S.loading) await S.loading;
+  const queue = new Set(S.games.filter(needsAnalysis).map((x) => x.id));
+  if (!queue.size) return;
+  const b = (S.batch = { stop: false, done: 0, total: queue.size, cur: null, failed: new Set() });
+  renderBatch();
+  try {
+    while (!b.stop) {
+      while (S.g && !b.stop) await new Promise((r) => setTimeout(r, 1000)); // pause pendant la consultation d'une partie
+      if (b.stop) break;
+      const game = S.games.find((x) => queue.has(x.id) && needsAnalysis(x) && !b.failed.has(x.id));
+      if (!game) break;
+      const saved = await store.get('analysis', game.id).catch(() => null);
+      let g;
+      try { g = prepareGame(game.id, game, saved); } catch { b.failed.add(game.id); continue; }
+      b.cur = g;
+      g.onProgress = renderBatch;
+      renderBatch();
+      await runAnalysis(g);
+      b.cur = null;
+      if (g.positions.every(Boolean)) b.done++;
+      else if (!g.abort) b.failed.add(game.id); // échec : on passe à la suivante
+      if (!S.g) renderList();
+      renderBatch();
+    }
+  } finally {
+    S.batch = null;
+    renderBatch();
+    if (!S.g) renderList();
+  }
 }
 
 // ------------------------------------------------------------------ partie
@@ -142,7 +262,7 @@ function computeOpenings(g) {
   let cur = null;
   for (let k = 0; k <= g.moves.length; k++) {
     const o = BOOK[epd(fenAt(g, k))];
-    if (o && o.length) cur = `${o[0]} · ${o[1]}`;
+    if (o && o.length) cur = o[1]; // nom seul, sans le code ECO
     g.openingAt.push(cur);
   }
 }
@@ -168,11 +288,32 @@ export async function openGame(id) {
     $('#coach').innerHTML = '<p class="err">Partie inconnue sur cet appareil : récupérez d\'abord vos parties (onglet Analyse).</p>';
     return;
   }
-  const c = new Chess();
-  try { c.loadPgn(game.pgn); } catch (e) {
+  // Partie justement en cours d'analyse par « Tout analyser » : on l'affiche telle quelle.
+  if (S.batch && S.batch.cur && S.batch.cur.id === id) {
+    const g = S.batch.cur;
+    S.g = g;
+    S.cycle = {};
+    g.ply = 0; g.var = null;
+    board.setOrientation(g.playerColor || 'w');
+    renderGame();
+    return;
+  }
+  if (S.batch && S.batch.cur) S.batch.cur.abort = true; // « Tout analyser » se met en pause
+  let g;
+  try { g = prepareGame(id, game, saved); } catch (e) {
     $('#coach').innerHTML = `<p class="err">PGN illisible : ${esc(e.message)}</p>`;
     return;
   }
+  S.g = g;
+  S.cycle = {};
+  board.setOrientation(g.playerColor || 'w');
+  renderGame();
+  if (g.positions.some((p) => !p)) runAnalysis(g);
+}
+
+function prepareGame(id, game, saved) {
+  const c = new Chess();
+  c.loadPgn(game.pgn);
   const moves = c.history({ verbose: true });
   const userLow = (S.user || '').toLowerCase();
   const playerColor = game.white.name.toLowerCase() === userLow ? 'w' : game.black.name.toLowerCase() === userLow ? 'b' : null;
@@ -183,13 +324,9 @@ export async function openGame(id) {
     ply: 0, var: null, analyzing: false, abort: false, playerColor,
     ratings: { w: game.white.rating, b: game.black.rating },
   };
-  S.g = g;
-  S.cycle = {};
   computeOpenings(g);
   recompute(g);
-  board.setOrientation(playerColor || 'w');
-  renderGame();
-  if (g.positions.some((p) => !p)) runAnalysis(g);
+  return g;
 }
 
 async function saveAnalysis(g) {
@@ -199,6 +336,7 @@ async function saveAnalysis(g) {
     accW: s.w.accuracy, accB: s.b.accuracy,
     complete: analyzed === g.moves.length, analyzed, total: g.moves.length, date: Date.now(),
     month: g.game.month, end: g.game.end, white: g.game.white.name, black: g.game.black.name,
+    opening: g.openingAt[g.openingAt.length - 1] || null, // ouverture jouée (nom, sans code ECO)
   };
   const month = g.game.month || new Date(g.game.end * 1000).toISOString().slice(0, 7);
   try {
@@ -212,7 +350,7 @@ async function runAnalysis(g) {
   if (g.analyzing) return;
   g.analyzing = true;
   let sinceSave = 0;
-  renderProgress(g);
+  if (S.g === g) renderProgress(g);
   const todo = [];
   g.positions.forEach((p, i) => { if (!p) todo.push(i); });
   const doOne = async (i, cloud, cloudOnly = false) => {
@@ -222,6 +360,7 @@ async function runAnalysis(g) {
     g.positions[i] = pos;
     recompute(g);
     if (S.g === g) renderGame();
+    if (g.onProgress) g.onProgress();
     if (++sinceSave >= 12) { sinceSave = 0; saveAnalysis(g); }
     return pos;
   };
@@ -576,8 +715,13 @@ function renderGraph(g) {
 }
 
 // ------------------------------------------------------------------ navigation
-export function leave() { if (S.g) { S.g.abort = true; S.g = null; } }
-export function showHome() { renderList(); }
+export function leave() {
+  if (!S.g) return;
+  if (!S.batch || S.batch.cur !== S.g) S.g.abort = true; // la partie de « Tout analyser » continue
+  S.g = null;
+  renderBatch();
+}
+export function showHome() { renderList(); renderBatch(); }
 
 export async function init() {
   board = new Board($('#board'), { onMove: onBoardMove });
@@ -587,7 +731,8 @@ export async function init() {
   $('#load').onclick = () => { S.loading = loadGames(); };
   $('#filter').oninput = () => { S.shown = 100; renderList(); };
   $('#tc').onchange = renderList;
-  $('#only-analyzed').onchange = renderList;
+  $('#op').onchange = () => { S.shown = 100; renderList(); };
+  $('#analyze-all').onclick = analyzeAll;
   $('#more').onclick = () => { S.shown += 200; renderList(); };
   $('#games tbody').onclick = (e) => {
     const tr = e.target.closest('tr[data-id]');
@@ -622,7 +767,7 @@ export async function init() {
   // Données arrivées d'un autre appareil (synchronisation) : on rafraîchit la liste.
   store.onChange(async (info) => {
     if (!info.remote) return;
-    if (info.col === 'analysisIndex') { await loadIndex(); if (!S.g) renderList(); }
+    if (info.col === 'analysisIndex') { await loadIndex(); await backfillOpenings(); if (!S.g) { renderList(); renderBatch(); } }
     if (info.col === 'settings') {
       const p = await store.get('settings', 'profile');
       if (p && p.chesscomUser && !S.user) { S.user = p.chesscomUser; showUser(); loadGames(); }
