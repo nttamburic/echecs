@@ -5,7 +5,7 @@ import { classifyMove, classifyGame, summarize, CLASSES, SUMMARY_ORDER, fmtScore
 import { frSan, explainMove } from '../explain.js';
 import { $, esc, fr1, uciOf, local, toast, badge } from '../core/ui.js';
 import {
-  analyzePosition, parallelism, SOURCE_LABEL, engineInfo, analysisSettings, maxTime, nLines, pcDepth, wasmDepth,
+  analyzePosition, parallelism, SOURCE_LABEL, analysisSettings, maxTime, nLines, pcDepth, wasmDepth,
   PC_DEPTHS, WEB_DEPTHS, boostEnabled, detectBoost, status as engineStatus, onStatus as onEngineStatus,
   MAX_THREADS, wasmThreads,
 } from '../core/engine.js';
@@ -205,10 +205,24 @@ async function backfillOpenings() {
 const needsAnalysis = (game) => !S.index[game.id] || !S.index[game.id].complete;
 const PERIODS = [['all', 'Toutes les parties'], ['15', '15 derniers jours'], ['30', '30 derniers jours'], ['60', '60 derniers jours'], ['90', '90 derniers jours']];
 const inPeriod = (game, period) => period === 'all' || game.end * 1000 >= Date.now() - Number(period) * 86400000;
-// Débit mesuré sur le Boost PC avec 6 moteurs (positions / s, profondeur 16 extrapolée) ; ≈ 61 demi-coups par partie.
+// Débits mesurés sur le PC (Ryzen 5 5600X), en positions / s, ≈ 61 demi-coups par partie.
+// Boost PC : 6 moteurs natifs. Lite : par moteur, tant qu'il y a un cœur physique par moteur ;
+// au-delà, les moteurs en plus ne rapportent presque rien (≈ 10 % chacun).
 const BOOST_RATE = { 16: 10.5, 18: 5.3, 20: 2.9, 22: 1.43, 24: 0.74 };
+const LITE_RATE = { 12: 3, 14: 1.5, 16: 0.75, 18: 0.38, 20: 0.2 };
 const PLIES_PER_GAME = 61;
-
+function estRate({ boost, depth, movetime, threads }) {
+  let rate, engines;
+  if (boost) { engines = engineStatus.boost.engines || 6; rate = (BOOST_RATE[depth] || 0) * engines / 6; }
+  else {
+    const cores = Math.max(1, Math.round(MAX_THREADS / 2));
+    engines = threads;
+    rate = (LITE_RATE[depth] || 0) * (Math.min(threads, cores) + 0.1 * Math.max(0, threads - cores));
+  }
+  // Le temps maximum plafonne chaque recherche : au pire « movetime » par position et par moteur.
+  if (rate && movetime) rate = Math.max(rate, engines / (movetime / 1000));
+  return rate;
+}
 function renderBatch() {
   const b = S.batch;
   const btn = $('#multi');
@@ -221,16 +235,16 @@ function renderBatch() {
   const c = b.cur;
   el.textContent = S.g && S.g !== c
     ? `Analyse multiple en pause pendant que vous consultez une partie (${b.done}/${b.total} terminées).`
-    : `Analyse multiple (${b.label}, profondeur ${b.depth}) : ${b.done}/${b.total} terminées${c ? ` — en cours : ${c.game.white.name} – ${c.game.black.name} (${c.positions.filter(Boolean).length}/${c.moves.length} coups)` : ''}.`;
+    : `Analyse multiple (${b.label}, profondeur ${b.depth}${b.movetime ? `, ${b.movetime / 1000} s max` : ''}) : ${b.done}/${b.total} terminées${c ? ` — en cours : ${c.game.white.name} – ${c.game.black.name} (${c.positions.filter(Boolean).length}/${c.moves.length} coups)` : ''}.`;
 }
 
 function fmtDuration(s) {
   if (s < 60) return 'moins d\'une minute';
-  const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
+  const t = Math.round(s / 60), h = Math.floor(t / 60), m = t % 60;
   return h ? `${h} h ${String(m).padStart(2, '0')}` : `${m} min`;
 }
 
-// Fenêtre de choix : période, moteur et profondeur.
+// Fenêtre de choix : période (menu déroulant) et réglages du moteur (les mêmes que la roue dentée).
 async function openMultiDialog() {
   if (S.batch) { // le bouton sert alors à arrêter (la partie en cours garde ce qui est déjà analysé)
     S.batch.stop = true;
@@ -240,54 +254,43 @@ async function openMultiDialog() {
   }
   if (!S.games.length) return;
   const dlg = $('#multi-dlg');
-  const eng = engineInfo();
   const todo = (p) => S.games.filter((x) => inPeriod(x, p) && needsAnalysis(x)).length;
-  const prevPeriod = local.get('multiPeriod', 'all');
-  $('#multi-periods').innerHTML = PERIODS.map(([v, label]) => {
-    const n = todo(v), all = S.games.filter((x) => inPeriod(x, v)).length;
-    return `<label class="choice${n ? '' : ' off'}"><input type="radio" name="period" value="${v}"${n ? '' : ' disabled'}>
-      <span>${label}</span><span class="muted">${n ? `${n} à analyser sur ${all}` : all ? `déjà analysées (${all})` : 'aucune partie'}</span></label>`;
-  }).join('');
-  const radios = [...dlg.querySelectorAll('input[name=period]')];
-  (radios.find((r) => r.value === prevPeriod && !r.disabled) || radios.find((r) => !r.disabled) || {}).checked = true;
-  $('#multi-engine').textContent = eng.label;
-  const sel = $('#multi-depth');
-  const prevDepth = Number(local.get(eng.boost ? 'multiDepthPc' : 'multiDepthWeb', eng.def));
-  sel.innerHTML = eng.depths.map((d) => `<option value="${d}">${d}${d === eng.def ? ' (recommandé)' : ''}</option>`).join('');
-  sel.value = eng.depths.includes(prevDepth) ? prevDepth : eng.def;
-  sel.disabled = eng.fixed;
-  $('#multi-fixed').classList.toggle('hidden', !eng.fixed);
+  const total = (p) => S.games.filter((x) => inPeriod(x, p)).length;
+  const sel = $('#multi-period');
+  sel.innerHTML = PERIODS.map(([v, label]) => `<option value="${v}"${todo(v) ? '' : ' disabled'}>${label} (${todo(v) || 'aucune'})</option>`).join('');
+  const prev = local.get('multiPeriod', 'all');
+  const opts = [...sel.options];
+  sel.value = (opts.find((o) => o.value === prev && !o.disabled) || opts.find((o) => !o.disabled) || opts[0]).value;
   const update = () => {
-    const r = radios.find((x) => x.checked);
-    const n = r ? todo(r.value) : 0;
+    const n = todo(sel.value), all = total(sel.value);
+    $('#multi-count').textContent = n ? `${n} à analyser sur ${all}.` : all ? `Déjà toutes analysées (${all}).` : 'Aucune partie.';
     $('#multi-go').disabled = !n;
-    const rate = eng.boost && BOOST_RATE[sel.value] ? BOOST_RATE[sel.value] * eng.engines / 6 : 0;
+    const st = f.read();
+    const rate = estRate(st);
     $('#multi-est').textContent = !n ? 'Rien à analyser pour cette période.'
-      : rate ? `Durée estimée : environ ${fmtDuration(n * PLIES_PER_GAME / rate)} pour ${n} partie(s) (un peu moins grâce à l'analyse cloud Lichess).`
-      : `${n} partie(s) à analyser. Dans le navigateur, comptez nettement plus longtemps qu'avec le Boost PC.`;
+      : rate ? `Durée estimée : environ ${fmtDuration(n * PLIES_PER_GAME / rate)} pour ${n} partie(s) (un peu moins grâce à l'analyse cloud Lichess${st.boost ? '' : ' ; dans le navigateur, l\'estimation est approximative'}).`
+      : `${n} partie(s) à analyser.`;
   };
-  radios.forEach((r) => { r.onchange = update; });
+  const f = engineFields($('#multi-fields'), 'multi', update);
   sel.onchange = update;
   update();
   dlg.returnValue = '';
   dlg.showModal();
-  dlg.onclose = () => {
-    if (dlg.returnValue !== 'go') return;
-    const r = radios.find((x) => x.checked);
-    if (!r) return;
-    const depth = Number(sel.value);
-    local.set('multiPeriod', r.value);
-    local.set(eng.boost ? 'multiDepthPc' : 'multiDepthWeb', String(depth));
-    analyzeMany(r.value, eng.fixed ? null : depth, PERIODS.find((p) => p[0] === r.value)[1].toLowerCase(), depth);
+  dlg.querySelector('form').onsubmit = async (e) => {
+    if (!e.submitter || e.submitter.value !== 'go' || !todo(sel.value)) return;
+    local.set('multiPeriod', sel.value);
+    await f.save(); // mêmes réglages que la roue dentée
+    const st = analysisSettings();
+    analyzeMany(sel.value, st.fixed ? null : st.depth, maxTime(), PERIODS.find((p) => p[0] === sel.value)[1].toLowerCase(), st.depth);
   };
 }
 
-async function analyzeMany(period, depth, label, shownDepth) {
+async function analyzeMany(period, depth, movetime, label, shownDepth) {
   if (S.batch) return;
   if (S.loading) await S.loading;
   const queue = new Set(S.games.filter((x) => inPeriod(x, period) && needsAnalysis(x)).map((x) => x.id));
   if (!queue.size) return;
-  const b = (S.batch = { stop: false, done: 0, total: queue.size, cur: null, failed: new Set(), label, depth: shownDepth });
+  const b = (S.batch = { stop: false, done: 0, total: queue.size, cur: null, failed: new Set(), label, depth: shownDepth, movetime });
   renderBatch();
   try {
     while (!b.stop) {
@@ -299,6 +302,7 @@ async function analyzeMany(period, depth, label, shownDepth) {
       let g;
       try { g = prepareGame(game.id, game, saved); } catch { b.failed.add(game.id); continue; }
       g.depth = depth;
+      g.movetime = movetime;
       b.cur = g;
       g.onProgress = renderBatch;
       renderBatch();
@@ -987,10 +991,27 @@ function renderNav() {
 }
 
 // ----- roue dentée : moteur, profondeur, temps maximum, nombre de variantes
-function openEngineDialog() {
-  const dlg = $('#eng-dlg');
-  const choice = $('#eng-choice');
-  const depthSel = $('#eng-depth');
+// Champs « moteur » partagés par la roue dentée et l'analyse multiple (préfixe p pour les id).
+// onChange est appelé à chaque modification ; save() enregistre les réglages (mêmes clés pour les deux fenêtres).
+function engineFields(root, p, onChange = () => {}) {
+  root.innerHTML = `
+    <div class="frow"><label for="${p}-choice">Moteur d'échecs</label><select id="${p}-choice">
+      <option value="boost">Stockfish 19 (Boost PC)</option>
+      <option value="lite">Stockfish 19 Lite (1,8 Mo)</option>
+    </select></div>
+    <p id="${p}-hint" class="muted small"></p>
+    <div class="frow"><label for="${p}-depth">Profondeur</label><select id="${p}-depth"></select></div>
+    <div class="frow"><label for="${p}-time">Temps maximum</label><select id="${p}-time">
+      <option value="0">Sans limite</option><option value="1000">1 s</option><option value="2000">2 s</option><option value="3000">3 s</option>
+      <option value="5000">5 s</option><option value="10000">10 s</option><option value="30000">30 s</option>
+    </select></div>
+    <div class="frow"><label for="${p}-lines">Nombre de variantes</label><select id="${p}-lines">
+      <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+    </select></div>
+    <div class="frow" id="${p}-threads-row"><label for="${p}-threads">Threads</label><input id="${p}-threads" type="number" min="1" step="1"></div>
+    <p id="${p}-threads-hint" class="muted small"></p>`;
+  const q = (id) => root.querySelector('#' + p + '-' + id);
+  const choice = q('choice'), depthSel = q('depth'), thr = q('threads');
   choice.value = boostEnabled() ? 'boost' : 'lite';
   const fill = () => {
     const boost = choice.value === 'boost';
@@ -1001,42 +1022,52 @@ function openEngineDialog() {
     depthSel.innerHTML = depths.map((d) => `<option value="${d}">${d}</option>`).join('');
     depthSel.value = depths.includes(cur) ? cur : depths[Math.floor(depths.length / 2)];
     depthSel.disabled = fixed;
-    $('#eng-hint').textContent = boost
+    q('hint').textContent = boost
       ? (b ? `Boost PC détecté : ${b.engine}, ${b.engines} moteurs en parallèle.${fixed ? ' Pour choisir la profondeur, fermez puis relancez « Lancer l\'analyseur.bat ».' : ''}`
         : 'Boost PC non détecté : lancez « Lancer l\'analyseur.bat » sur ce PC. En attendant, Stockfish 19 Lite (navigateur) est utilisé.')
       : 'Version allégée de Stockfish 19, directement dans le navigateur (aussi sur téléphone). Un peu moins forte et plus lente que le Boost PC.';
+    const lite = !boost || !b;
+    q('threads-row').classList.toggle('hidden', !lite);
+    q('threads-hint').classList.toggle('hidden', !lite);
+    q('threads-hint').textContent = `Nombre de moteurs Stockfish 19 Lite qui analysent en parallèle, un cœur chacun (1 à ${MAX_THREADS} sur cet appareil). Plus il y en a, plus l'analyse est rapide, mais plus l'appareil chauffe.`;
   };
-  const thr = $('#eng-threads');
   thr.max = MAX_THREADS;
   thr.value = wasmThreads();
-  const fillThreads = () => {
-    const lite = choice.value === 'lite' || !engineStatus.boost;
-    $('#threads-row').classList.toggle('hidden', !lite);
-    $('#threads-hint').classList.toggle('hidden', !lite);
-    $('#threads-hint').textContent = `Nombre de moteurs Stockfish 19 Lite qui analysent en parallèle, un cœur chacun (1 à ${MAX_THREADS} sur cet appareil). Plus il y en a, plus l'analyse d'une partie est rapide, mais plus l'appareil chauffe.`;
-  };
-  choice.onchange = () => { fill(); fillThreads(); };
+  q('time').value = String(maxTime());
+  q('lines').value = String(nLines());
+  choice.onchange = () => { fill(); onChange(); };
+  depthSel.onchange = q('time').onchange = q('lines').onchange = thr.oninput = () => onChange();
   fill();
-  fillThreads();
-  $('#eng-time').value = String(maxTime());
-  $('#eng-lines').value = String(nLines());
+  const threads = () => Math.min(MAX_THREADS, Math.max(1, Math.round(Number(thr.value)) || wasmThreads()));
+  return {
+    // Réglages tels qu'affichés (moteur réellement utilisé : Lite si le Boost PC n'est pas lancé).
+    read: () => ({ boost: choice.value === 'boost' && !!engineStatus.boost, depth: Number(depthSel.value), movetime: Number(q('time').value), threads: threads() }),
+    async save() {
+      const boost = choice.value === 'boost';
+      if (!depthSel.disabled) local.set(boost ? 'depthPc' : 'wasmDepth', depthSel.value);
+      local.set('movetime', q('time').value === '0' ? '' : q('time').value);
+      local.set('multipv', q('lines').value);
+      local.set('threads', String(threads()));
+      const changed = boost !== boostEnabled();
+      local.set('boost', boost ? '1' : '0');
+      S.liveRes = null; S.livePending = null;
+      if (changed) {
+        await detectBoost();
+        if (boost && !engineStatus.boost) toast('Boost PC non trouvé : lancez « Lancer l\'analyseur.bat » sur ce PC. Stockfish 19 Lite (navigateur) est utilisé en attendant.', 6000);
+      }
+    },
+  };
+}
+
+function openEngineDialog() {
+  const dlg = $('#eng-dlg');
+  const f = engineFields($('#eng-fields'), 'eng');
   dlg.returnValue = '';
   dlg.showModal();
   // « submit » (et non « close ») : déclenché tout de suite par le bouton Sauvegarder.
   dlg.querySelector('form').onsubmit = async (e) => {
     if (!e.submitter || e.submitter.value !== 'save') return;
-    const boost = choice.value === 'boost';
-    if (!depthSel.disabled) local.set(boost ? 'depthPc' : 'wasmDepth', depthSel.value);
-    local.set('movetime', $('#eng-time').value === '0' ? '' : $('#eng-time').value);
-    local.set('multipv', $('#eng-lines').value);
-    local.set('threads', String(Math.min(MAX_THREADS, Math.max(1, Math.round(Number(thr.value)) || wasmThreads()))));
-    const changed = boost !== boostEnabled();
-    local.set('boost', boost ? '1' : '0');
-    S.liveRes = null; S.livePending = null;
-    if (changed) {
-      await detectBoost();
-      if (boost && !engineStatus.boost) toast('Boost PC non trouvé : lancez « Lancer l\'analyseur.bat » sur ce PC. Stockfish 19 Lite (navigateur) est utilisé en attendant.', 6000);
-    }
+    await f.save();
     if (S.g) renderGame();
   };
 }

@@ -1,17 +1,15 @@
-// Paramètres : profil chess.com, connexion GitHub (synchronisation), moteur d'analyse.
+// Paramètres : profil chess.com, connexion GitHub (synchronisation).
+// Les réglages du moteur sont dans la roue dentée ⚙ du panneau d'une partie et dans « Analyse multiple ».
 import { $, esc, local, toast } from '../core/ui.js';
 import { cfg, test, syncNow, state, onSync } from '../core/sync.js';
-import { detectBoost, engineLabel, onStatus, status as engineStatus, wasmDepth } from '../core/engine.js';
 import { getUser, changeUser } from './analyse.js';
 
 const SECTIONS = [
   ['profile', 'Profil chess.com'],
   ['connection', 'Connexion'],
-  ['engine', 'Paramètres moteur'],
 ];
 
 let unsub = null;
-let unsubEng = null;
 let installEvent = null;
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvent = e; });
 
@@ -25,8 +23,7 @@ export function render(el, sub) {
   </div>`;
   const body = $('.settings-body', el);
   if (unsub) { unsub(); unsub = null; }
-  if (unsubEng) { unsubEng(); unsubEng = null; }
-  ({ profile, connection, engine })[cur](body);
+  ({ profile, connection })[cur](body);
 }
 
 // ------------------------------------------------------------------ profil
@@ -119,34 +116,4 @@ function connection(el) {
     else if (st.lastSync && cfg.configured) { msg.className = 'muted'; msg.textContent = 'Dernière synchronisation : ' + new Date(st.lastSync).toLocaleString('fr-FR'); }
   });
   $('#install').onclick = async () => { if (installEvent) { installEvent.prompt(); installEvent = null; $('#install').classList.add('hidden'); } };
-}
-
-// ------------------------------------------------------------------ moteur
-function engine(el) {
-  const depth = wasmDepth();
-  el.innerHTML = `
-  <section class="card">
-    <h2>Paramètres moteur</h2>
-    <p>Moteur utilisé : <b id="eng-label"></b></p>
-    <label class="check"><input type="checkbox" id="boost" ${local.get('boost', '1') === '1' ? 'checked' : ''}> Utiliser le « boost PC » quand il est lancé
-      <span class="muted">(Stockfish 19 complet, 6 cœurs — double-clic sur « Lancer l'analyseur.bat »)</span></label>
-    <p class="muted small">Moteur, profondeur, temps maximum et nombre de variantes se règlent aussi avec la roue dentée ⚙ du panneau d'analyse d'une partie.</p>
-    <div class="row">
-      <label>Profondeur sans le PC
-        <select id="wasm-depth">${[12, 14, 16, 18, 20].map((d) => `<option ${d === depth ? 'selected' : ''}>${d}</option>`).join('')}</select>
-      </label>
-      <button id="boost-retry" class="btn">Rechercher le PC</button>
-    </div>
-    <p class="muted small">Sans le PC, Stockfish 19 « lite » tourne directement dans le navigateur (aussi sur téléphone). Plus la profondeur est grande, plus l'analyse est juste… et lente.
-      Les positions connues viennent de l'analyse cloud Lichess, les finales à 7 pièces ou moins des tables de finales.</p>
-  </section>`;
-  const showEng = () => { const l = $('#eng-label'); if (l) l.textContent = engineLabel(); };
-  unsubEng = onStatus(showEng); // se met à jour quand la recherche du PC se termine
-  $('#boost').onchange = async (e) => { local.set('boost', e.target.checked ? '1' : '0'); await detectBoost(); showEng(); };
-  $('#wasm-depth').onchange = (e) => { local.set('wasmDepth', e.target.value); showEng(); };
-  $('#boost-retry').onclick = async () => {
-    $('#eng-label').textContent = 'Recherche du PC…';
-    await detectBoost(); showEng();
-    if (!engineStatus.boost) toast('PC non trouvé : lancez « Lancer l\'analyseur.bat » sur le PC (cela ne fonctionne que sur le PC lui-même).', 6000);
-  };
 }

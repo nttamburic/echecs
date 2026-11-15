@@ -83,16 +83,12 @@
 <dialog id="multi-dlg" class="dlg">
   <form method="dialog">
     <h2>Analyse multiple</h2>
-    <fieldset>
-      <legend>Parties à analyser</legend>
-      <div id="multi-periods"></div>
-    </fieldset>
+    <div class="frow"><label for="multi-period">Parties à analyser</label><select id="multi-period"></select></div>
+    <p id="multi-count" class="muted small"></p>
     <fieldset>
       <legend>Moteur</legend>
-      <p id="multi-engine"></p>
-      <label class="inline">Profondeur <select id="multi-depth"></select></label>
-      <p id="multi-fixed" class="muted small hidden">Pour choisir la profondeur, fermez puis relancez le Boost PC (« Lancer l'analyseur.bat »).</p>
-      <p class="muted small">Plus la profondeur est grande, plus l'analyse est précise et longue. 18 : verdicts quasi identiques à 22, environ 4 fois plus vite.</p>
+      <div id="multi-fields"></div>
+      <p class="muted small">Ce sont les mêmes réglages que la roue dentée ⚙ d'une partie. Profondeur 18 : verdicts quasi identiques à 22, environ 4 fois plus vite. Le nombre de variantes ne change pas la durée (il sert à l'analyse en direct).</p>
     </fieldset>
     <p id="multi-est" class="small"></p>
     <div class="row end">
@@ -153,21 +149,7 @@
 <dialog id="eng-dlg" class="dlg">
   <form method="dialog">
     <h2>Paramètres d'analyse</h2>
-    <div class="frow"><label for="eng-choice">Moteur d'échecs</label><select id="eng-choice">
-      <option value="boost">Stockfish 19 (Boost PC)</option>
-      <option value="lite">Stockfish 19 Lite (1,8 Mo)</option>
-    </select></div>
-    <p id="eng-hint" class="muted small"></p>
-    <div class="frow"><label for="eng-depth">Profondeur</label><select id="eng-depth"></select></div>
-    <div class="frow"><label for="eng-time">Temps maximum</label><select id="eng-time">
-      <option value="0">Sans limite</option><option value="1000">1 s</option><option value="2000">2 s</option><option value="3000">3 s</option>
-      <option value="5000">5 s</option><option value="10000">10 s</option><option value="30000">30 s</option>
-    </select></div>
-    <div class="frow"><label for="eng-lines">Nombre de variantes</label><select id="eng-lines">
-      <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
-    </select></div>
-    <div class="frow" id="threads-row"><label for="eng-threads">Threads</label><input id="eng-threads" type="number" min="1" step="1"></div>
-    <p id="threads-hint" class="muted small"></p>
+    <div id="eng-fields"></div>
     <p class="muted small">Profondeur et temps maximum s'appliquent à chaque position : le moteur s'arrête au premier des deux atteint.
       Le nombre de variantes est celui des lignes affichées quand « Analyse » est activé.
       Les nouveaux réglages valent pour les prochaines analyses (« Relancer l'analyse » pour une partie déjà analysée).</p>
