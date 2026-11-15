@@ -54,7 +54,7 @@ export function parseInfo(line) {
 }
 
 // ------------------------------------------------------------------ Lichess
-export async function tablebase(fen, played) {
+export async function tablebase(fen, played, npv = MULTIPV) {
   if (countPieces(fen) > 7 || fen.split(' ')[2] !== '-') return null;
   const { status, body } = await fetchJson('https://tablebase.lichess.ovh/standard?fen=' + encodeURIComponent(fen));
   if (status !== 200 || !body || !body.moves || !body.moves.length) return null;
@@ -71,7 +71,7 @@ export async function tablebase(fen, played) {
     }
     return { cp: 0, tb: true };
   };
-  const lines = body.moves.slice(0, MULTIPV).map((m) => ({ pv: [m.uci], score: toWhite(fen, moveScore(m)) }));
+  const lines = body.moves.slice(0, npv).map((m) => ({ pv: [m.uci], score: toWhite(fen, moveScore(m)) }));
   const pm = body.moves.find((m) => m.uci === played);
   const result = { source: 'tablebase', depth: 0, lines, tb: body };
   if (played) {
@@ -83,22 +83,22 @@ export async function tablebase(fen, played) {
 
 let cloudBlockedUntil = 0;
 const cloudCache = new Map();
-export async function cloudEval(fen, minDepth) {
-  const key = fen + '|' + minDepth;
+export async function cloudEval(fen, minDepth, npv = MULTIPV) {
+  const key = fen + '|' + minDepth + '|' + npv;
   if (cloudCache.has(key)) return cloudCache.get(key);
-  const r = await cloudEvalRaw(fen, minDepth);
+  const r = await cloudEvalRaw(fen, minDepth, npv);
   if (!r.blocked) cloudCache.set(key, r);
   if (cloudCache.size > 5000) cloudCache.delete(cloudCache.keys().next().value);
   return r;
 }
-async function cloudEvalRaw(fen, minDepth) {
+async function cloudEvalRaw(fen, minDepth, npv) {
   if (Date.now() < cloudBlockedUntil) return { miss: true, blocked: true };
-  const { status, body } = await fetchJson(`https://lichess.org/api/cloud-eval?fen=${encodeURIComponent(fen)}&multiPv=${MULTIPV}`, { timeout: 8000 });
+  const { status, body } = await fetchJson(`https://lichess.org/api/cloud-eval?fen=${encodeURIComponent(fen)}&multiPv=${npv}`, { timeout: 8000 });
   if (status === 429) { cloudBlockedUntil = Date.now() + 60000; return { miss: true, blocked: true }; }
   if (status === 0) return { miss: true, blocked: true };
   if (status !== 200 || !body || !body.pvs || body.depth < minDepth) return { miss: true };
   const nLegal = new Chess(fen).moves().length;
-  if (body.pvs.length < Math.min(MULTIPV, nLegal)) return { miss: true };
+  if (body.pvs.length < Math.min(npv, nLegal)) return { miss: true };
   const lines = body.pvs.map((p) => ({
     pv: normalizePv(fen, p.moves.split(' ')),
     score: p.mate !== undefined ? { mate: p.mate } : { cp: p.cp },
@@ -137,7 +137,7 @@ class WasmEngine {
     this.send('isready');
     await r;
   }
-  search(fen, { depth, multipv = 1, searchmoves = null, nodes = null } = {}) {
+  search(fen, { depth, multipv = 1, searchmoves = null, nodes = null, movetime = 0 } = {}) {
     const job = async () => {
       await this.ready;
       this.send(`setoption name MultiPV value ${multipv}`);
@@ -157,7 +157,7 @@ class WasmEngine {
         };
       });
       const timer = setTimeout(() => this.send('stop'), SEARCH_TIMEOUT_MS);
-      this.send((nodes ? `go nodes ${nodes}` : `go depth ${depth}`) + (searchmoves ? ` searchmoves ${searchmoves.join(' ')}` : ''));
+      this.send((nodes ? `go nodes ${nodes}` : `go depth ${depth}`) + (movetime ? ` movetime ${movetime}` : '') + (searchmoves ? ` searchmoves ${searchmoves.join(' ')}` : ''));
       await done;
       clearTimeout(timer);
       const out = [];
@@ -200,12 +200,19 @@ const hw = navigator.hardwareConcurrency || 2;
 const WASM_ENGINES = isMobile() ? Math.min(2, hw) : Math.max(1, Math.min(4, hw - 1));
 const wasmPool = new WasmPool(WASM_ENGINES);
 export const wasmDepth = () => Number(local.get('wasmDepth')) || (isMobile() ? 16 : 18);
+// Réglages de la roue dentée (vue partie) : profondeur avec le Boost PC, temps maximum par position (ms, 0 = sans limite)
+// et nombre de variantes affichées par l'analyse en direct.
+export const pcDepth = () => Number(local.get('depthPc')) || DEPTH_PC;
+export const maxTime = () => Number(local.get('movetime')) || 0;
+export const nLines = () => Math.min(5, Math.max(1, Number(local.get('multipv')) || 3));
+export const PC_DEPTHS = [16, 18, 20, 22, 24];
+export const WEB_DEPTHS = [12, 14, 16, 18, 20];
 
 // ------------------------------------------------------------------ Boost PC
 const PC_PORT = 8765;
 const sameOriginPc = location.hostname === '127.0.0.1' && Number(location.port) === PC_PORT;
 const boostBase = () => (sameOriginPc ? '' : (local.get('boostUrl') || `http://127.0.0.1:${PC_PORT}`));
-const boostEnabled = () => local.get('boost', '1') === '1';
+export const boostEnabled = () => local.get('boost', '1') === '1';
 const LOOPBACK = sameOriginPc ? {} : { targetAddressSpace: 'loopback' };
 
 export const status = { boost: null, checked: false, listeners: new Set() };
@@ -238,9 +245,17 @@ export function engineInfo() {
   return { boost: false, label: `Navigateur : Stockfish 19 lite · ${WASM_ENGINES} moteur${WASM_ENGINES > 1 ? 's' : ''}`, engines: WASM_ENGINES, depths, def: d, fixed: false };
 }
 
+// Moteur et profondeur utilisés pour analyser une partie (réglages de la roue dentée).
+// Un Boost PC lancé avant la version « depthOption » garde sa profondeur fixe.
+export function analysisSettings() {
+  const b = status.boost;
+  if (b) return { boost: true, name: b.engine || 'Stockfish 19', engines: b.engines, fixed: !b.depthOption, depth: b.depthOption ? pcDepth() : b.depth };
+  return { boost: false, name: 'Stockfish 19 Lite', engines: WASM_ENGINES, fixed: false, depth: wasmDepth() };
+}
+
 export function engineLabel() {
   if (!status.checked) return 'Recherche du moteur…';
-  if (status.boost) return `Boost PC : ${status.boost.engine} · ${status.boost.engines} moteurs · profondeur ${status.boost.depth}`;
+  if (status.boost) return `Boost PC : ${status.boost.engine} · ${status.boost.engines} moteurs · profondeur ${analysisSettings().depth}`;
   return `Navigateur : Stockfish 19 lite · ${WASM_ENGINES} moteur${WASM_ENGINES > 1 ? 's' : ''} · profondeur ${wasmDepth()}`;
 }
 
@@ -264,14 +279,16 @@ async function boostPosition(body) {
 }
 
 // Analyse « fen », avec le coup joué « played » (UCI) évalué dans la même recherche.
-// opts : { cloud, priority, cloudOnly, depth }. « depth » : profondeur imposée (analyse multiple), sinon celle par défaut. Renvoie { source, depth, lines:[{pv,score}], played:{pv,score} } ou { miss:true }.
-export async function analyzePosition(fen, played = null, { cloud = false, priority = false, cloudOnly = false, depth = null } = {}) {
-  const key = `${fen}|${played || ''}|${depth || ''}`;
+// opts : { cloud, priority, cloudOnly, depth, multipv, movetime }. « depth » : profondeur imposée, sinon celle par défaut ;
+// « multipv » : nombre de meilleures lignes (au moins 2) ; « movetime » : temps maximum par recherche en ms (0 = sans limite).
+// Renvoie { source, depth, lines:[{pv,score}], played:{pv,score} } ou { miss:true }.
+export async function analyzePosition(fen, played = null, { cloud = false, priority = false, cloudOnly = false, depth = null, multipv = 0, movetime = 0 } = {}) {
+  const key = `${fen}|${played || ''}|${depth || ''}|${multipv || ''}|${movetime || ''}`;
   if (posCache.has(key)) return posCache.get(key);
   if (!status.checked) await detectBoost();
   if (status.boost) {
     try {
-      const r = await boostPosition({ fen, played, cloud, priority, cloudOnly, ...(depth ? { depth } : {}) });
+      const r = await boostPosition({ fen, played, cloud, priority, cloudOnly, ...(depth ? { depth } : {}), ...(multipv ? { multipv } : {}), ...(movetime ? { movetime } : {}) });
       if (!r.miss) remember(key, r);
       return r;
     } catch (e) {
@@ -279,29 +296,30 @@ export async function analyzePosition(fen, played = null, { cloud = false, prior
       status.boost = null; notify(); // le serveur a été fermé : on bascule sur le navigateur
     }
   }
-  const r = await localPosition(fen, played, cloud, priority, cloudOnly, depth);
+  const r = await localPosition(fen, played, cloud, priority, cloudOnly, depth, multipv, movetime);
   if (!r.miss) remember(key, r);
   return r;
 }
 function remember(key, r) { posCache.set(key, r); if (posCache.size > 5000) posCache.delete(posCache.keys().next().value); }
 
-async function localPosition(fen, played, useCloud, priority, cloudOnly, forcedDepth = null) {
+async function localPosition(fen, played, useCloud, priority, cloudOnly, forcedDepth = null, multipv = 0, movetime = 0) {
   const depth = forcedDepth || wasmDepth();
+  const npv = Math.max(MULTIPV, multipv || 0);
   if (cloudOnly) {
     if (countPieces(fen) > 7) {
-      const cl = await cloudEval(fen, depth);
+      const cl = await cloudEval(fen, depth, npv);
       if (cl.miss) return { miss: true };
     }
-    return localPosition(fen, played, true, priority, false, forcedDepth);
+    return localPosition(fen, played, true, priority, false, forcedDepth, multipv, movetime);
   }
   if (played) {
     const c = new Chess(fen);
     try { c.move({ from: played.slice(0, 2), to: played.slice(2, 4), promotion: played[4] }); } catch { throw new Error('Coup illégal : ' + played); }
   }
-  let result = await tablebase(fen, played);
+  let result = await tablebase(fen, played, npv);
   let cloudMiss = false;
   if (!result && useCloud) {
-    const cl = await cloudEval(fen, depth);
+    const cl = await cloudEval(fen, depth, npv);
     if (cl.miss) cloudMiss = true; else result = { source: 'cloud', depth: cl.depth, lines: cl.lines };
   }
   if (result) delete result.tb;
@@ -309,14 +327,14 @@ async function localPosition(fen, played, useCloud, priority, cloudOnly, forcedD
   result = await wasmPool.run(async (eng) => {
     let r = pre;
     if (!r) {
-      const infos = await eng.search(fen, { depth, multipv: MULTIPV });
+      const infos = await eng.search(fen, { depth, multipv: npv, movetime });
       r = { source: 'wasm', depth: Math.max(...infos.map((i) => i.depth)), lines: infos.map((i) => ({ pv: i.pv, score: toWhite(fen, i.score) })) };
     }
     if (played && !r.played) {
       const inLines = r.lines.find((l) => l.pv[0] === played);
       if (inLines) r.played = { pv: inLines.pv, score: inLines.score };
       else {
-        const infos = await eng.search(fen, { depth, multipv: 1, searchmoves: [played] });
+        const infos = await eng.search(fen, { depth, multipv: 1, searchmoves: [played], movetime });
         if (infos[0]) r.played = { pv: infos[0].pv, score: toWhite(fen, infos[0].score), source: 'wasm' };
       }
     }

@@ -129,7 +129,8 @@ function engine(el) {
     <h2>Paramètres moteur</h2>
     <p>Moteur utilisé : <b id="eng-label"></b></p>
     <label class="check"><input type="checkbox" id="boost" ${local.get('boost', '1') === '1' ? 'checked' : ''}> Utiliser le « boost PC » quand il est lancé
-      <span class="muted">(Stockfish 19 complet, 6 cœurs, profondeur 22 — double-clic sur « Lancer l'analyseur.bat »)</span></label>
+      <span class="muted">(Stockfish 19 complet, 6 cœurs — double-clic sur « Lancer l'analyseur.bat »)</span></label>
+    <p class="muted small">Moteur, profondeur, temps maximum et nombre de variantes se règlent aussi avec la roue dentée ⚙ du panneau d'analyse d'une partie.</p>
     <div class="row">
       <label>Profondeur sans le PC
         <select id="wasm-depth">${[12, 14, 16, 18, 20].map((d) => `<option ${d === depth ? 'selected' : ''}>${d}</option>`).join('')}</select>

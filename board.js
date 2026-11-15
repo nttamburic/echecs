@@ -1,4 +1,5 @@
-// Échiquier : affichage, déplacement à la souris (clic ou glisser), promotion, flèches.
+// Échiquier : affichage, déplacement à la souris (clic ou glisser), promotion, flèches,
+// et annotation du coup joué façon chess.com (cases coloriées + pastille Brillant, Gaffe…).
 import { Chess } from './vendor/chess.js';
 
 const FILES = 'abcdefgh';
@@ -11,6 +12,7 @@ export class Board {
     this.fen = new Chess().fen();
     this.lastMove = null;
     this.arrows = [];
+    this.mark = null;
     this.selected = null;
     this.interactive = true;
     el.classList.add('board');
@@ -26,10 +28,12 @@ export class Board {
     this.render();
   }
 
-  setPosition(fen, { lastMove = null, arrows = [] } = {}) {
+  // mark : { sq, color, sym, label } — classification du dernier coup, affichée sur sa case d'arrivée.
+  setPosition(fen, { lastMove = null, arrows = [], mark = null } = {}) {
     this.fen = fen;
     this.lastMove = lastMove;
     this.arrows = arrows;
+    this.mark = mark;
     this.selected = null;
     this.render();
   }
@@ -63,10 +67,12 @@ export class Board {
         const name = this.orientation === 'w' ? FILES[x] + (8 - y) : FILES[7 - x] + (y + 1);
         const dark = (x + y) % 2 === 1;
         const cls = ['sq', dark ? 'dark' : 'light'];
-        if (this.lastMove && (this.lastMove[0] === name || this.lastMove[1] === name)) cls.push('last');
+        const onLast = this.lastMove && (this.lastMove[0] === name || this.lastMove[1] === name);
+        if (onLast && !this.mark) cls.push('last');
         if (this.selected === name) cls.push('sel');
         if (check === name) cls.push('check');
         let inner = '';
+        if (onLast && this.mark) inner += `<span class="tint" style="background:${this.mark.color}"></span>`;
         if (legalTargets.has(name)) inner += '<span class="dot"></span>';
         if (legalTargets.has(name + 'x')) inner += '<span class="ring"></span>';
         if (x === 0) inner += `<span class="coord rank">${name[1]}</span>`;
@@ -82,6 +88,12 @@ export class Board {
         const { x, y } = this.coords(p.square);
         pc += `<img class="piece" data-sq="${p.square}" draggable="false" src="pieces/${p.color}${p.type.toUpperCase()}.svg" style="left:${x * 12.5}%;top:${y * 12.5}%">`;
       }
+    }
+    if (this.mark) {
+      const m = this.mark;
+      const { x, y } = this.coords(m.sq);
+      const left = Math.min((x + 1) * 12.5 - 3.9, 94.2), top = Math.max(y * 12.5 - 1.9, 0.3);
+      pc += `<span class="mark" title="${m.label}" style="left:${left}%;top:${top}%;background:${m.color}">${m.sym}</span>`;
     }
     this.pcLayer.innerHTML = pc;
     this.renderArrows();

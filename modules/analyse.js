@@ -4,7 +4,10 @@ import { Board } from '../board.js';
 import { classifyMove, classifyGame, summarize, CLASSES, SUMMARY_ORDER, fmtScore, winPct, epd } from '../analysis.js';
 import { frSan, explainMove } from '../explain.js';
 import { $, esc, fr1, uciOf, local, toast, badge } from '../core/ui.js';
-import { analyzePosition, parallelism, SOURCE_LABEL, engineInfo } from '../core/engine.js';
+import {
+  analyzePosition, parallelism, SOURCE_LABEL, engineInfo, analysisSettings, maxTime, nLines, pcDepth, wasmDepth,
+  PC_DEPTHS, WEB_DEPTHS, boostEnabled, detectBoost, status as engineStatus, onStatus as onEngineStatus,
+} from '../core/engine.js';
 import { syncNow, cfg as syncCfg } from '../core/sync.js';
 import * as store from '../core/store.js';
 import * as chesscom from '../core/chesscom.js';
@@ -346,6 +349,9 @@ async function clearHistory() {
 }
 
 // ------------------------------------------------------------------ partie
+// Mise en page façon chess.com : échiquier au centre, barre d'évaluation à gauche, panneau à droite.
+// À l'ouverture, seule la liste des coups est affichée ; l'analyse ne démarre qu'avec le bouton « Analyser ».
+// Une fois toute la partie analysée, le panneau passe en mode « Bilan » (coach, Suivant, coups annotés, graphique).
 let board;
 
 function fenAt(g, k) { return k === 0 ? g.startFen : g.moves[k - 1].after; }
@@ -365,20 +371,23 @@ function recompute(g) {
   g.summary = summarize(g.moves, g.results);
 }
 
+const isComplete = (g) => g.positions.every(Boolean);
+
 export async function openGame(id) {
+  stopAuto();
   if (S.g && S.g.id === id) { renderGame(); return; }
   if (S.g) S.g.abort = true;
-  $('#coach').innerHTML = '<p class="muted">Chargement de la partie…</p>';
+  $('#moves').innerHTML = '<p class="muted pad">Chargement de la partie…</p>';
   let game = S.games.find((x) => x.id === id);
   const saved = await store.get('analysis', id).catch(() => null);
   if (!game && saved) game = saved.game;
   if (!game && S.loading) {
-    $('#coach').innerHTML = '<p class="muted">Récupération des parties chess.com…</p>';
+    $('#moves').innerHTML = '<p class="muted pad">Récupération des parties chess.com…</p>';
     await S.loading;
     game = S.games.find((x) => x.id === id);
   }
   if (!game) {
-    $('#coach').innerHTML = '<p class="err">Partie inconnue sur cet appareil : récupérez d\'abord vos parties (onglet Analyse).</p>';
+    $('#moves').innerHTML = '<p class="err pad">Partie inconnue sur cet appareil : récupérez d\'abord vos parties (Historique des parties → Actualiser).</p>';
     return;
   }
   // Partie justement en cours d'analyse par l'analyse multiple : on l'affiche telle quelle.
@@ -394,14 +403,13 @@ export async function openGame(id) {
   if (S.batch && S.batch.cur) S.batch.cur.abort = true; // l'analyse multiple se met en pause
   let g;
   try { g = prepareGame(id, game, saved); } catch (e) {
-    $('#coach').innerHTML = `<p class="err">PGN illisible : ${esc(e.message)}</p>`;
+    $('#moves').innerHTML = `<p class="err pad">PGN illisible : ${esc(e.message)}</p>`;
     return;
   }
   S.g = g;
   S.cycle = {};
   board.setOrientation(g.playerColor || 'w');
-  renderGame();
-  if (g.positions.some((p) => !p)) runAnalysis(g);
+  renderGame(); // pas d'analyse automatique : bouton « Analyser »
 }
 
 function prepareGame(id, game, saved) {
@@ -444,16 +452,16 @@ async function runAnalysis(g) {
   if (g.analyzing) return;
   g.analyzing = true;
   let sinceSave = 0;
-  if (S.g === g) renderProgress(g);
+  if (S.g === g) renderGame();
   const todo = [];
   g.positions.forEach((p, i) => { if (!p) todo.push(i); });
   const doOne = async (i, cloud, cloudOnly = false) => {
     const m = g.moves[i];
-    const pos = await analyzePosition(m.before, uciOf(m), { cloud, cloudOnly, depth: g.depth || null });
+    const pos = await analyzePosition(m.before, uciOf(m), { cloud, cloudOnly, depth: g.depth || null, movetime: g.movetime || 0 });
     if (pos.miss) return pos;
     g.positions[i] = pos;
     recompute(g);
-    if (S.g === g) renderGame();
+    if (S.g === g) renderFoot(g);
     if (g.onProgress) g.onProgress();
     if (++sinceSave >= 12) { sinceSave = 0; saveAnalysis(g); }
     return pos;
@@ -482,6 +490,17 @@ async function runAnalysis(g) {
   }
 }
 
+// Bouton « Analyser » / « Reprendre » : analyse avec les réglages de la roue dentée.
+function startAnalysis() {
+  const g = S.g;
+  if (!g || g.analyzing) return;
+  const st = analysisSettings();
+  g.depth = st.fixed ? null : st.depth;
+  g.movetime = maxTime();
+  g.abort = false;
+  runAnalysis(g);
+}
+
 // ----- variantes (coups joués par l'utilisateur sur l'échiquier)
 function currentFen(g) {
   if (g.var) return g.var.idx > 0 ? g.var.items[g.var.idx - 1].fenAfter : fenAt(g, g.var.basePly);
@@ -495,9 +514,22 @@ function makeVarItem(fenBefore, from, to, promotion) {
   return { fenBefore, fenAfter: c.fen(), uci: uciOf(m), san: m.san, color: m.color, move: m, pos: null, r: null, pending: false };
 }
 
+function lineItems(fen, pv) {
+  const items = [];
+  let f = fen;
+  for (const u of pv.slice(0, 12)) {
+    const it = makeVarItem(f, u.slice(0, 2), u.slice(2, 4), u[4]);
+    if (!it) break;
+    items.push(it);
+    f = it.fenAfter;
+  }
+  return items;
+}
+
 function onBoardMove(from, to, promo) {
   const g = S.g;
   if (!g) return;
+  stopAuto();
   const fen = currentFen(g);
   const item = makeVarItem(fen, from, to, promo);
   if (!item) return;
@@ -510,17 +542,17 @@ function onBoardMove(from, to, promo) {
   renderGame();
 }
 
-function showLine(basePly, fen, pv) {
+// Joue une ligne (meilleure suite, ligne du moteur…) comme variante à partir de la position affichée.
+function playLine(fen, pv) {
   const g = S.g;
-  const items = [];
-  let f = fen;
-  for (const u of pv.slice(0, 12)) {
-    const it = makeVarItem(f, u.slice(0, 2), u.slice(2, 4), u[4]);
-    if (!it) break;
-    items.push(it);
-    f = it.fenAfter;
-  }
-  g.var = { basePly, items, idx: 1 };
+  if (!g) return;
+  stopAuto();
+  const items = lineItems(fen, pv);
+  if (!items.length) return;
+  if (g.var) {
+    g.var.items = g.var.items.slice(0, g.var.idx).concat(items);
+    g.var.idx = g.var.idx + 1;
+  } else g.var = { basePly: g.ply, items, idx: 1 };
   renderGame();
 }
 
@@ -528,7 +560,8 @@ async function analyzeVarItem(g, item, idx) {
   if (item.pos || item.pending) return;
   item.pending = true;
   try {
-    item.pos = await analyzePosition(item.fenBefore, item.uci, { cloud: true, priority: true });
+    const st = analysisSettings();
+    item.pos = await analyzePosition(item.fenBefore, item.uci, { cloud: true, priority: true, depth: st.fixed ? null : st.depth, movetime: maxTime() });
     const prevMove = idx > 0 ? g.var.items[idx - 1].move : g.moves[g.var.basePly - 1] || null;
     item.r = classifyMove({
       fenBefore: item.fenBefore, fenAfter: item.fenAfter, uci: item.uci, color: item.color,
@@ -563,6 +596,19 @@ function step(d) {
   setPly(g.ply + d);
 }
 
+// Lecture automatique (bouton ▶ du panneau).
+function atEnd(g) { return g.var ? g.var.idx >= g.var.items.length : g.ply >= g.moves.length; }
+function stopAuto() { if (S.auto) { clearInterval(S.auto); S.auto = null; renderNav(); } }
+function toggleAuto() {
+  const g = S.g;
+  if (!g) return;
+  if (S.auto) return stopAuto();
+  if (atEnd(g)) setPly(0);
+  S.auto = setInterval(() => { if (!S.g || atEnd(S.g)) stopAuto(); else step(1); }, 1000);
+  renderNav();
+}
+const nav = (f) => () => { stopAuto(); f(); };
+
 // ----- élément affiché : { fenBefore, san, uci, color, pos, r, inVar }
 function displayed(g) {
   if (g.var) {
@@ -584,36 +630,47 @@ function scoreAfter(g) {
   return p && p.played ? p.played.score : null;
 }
 
+// Notation en figurines (comme chess.com) : « Cf3 » → icône du cavalier + « f3 ».
+function figSan(san, color) {
+  const m = /^([NBRQK])(.*)$/.exec(san);
+  if (!m) return esc(frSan(san));
+  return `<img class="fig${color === 'b' ? ' dark' : ''}" src="pieces/w${m[1]}.svg" alt="${esc(frSan(m[1]))}">${esc(frSan(m[2]))}`;
+}
+
 // ------------------------------------------------------------------ rendu partie
 function renderGame() {
   const g = S.g;
   if (!g) return;
+  const review = isComplete(g);
   const fen = currentFen(g);
   const d = displayed(g);
   if (d && d.inVar && !d.pos && !d.pending) analyzeVarItem(g, g.var.items[d.varIdx], d.varIdx);
+  const annotate = d && d.r && (review || d.inVar);
 
-  // échiquier + flèches
+  // échiquier : case du coup coloriée et annotée (Brillant, Théorique, Gaffe…), flèche du meilleur coup
   const arrows = [];
-  if (d && d.pos && d.r && !d.r.isBest && d.r.cls !== 'book' && d.pos.lines[0]) {
+  if (annotate && d.pos && !d.r.isBest && d.r.cls !== 'book' && d.pos.lines[0]) {
     const b = d.pos.lines[0].pv[0];
     arrows.push({ from: b.slice(0, 2), to: b.slice(2, 4), color: '#4caf50' });
   }
-  const nextPos = !g.var && g.ply < g.moves.length ? g.positions[g.ply] : null;
+  const nextPos = review && !g.var && g.ply < g.moves.length ? g.positions[g.ply] : null;
   if ($('#show-next').checked && nextPos && nextPos.lines[0]) {
     const b = nextPos.lines[0].pv[0];
     arrows.push({ from: b.slice(0, 2), to: b.slice(2, 4), color: '#3b82f6', opacity: 0.6 });
   }
-  board.setPosition(fen, { lastMove: d ? [d.uci.slice(0, 2), d.uci.slice(2, 4)] : null, arrows });
+  const mark = annotate ? { sq: d.uci.slice(2, 4), color: CLASSES[d.r.cls].color, sym: CLASSES[d.r.cls].sym, label: CLASSES[d.r.cls].label } : null;
+  board.setPosition(fen, { lastMove: d ? [d.uci.slice(0, 2), d.uci.slice(2, 4)] : null, arrows, mark });
 
-  // barre d'évaluation
+  // barre d'évaluation (analyse de la partie, sinon analyse en direct de la position)
   const chess = new Chess(fen);
   let wp, label;
   if (chess.isCheckmate()) { wp = chess.turn() === 'w' ? 0 : 100; label = chess.turn() === 'w' ? '0-1' : '1-0'; }
   else if (chess.isDraw()) { wp = 50; label = '½-½'; }
   else {
-    const s = scoreAfter(g);
+    let s = review || d?.inVar ? scoreAfter(g) : null;
+    if (!s && S.liveRes && S.liveRes.fen === fen && S.liveRes.res.lines[0]) s = S.liveRes.res.lines[0].score;
     wp = s ? winPct(s, 'w') : 50;
-    label = s ? fmtScore(s) : '…';
+    label = s ? fmtScore(s) : '';
   }
   const flipped = board.orientation === 'b';
   $('#evalbar').classList.toggle('flipped', flipped);
@@ -627,39 +684,127 @@ function renderGame() {
   const pl = (c) => {
     const p = c === 'w' ? g.game.white : g.game.black;
     const s = g.summary[c];
-    return `<span class="color-dot ${c}"></span><b>${esc(p.name)}</b> <span class="muted">(${esc(p.rating)})</span>
-      <span class="pill">Précision ${fr1(s.accuracy)} %</span>`;
+    return `<span class="avatar-sm ${c}"><img src="pieces/${c}P.svg" alt=""></span><b>${esc(p.name)}</b> <span class="muted">(${esc(p.rating)})</span>
+      ${review ? `<span class="pill" title="Précision">${fr1(s.accuracy)} %</span>` : ''}`;
   };
   $('#player-top').innerHTML = pl(top);
   $('#player-bottom').innerHTML = pl(bot);
 
-  // en-tête
+  // panneau
+  $('#gpanel').classList.toggle('review', review);
+  $('#ptitle').innerHTML = review ? `<span class="badge" style="background:${CLASSES.best.color}">★</span> Bilan` : 'Analyse';
+  $('#cc-link').href = g.game.url || '#';
   const k = g.var ? g.var.basePly : g.ply;
-  const op = g.openingAt[k] || g.openingAt[g.openingAt.length - 1];
-  $('#opening').textContent = op ? op : 'Ouverture inconnue';
+  $('#opening').textContent = k === 0 && !g.var ? 'Position de départ' : (g.openingAt[k] || g.openingAt[g.openingAt.length - 1] || 'Ouverture inconnue');
   const date = new Date(g.game.end * 1000).toLocaleDateString('fr-FR');
-  $('#game-meta').innerHTML = `${TIME_FR[g.game.timeClass] || ''} · ${date} · ${esc(g.game.result)} · <a href="${esc(g.game.url)}" target="_blank" rel="noopener">voir sur chess.com</a>`;
+  $('#game-meta').textContent = `${TIME_FR[g.game.timeClass] || ''} · ${date} · ${g.game.result || ''}`;
 
-  renderProgress(g);
-  renderCoach(g, d);
-  renderMoves(g);
-  renderSummary(g);
-  renderGraph(g);
+  renderEngine();
+  renderLive(g);
+  renderCoach(g, d, review);
+  renderMoves(g, review);
+  renderFoot(g);
+  renderSummary(g, review);
+  renderGraph(g, review);
+  renderNav();
 }
 
-function renderProgress(g) {
+// Ligne « Analyse · profondeur 22 | Stockfish 19 ⚙ »
+function renderEngine() {
+  const el = $('#eng-desc');
+  if (!engineStatus.checked) { el.textContent = 'recherche du moteur…'; return; }
+  const st = analysisSettings();
+  const t = maxTime();
+  el.textContent = `profondeur ${st.depth}${t ? ` · ${t / 1000} s max` : ''} | ${st.name}${st.boost ? ' (PC)' : ''}`;
+}
+
+// Bas du panneau : bouton « Analyser », progression ou « Reprendre ».
+function renderFoot(g) {
+  if (S.g !== g) return;
   const done = g.positions.filter(Boolean).length;
   const total = g.moves.length;
-  const el = $('#progress');
-  if (done >= total) { el.classList.add('hidden'); return; }
-  el.classList.remove('hidden');
-  el.querySelector('.fill').style.width = (100 * done / Math.max(1, total)) + '%';
-  el.querySelector('.txt').textContent = g.analyzing ? `Analyse Stockfish : ${done}/${total} coups…` : `Analyse incomplète (${done}/${total})`;
-  $('#resume').classList.toggle('hidden', g.analyzing);
+  const review = isComplete(g);
+  const prog = $('#progress');
+  const btn = $('#analyze');
+  $('#pfoot').classList.toggle('hidden', review && !g.analyzing);
+  if (g.analyzing) {
+    prog.classList.remove('hidden');
+    btn.classList.add('hidden');
+    prog.querySelector('.fill').style.width = (100 * done / Math.max(1, total)) + '%';
+    const batch = S.batch && S.batch.cur === g;
+    prog.querySelector('.txt').textContent = `${batch ? 'Analyse multiple' : 'Analyse'} : ${done}/${total} coups…`;
+    $('#stop').classList.toggle('hidden', batch);
+    // la partie bascule en « Bilan » dès qu'elle est complète
+    if (review && !$('#gpanel').classList.contains('review')) renderGame();
+    return;
+  }
+  prog.classList.add('hidden');
+  btn.classList.remove('hidden');
+  btn.textContent = done ? `Reprendre l'analyse (${done}/${total})` : 'Analyser';
+  btn.disabled = !total;
 }
 
-function renderCoach(g, d) {
+// ----- analyse en direct (interrupteur « Analyse ») : meilleures lignes du moteur pour la position affichée
+function liveKey(fen) { const st = analysisSettings(); return `${fen}|${st.boost}|${st.depth}|${maxTime()}|${nLines()}`; }
+
+function renderLive(g) {
+  const el = $('#lines');
+  el.classList.toggle('hidden', !S.live);
+  if (!S.live) return;
+  const fen = currentFen(g);
+  const c = new Chess(fen);
+  if (c.isGameOver()) { el.innerHTML = `<div class="lrow muted">${c.isCheckmate() ? 'Échec et mat' : 'Partie nulle'}</div>`; return; }
+  const key = liveKey(fen);
+  if (S.liveRes && S.liveRes.key === key) { el.innerHTML = linesHtml(fen, S.liveRes.res); bindLines(el, fen, S.liveRes.res); return; }
+  if (S.livePending === key) return; // calcul déjà en cours pour cette position
+  S.livePending = key;
+  el.innerHTML = '<div class="lrow muted">Calcul en cours…</div>';
+  clearTimeout(S.liveTimer);
+  S.liveTimer = setTimeout(async () => {
+    if (S.livePending !== key) return;
+    try {
+      const st = analysisSettings();
+      const res = await analyzePosition(fen, null, { cloud: true, priority: true, multipv: nLines(), depth: st.fixed ? null : st.depth, movetime: maxTime() });
+      if (S.livePending !== key) return;
+      S.livePending = null;
+      if (res.miss) { el.innerHTML = '<div class="lrow muted">Pas d\'analyse disponible.</div>'; return; }
+      S.liveRes = { key, fen, res };
+      if (S.g === g) renderGame();
+    } catch (e) {
+      if (S.livePending === key) { S.livePending = null; el.innerHTML = `<div class="lrow err">Analyse impossible : ${esc(e.message)}</div>`; }
+    }
+  }, 200);
+}
+
+function linesHtml(fen, res) {
+  const n = nLines();
+  return res.lines.slice(0, n).map((l, i) => {
+    const items = lineItems(fen, l.pv);
+    let moves = '';
+    items.slice(0, 10).forEach((it, j) => {
+      const no = it.fenBefore.split(' ')[5];
+      if (it.color === 'w') moves += `${no}. `;
+      else if (j === 0) moves += `${no}… `;
+      moves += figSan(it.san, it.color) + ' ';
+    });
+    const sc = l.score;
+    const neg = sc.mate !== undefined ? sc.mate < 0 : sc.cp < 0;
+    return `<div class="lrow" data-li="${i}" title="Cliquez pour jouer cette ligne sur l'échiquier"><span class="lscore${neg ? ' neg' : ''}">${fmtScore(sc)}</span><span class="lmoves">${moves}</span></div>`;
+  }).join('') + `<div class="lfoot muted small">${esc(SOURCE_LABEL(res))}</div>`;
+}
+
+function bindLines(el, fen, res) {
+  el.querySelectorAll('.lrow[data-li]').forEach((r) => { r.onclick = () => playLine(fen, res.lines[+r.dataset.li].pv); });
+}
+
+// ----- coach (bulle façon chess.com) : en mode Bilan, ou pendant une variante
+function renderCoach(g, d, review) {
   const el = $('#coach');
+  const show = review || !!g.var;
+  el.classList.toggle('hidden', !show);
+  $('#next-wrap').classList.toggle('hidden', !review);
+  $('#suivant').disabled = atEnd(g);
+  if (!show) { el.innerHTML = ''; return; }
   let html = '';
   if (g.var) {
     const items = g.var.items.map((it, i) => {
@@ -669,16 +814,26 @@ function renderCoach(g, d) {
     html += `<div class="variation"><div class="vhead">Variante <button id="exit-var" class="btn small">↩ Revenir à la partie</button></div><div class="vmoves">${items || '<span class="muted">Jouez un coup…</span>'}</div></div>`;
   }
   if (!d) {
-    const nextPos = !g.var && g.positions[0];
-    html += `<div class="coach-title">Position de départ</div><p class="muted">Utilisez les flèches ← → (ou les boutons ◀ ▶), cliquez sur un coup, ou jouez vos propres coups sur l'échiquier : Stockfish les notera.</p>`;
-    if (nextPos) html += `<p>Évaluation : ${fmtScore(nextPos.lines[0].score)}</p>`;
-    el.innerHTML = html;
+    if (review) {
+      const s = g.summary;
+      const me = g.playerColor;
+      const who = (c) => esc((c === 'w' ? g.game.white : g.game.black).name);
+      html += `<div class="coach-title">Bilan de la partie</div>
+        <p>Précision : <b>${who('w')}</b> ${fr1(s.w.accuracy)} % · <b>${who('b')}</b> ${fr1(s.b.accuracy)} %.</p>`;
+      if (me) {
+        const n = (cls) => s[me].counts[cls] || 0;
+        const bad = ['blunder', 'mistake', 'miss', 'inaccuracy'].filter((c) => n(c)).map((c) => `${n(c)} ${CLASSES[c].label.toLowerCase()}${n(c) > 1 && !/s$/.test(CLASSES[c].label) ? 's' : ''}`);
+        html += `<p>${bad.length ? `De votre côté : ${bad.join(', ')}.` : 'Aucune erreur de votre côté : bravo !'}</p>`;
+      }
+      html += '<p class="muted">Cliquez sur « Suivant » pour revoir la partie coup par coup.</p>';
+    } else html += '<p class="muted">Jouez vos propres coups : Stockfish les note.</p>';
+    el.innerHTML = coachWrap(html);
     bindCoach(g);
     return;
   }
   if (!d.pos || !d.r) {
     html += `<div class="coach-title">${esc(frSan(d.san))}</div><p class="muted">${d.pending || g.analyzing ? 'Analyse en cours…' : 'Pas encore analysé.'}</p>`;
-    el.innerHTML = html;
+    el.innerHTML = coachWrap(html);
     bindCoach(g);
     return;
   }
@@ -691,60 +846,69 @@ function renderCoach(g, d) {
   if (ex.best) {
     html += `<div class="line good"><div class="lhead">${ex.best.isPlayed ? 'Suite prévue' : 'Meilleure suite'} <button class="btn small" data-line="${ex.best.isPlayed ? 'played' : 'best'}">▶ Voir</button></div>${esc(ex.best.text)}</div>`;
   }
-  html += `<div class="coach-foot"><span class="muted">${esc(SOURCE_LABEL(d.pos))}</span></div>`;
-  el.innerHTML = html;
+  html += `<div class="coach-foot muted">${esc(SOURCE_LABEL(d.pos))}</div>`;
+  el.innerHTML = coachWrap(html);
   bindCoach(g, d);
 }
+
+const coachWrap = (html) => `<div class="coach-wrap"><div class="avatar"><img src="pieces/wN.svg" alt=""></div><div class="bubble">${html}</div></div>`;
 
 function bindCoach(g, d) {
   const ev = $('#exit-var');
   if (ev) ev.onclick = exitVar;
-  document.querySelectorAll('.vmove').forEach((s) => { s.onclick = () => { g.var.idx = +s.dataset.vi; renderGame(); }; });
+  document.querySelectorAll('.vmove').forEach((s) => { s.onclick = () => { stopAuto(); g.var.idx = +s.dataset.vi; renderGame(); }; });
   if (!d) return;
-  const base = d.inVar ? null : g.ply - 1;
   document.querySelectorAll('[data-line]').forEach((b) => {
     b.onclick = () => {
+      stopAuto();
       const pv = b.dataset.line === 'best' ? d.pos.lines[0].pv : d.pos.played.pv;
       if (d.inVar) {
         // remplace la suite de la variante à partir de ce coup
         const vi = d.varIdx;
-        const before = g.var.items.slice(0, vi);
-        let f = d.fenBefore;
-        const items = [];
-        for (const u of pv.slice(0, 12)) { const it = makeVarItem(f, u.slice(0, 2), u.slice(2, 4), u[4]); if (!it) break; items.push(it); f = it.fenAfter; }
-        g.var.items = before.concat(items);
+        g.var.items = g.var.items.slice(0, vi).concat(lineItems(d.fenBefore, pv));
         g.var.idx = vi + 1;
         renderGame();
-      } else showLine(base, d.fenBefore, pv);
+      } else {
+        g.var = { basePly: g.ply - 1, items: lineItems(d.fenBefore, pv), idx: 1 };
+        renderGame();
+      }
     };
   });
 }
 
-function renderMoves(g) {
+// Liste des coups. En mode Bilan : icône de la classification (coups notables) et couleur.
+const NOTABLE = ['brilliant', 'great', 'inaccuracy', 'mistake', 'miss', 'blunder'];
+function renderMoves(g, review) {
   const el = $('#moves');
+  // icône « théorie » seulement sur le dernier coup théorique de chaque camp
+  const lastBook = { w: -1, b: -1 };
+  if (review) g.results.forEach((r, i) => { if (r && r.cls === 'book') lastBook[g.moves[i].color] = i; });
   let html = '';
   for (let i = 0; i < g.moves.length; i += 2) {
     html += `<div class="mrow"><span class="mno">${i / 2 + 1}.</span>`;
     for (const j of [i, i + 1]) {
       const m = g.moves[j];
       if (!m) { html += '<span class="mv empty"></span>'; continue; }
-      const r = g.results[j];
+      const r = review ? g.results[j] : null;
       const cur = !g.var && g.ply === j + 1 ? ' cur' : g.var && g.var.basePly === j + 1 ? ' base' : '';
-      const col = r && ['inaccuracy', 'mistake', 'miss', 'blunder', 'brilliant', 'great'].includes(r.cls) ? ` style="color:${CLASSES[r.cls].color}"` : '';
-      html += `<span class="mv${cur}" data-ply="${j + 1}"><span${col}>${esc(frSan(m.san))}</span>${r ? badge(r.cls, true) : ''}</span>`;
+      const icon = r && (NOTABLE.includes(r.cls) || (r.cls === 'book' && lastBook[m.color] === j));
+      const col = r && NOTABLE.includes(r.cls) ? ` style="color:${CLASSES[r.cls].color}"` : '';
+      html += `<span class="mv${cur}" data-ply="${j + 1}"${r ? ` title="${CLASSES[r.cls].label}"` : ''}><span class="ico">${icon ? badge(r.cls, true) : ''}</span><span class="san"${col}>${figSan(m.san, m.color)}</span></span>`;
     }
     html += '</div>';
   }
-  el.innerHTML = html;
-  el.querySelectorAll('.mv[data-ply]').forEach((s) => { s.onclick = () => setPly(+s.dataset.ply); });
+  el.innerHTML = html || '<p class="muted pad">Aucun coup joué.</p>';
+  el.querySelectorAll('.mv[data-ply]').forEach((s) => { s.onclick = () => { stopAuto(); setPly(+s.dataset.ply); }; });
   const cur = el.querySelector('.mv.cur');
   if (cur) {
     const top = cur.offsetTop - el.offsetTop;
     if (top < el.scrollTop || top > el.scrollTop + el.clientHeight - 30) el.scrollTop = top - el.clientHeight / 2;
-  }
+  } else if (!g.var && g.ply === 0) el.scrollTop = 0;
 }
 
-function renderSummary(g) {
+function renderSummary(g, review) {
+  $('#stats').classList.toggle('hidden', !review);
+  if (!review) return;
   const el = $('#summary');
   const s = g.summary;
   const name = (c) => esc((c === 'w' ? g.game.white : g.game.black).name);
@@ -768,16 +932,18 @@ function renderSummary(g) {
       if (!plies.length) return;
       const key = col + cls;
       S.cycle[key] = ((S.cycle[key] ?? -1) + 1) % plies.length;
+      stopAuto();
       setPly(plies[S.cycle[key]]);
     };
   });
 }
 
-function renderGraph(g) {
+function renderGraph(g, review) {
   const el = $('#graph');
   const n = g.moves.length;
-  if (!n) { el.innerHTML = ''; return; }
-  const W = 600, H = 80;
+  el.classList.toggle('hidden', !review || !n);
+  if (!review || !n) { el.innerHTML = ''; return; }
+  const W = 600, H = 100;
   const pts = [];
   for (let k = 0; k <= n; k++) {
     let s = null;
@@ -790,29 +956,84 @@ function renderGraph(g) {
     pts.push([k / n * W, H - w / 100 * H]);
   }
   let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`;
-  svg += `<rect width="${W}" height="${H}" fill="#3a3835"/>`;
+  svg += `<rect width="${W}" height="${H}" fill="#403d39"/>`;
   if (pts.length > 1) {
-    svg += `<path d="M0,${H} ${pts.map((p) => `L${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ')} L${pts[pts.length - 1][0].toFixed(1)},${H} Z" fill="#e8e6e1"/>`;
+    svg += `<path d="M0,${H} ${pts.map((p) => `L${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ')} L${pts[pts.length - 1][0].toFixed(1)},${H} Z" fill="#fff"/>`;
   }
-  svg += `<line x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}" stroke="#888" stroke-width="0.5" stroke-dasharray="3,3"/>`;
+  svg += `<line x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}" stroke="#888" stroke-width="0.6"/>`;
   g.results.forEach((r, i) => {
-    if (!r || !['mistake', 'miss', 'blunder', 'brilliant', 'great'].includes(r.cls) || !pts[i + 1]) return;
-    svg += `<circle cx="${pts[i + 1][0]}" cy="${pts[i + 1][1]}" r="3.5" fill="${CLASSES[r.cls].color}" stroke="#222" stroke-width="0.8"/>`;
+    if (!r || !['inaccuracy', 'mistake', 'miss', 'blunder', 'brilliant', 'great'].includes(r.cls) || !pts[i + 1]) return;
+    svg += `<circle cx="${pts[i + 1][0]}" cy="${pts[i + 1][1]}" r="4" fill="${CLASSES[r.cls].color}" stroke="#fff" stroke-width="1"/>`;
   });
   const cx = (g.var ? g.var.basePly : g.ply) / n * W;
-  svg += `<line x1="${cx}" y1="0" x2="${cx}" y2="${H}" stroke="#f0a020" stroke-width="1.5"/></svg>`;
+  svg += `<line x1="${cx}" y1="0" x2="${cx}" y2="${H}" stroke="#81b64c" stroke-width="2"/></svg>`;
   el.innerHTML = svg;
   el.onclick = (e) => {
     const rect = el.getBoundingClientRect();
+    stopAuto();
     setPly(Math.round((e.clientX - rect.left) / rect.width * n));
+  };
+}
+
+const PLAY_SVG = '<svg viewBox="0 0 24 24"><path class="fill" d="M8 5l11 7-11 7z"/></svg>';
+const PAUSE_SVG = '<svg viewBox="0 0 24 24"><path class="fill" d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>';
+function renderNav() {
+  const b = $('#play');
+  if (!b) return;
+  const want = S.auto ? 'pause' : 'play';
+  if (b.dataset.st !== want) { b.innerHTML = S.auto ? PAUSE_SVG : PLAY_SVG; b.dataset.st = want; }
+}
+
+// ----- roue dentée : moteur, profondeur, temps maximum, nombre de variantes
+function openEngineDialog() {
+  const dlg = $('#eng-dlg');
+  const choice = $('#eng-choice');
+  const depthSel = $('#eng-depth');
+  choice.value = boostEnabled() ? 'boost' : 'lite';
+  const fill = () => {
+    const boost = choice.value === 'boost';
+    const b = engineStatus.boost;
+    const fixed = boost && b && !b.depthOption;
+    const depths = fixed ? [b.depth] : boost ? PC_DEPTHS : WEB_DEPTHS;
+    const cur = fixed ? b.depth : boost ? pcDepth() : wasmDepth();
+    depthSel.innerHTML = depths.map((d) => `<option value="${d}">${d}</option>`).join('');
+    depthSel.value = depths.includes(cur) ? cur : depths[Math.floor(depths.length / 2)];
+    depthSel.disabled = fixed;
+    $('#eng-hint').textContent = boost
+      ? (b ? `Boost PC détecté : ${b.engine}, ${b.engines} moteurs en parallèle.${fixed ? ' Pour choisir la profondeur, fermez puis relancez « Lancer l\'analyseur.bat ».' : ''}`
+        : 'Boost PC non détecté : lancez « Lancer l\'analyseur.bat » sur ce PC. En attendant, Stockfish 19 Lite (navigateur) est utilisé.')
+      : 'Version allégée de Stockfish 19, directement dans le navigateur (aussi sur téléphone). Un peu moins forte et plus lente que le Boost PC.';
+  };
+  choice.onchange = fill;
+  fill();
+  $('#eng-time').value = String(maxTime());
+  $('#eng-lines').value = String(nLines());
+  dlg.returnValue = '';
+  dlg.showModal();
+  dlg.onclose = async () => {
+    if (dlg.returnValue !== 'save') return;
+    const boost = choice.value === 'boost';
+    if (!depthSel.disabled) local.set(boost ? 'depthPc' : 'wasmDepth', depthSel.value);
+    local.set('movetime', $('#eng-time').value === '0' ? '' : $('#eng-time').value);
+    local.set('multipv', $('#eng-lines').value);
+    const changed = boost !== boostEnabled();
+    local.set('boost', boost ? '1' : '0');
+    S.liveRes = null; S.livePending = null;
+    if (changed) {
+      await detectBoost();
+      if (boost && !engineStatus.boost) toast('Boost PC non trouvé : lancez « Lancer l\'analyseur.bat » sur ce PC. Stockfish 19 Lite (navigateur) est utilisé en attendant.', 6000);
+    }
+    if (S.g) renderGame();
   };
 }
 
 // ------------------------------------------------------------------ navigation
 export function leave() {
+  stopAuto();
   if (!S.g) return;
   if (!S.batch || S.batch.cur !== S.g) S.g.abort = true; // la partie de l'analyse multiple continue
   S.g = null;
+  S.livePending = null;
   renderBatch();
 }
 export function showHome() { renderList(); renderBatch(); }
@@ -821,6 +1042,7 @@ export async function init() {
   board = new Board($('#board'), { onMove: onBoardMove });
   const profile = await store.get('settings', 'profile').catch(() => null);
   S.user = (profile && profile.chesscomUser) || local.get('user', '');
+  S.live = local.get('liveEval', '0') === '1';
   showUser();
   $('#load').onclick = () => { S.loading = loadGames(); };
   $('#filter').oninput = () => { S.shown = 100; renderList(); };
@@ -834,27 +1056,35 @@ export async function init() {
     if (tr) location.hash = '#/game/' + encodeURIComponent(tr.dataset.id);
   };
   $('#back').onclick = () => { location.hash = '#/games'; };
-  $('#first').onclick = () => setPly(0);
-  $('#prev').onclick = () => step(-1);
-  $('#next').onclick = () => step(1);
-  $('#last').onclick = () => setPly(S.g ? S.g.moves.length : 0);
+  $('#first').onclick = nav(() => setPly(0));
+  $('#prev').onclick = nav(() => step(-1));
+  $('#next').onclick = nav(() => step(1));
+  $('#last').onclick = nav(() => { if (S.g) setPly(S.g.moves.length); });
+  $('#play').onclick = toggleAuto;
+  $('#suivant').onclick = nav(() => step(1));
   $('#flip').onclick = () => { board.flip(); renderGame(); };
   $('#show-next').onchange = () => renderGame();
-  $('#resume').onclick = () => S.g && runAnalysis(S.g);
-  $('#reanalyze').onclick = async () => {
+  $('#analyze').onclick = startAnalysis;
+  $('#stop').onclick = () => { if (S.g && S.g.analyzing) S.g.abort = true; };
+  $('#eng-gear').onclick = openEngineDialog;
+  $('#live').checked = S.live;
+  $('#live').onchange = (e) => { S.live = e.target.checked; local.set('liveEval', S.live ? '1' : '0'); if (S.g) renderGame(); };
+  $('#reanalyze').onclick = () => {
     const g = S.g;
-    if (!g || g.analyzing || !confirm('Relancer l\'analyse complète de cette partie ?')) return;
+    if (!g || g.analyzing || !confirm('Relancer l\'analyse complète de cette partie avec les réglages actuels ?')) return;
     g.positions = new Array(g.moves.length).fill(null);
     recompute(g);
-    renderGame();
-    runAnalysis(g);
+    startAnalysis();
   };
+  onEngineStatus(() => { if (S.g) { renderEngine(); renderLive(S.g); } });
+  renderNav();
   document.addEventListener('keydown', (e) => {
-    if (!S.g || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-    if (e.key === 'ArrowLeft') { step(-1); e.preventDefault(); }
-    else if (e.key === 'ArrowRight') { step(1); e.preventDefault(); }
-    else if (e.key === 'ArrowUp' || e.key === 'Home') { setPly(0); e.preventDefault(); }
-    else if (e.key === 'ArrowDown' || e.key === 'End') { setPly(S.g.moves.length); e.preventDefault(); }
+    if (!S.g || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT' || document.querySelector('dialog[open]')) return;
+    if (e.key === 'ArrowLeft') { stopAuto(); step(-1); e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { stopAuto(); step(1); e.preventDefault(); }
+    else if (e.key === 'ArrowUp' || e.key === 'Home') { stopAuto(); setPly(0); e.preventDefault(); }
+    else if (e.key === 'ArrowDown' || e.key === 'End') { stopAuto(); setPly(S.g.moves.length); e.preventDefault(); }
+    else if (e.key === ' ') { toggleAuto(); e.preventDefault(); }
     else if (e.key === 'Escape') exitVar();
     else if (e.key === 'f') { board.flip(); renderGame(); }
   });

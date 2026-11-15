@@ -110,29 +110,71 @@
       <div id="board"></div>
     </div>
     <div class="player" id="player-bottom"></div>
-    <div class="controls">
-      <button id="back" class="btn" title="Retour à l'historique">☰<span class="opt"> Parties</span></button>
-      <button id="first" class="btn" title="Début (↑)">⏮</button>
-      <button id="prev" class="btn" title="Coup précédent (←)">◀</button>
-      <button id="next" class="btn" title="Coup suivant (→)">▶</button>
-      <button id="last" class="btn" title="Fin (↓)">⏭</button>
-      <button id="flip" class="btn" title="Retourner l'échiquier (F)">⇅</button>
+    <div class="board-opts">
+      <button id="flip" class="btn small" title="Retourner l'échiquier (F)">⇅ Retourner</button>
       <label class="muted small"><input type="checkbox" id="show-next"> Flèche du meilleur coup suivant</label>
     </div>
-    <div id="graph" title="Cliquez pour aller à ce moment de la partie"></div>
   </div>
-  <div class="right">
-    <div class="card head">
-      <div id="opening"></div>
-      <div id="game-meta" class="muted small"></div>
-      <div id="progress" class="hidden"><div class="bar"><div class="fill"></div></div><span class="txt"></span> <button id="resume" class="btn small hidden">Reprendre</button></div>
+  <aside class="panel" id="gpanel">
+    <div class="phead">
+      <button id="back" class="icon-btn" title="Retour à l'historique des parties" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <span id="ptitle"></span>
+      <a id="cc-link" class="icon-btn" target="_blank" rel="noopener" title="Voir la partie sur chess.com"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
     </div>
-    <div class="card" id="coach"></div>
-    <div class="card"><div id="moves"></div></div>
-    <div class="card" id="summary"></div>
-    <div class="card foot"><button id="reanalyze" class="btn small">Relancer l'analyse</button></div>
-  </div>
+    <div class="peng">
+      <label class="switch" title="Afficher les meilleures lignes du moteur pour la position"><input type="checkbox" id="live"><span></span></label>
+      <span>Analyse</span>
+      <span id="eng-desc" class="muted small"></span>
+      <button id="eng-gear" class="icon-btn" title="Paramètres d'analyse" aria-label="Paramètres d'analyse"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+    </div>
+    <div id="lines" class="hidden"></div>
+    <div id="coach" class="hidden"></div>
+    <div id="next-wrap" class="hidden"><button id="suivant" class="btn big primary">→ Suivant</button></div>
+    <div id="opening"></div>
+    <div id="moves"></div>
+    <div id="graph" class="hidden" title="Cliquez pour aller à ce moment de la partie"></div>
+    <div id="pfoot">
+      <div id="progress" class="hidden"><div class="bar"><div class="fill"></div></div><div class="row between"><span class="txt"></span><button id="stop" class="btn small">Arrêter</button></div></div>
+      <button id="analyze" class="btn big primary">Analyser</button>
+    </div>
+    <details id="stats" class="hidden"><summary>Statistiques de la partie</summary><div id="summary"></div>
+      <p><button id="reanalyze" class="btn small">Relancer l'analyse avec les réglages actuels</button></p></details>
+    <div id="game-meta" class="muted small"></div>
+    <div class="navbar">
+      <button id="first" class="btn" title="Début (↑)" aria-label="Début"><svg viewBox="0 0 24 24"><path d="M6 5v14M18 5l-8 7 8 7"/></svg></button>
+      <button id="prev" class="btn" title="Coup précédent (←)" aria-label="Coup précédent"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <button id="play" class="btn" title="Lecture automatique (espace)" aria-label="Lecture automatique"></button>
+      <button id="next" class="btn" title="Coup suivant (→)" aria-label="Coup suivant"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+      <button id="last" class="btn" title="Fin (↓)" aria-label="Fin"><svg viewBox="0 0 24 24"><path d="M18 5v14M6 5l8 7-8 7"/></svg></button>
+    </div>
+  </aside>
 </main>
+
+<dialog id="eng-dlg" class="dlg">
+  <form method="dialog">
+    <h2>Paramètres d'analyse</h2>
+    <div class="frow"><label for="eng-choice">Moteur d'échecs</label><select id="eng-choice">
+      <option value="boost">Stockfish 19 (Boost PC)</option>
+      <option value="lite">Stockfish 19 Lite (1,8 Mo)</option>
+    </select></div>
+    <p id="eng-hint" class="muted small"></p>
+    <div class="frow"><label for="eng-depth">Profondeur</label><select id="eng-depth"></select></div>
+    <div class="frow"><label for="eng-time">Temps maximum</label><select id="eng-time">
+      <option value="0">Sans limite</option><option value="1000">1 s</option><option value="2000">2 s</option><option value="3000">3 s</option>
+      <option value="5000">5 s</option><option value="10000">10 s</option><option value="30000">30 s</option>
+    </select></div>
+    <div class="frow"><label for="eng-lines">Nombre de variantes</label><select id="eng-lines">
+      <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+    </select></div>
+    <p class="muted small">Profondeur et temps maximum s'appliquent à chaque position : le moteur s'arrête au premier des deux atteint.
+      Le nombre de variantes est celui des lignes affichées quand « Analyse » est activé.
+      Les nouveaux réglages valent pour les prochaines analyses (« Relancer l'analyse » pour une partie déjà analysée).</p>
+    <div class="row end">
+      <button value="cancel" class="btn">Annuler</button>
+      <button value="save" class="btn primary">Sauvegarder</button>
+    </div>
+  </form>
+</dialog>
 
 <main id="play-view" class="view hidden page"></main>
 <main id="openings-view" class="view hidden page"></main>
