@@ -107,6 +107,9 @@ async function cloudEvalRaw(fen, minDepth, npv) {
 }
 
 // ------------------------------------------------------------------ Stockfish WASM (navigateur)
+// Stockfish 19 Lite « single » : un cœur par moteur. Pour utiliser plusieurs cœurs, on lance plusieurs
+// moteurs en parallèle, chacun sur une position différente (mesuré : à profondeur fixe, la version
+// multi-thread explore 4 fois plus de positions pour la même profondeur, donc sans gain de temps).
 class WasmEngine {
   constructor() {
     this.queue = Promise.resolve();
@@ -176,6 +179,7 @@ class WasmEngine {
 class WasmPool {
   constructor(n) {
     this.n = n;
+    this.retired = false;
     this.engines = [];
     this.free = [];
     this.waiting = [];
@@ -189,7 +193,13 @@ class WasmPool {
     if (this.free.length) return Promise.resolve(this.free.pop());
     return new Promise((resolve) => { if (priority) this.waiting.unshift(resolve); else this.waiting.push(resolve); });
   }
-  release(e) { const next = this.waiting.shift(); if (next) next(e); else this.free.push(e); }
+  release(e) {
+    const next = this.waiting.shift();
+    if (next) next(e);
+    else if (this.retired) e.worker.terminate(); // ancien réglage : le moteur s'arrête une fois sa recherche finie
+    else this.free.push(e);
+  }
+  retire() { this.retired = true; for (const e of this.free) e.worker.terminate(); this.free = []; }
   async run(fn, priority = false) {
     const e = await this.acquire(priority);
     try { return await fn(e); } finally { this.release(e); }
@@ -197,8 +207,24 @@ class WasmPool {
 }
 
 const hw = navigator.hardwareConcurrency || 2;
-const WASM_ENGINES = isMobile() ? Math.min(2, hw) : Math.max(1, Math.min(4, hw - 1));
-const wasmPool = new WasmPool(WASM_ENGINES);
+// « Threads » (roue dentée) : nombre de moteurs Stockfish 1 cœur en parallèle, réglable par appareil.
+// Par défaut : tous les cœurs logiques sauf 2 sur PC (10 sur un processeur à 12 threads), 2 sur téléphone.
+export const MAX_THREADS = Math.max(1, hw);
+export const DEFAULT_THREADS = isMobile() ? Math.min(2, hw) : Math.max(1, hw - 2);
+export const wasmThreads = () => Math.min(MAX_THREADS, Math.max(1, Number(local.get('threads')) || DEFAULT_THREADS));
+let WASM_ENGINES = 0;
+let wasmPool = null;
+function getPool() {
+  const n = wasmThreads();
+  if (n !== WASM_ENGINES) {
+    if (wasmPool) wasmPool.retire();
+    wasmPool = new WasmPool(n);
+    WASM_ENGINES = n;
+  }
+  return wasmPool;
+}
+getPool();
+const wasmDesc = () => `${wasmThreads()} moteur${wasmThreads() > 1 ? 's' : ''}`;
 export const wasmDepth = () => Number(local.get('wasmDepth')) || (isMobile() ? 16 : 18);
 // Réglages de la roue dentée (vue partie) : profondeur avec le Boost PC, temps maximum par position (ms, 0 = sans limite)
 // et nombre de variantes affichées par l'analyse en direct.
@@ -231,7 +257,7 @@ export async function detectBoost() {
 // Si le PC n'était pas joignable, on retente de temps en temps (le serveur a pu être lancé entre-temps).
 setInterval(() => { if (!status.boost && boostEnabled() && document.visibilityState === 'visible') detectBoost(); }, 30000);
 
-export function parallelism() { return status.boost ? status.boost.engines || 4 : WASM_ENGINES; }
+export function parallelism() { return status.boost ? status.boost.engines || 4 : (getPool(), WASM_ENGINES); }
 
 // Moteur utilisé par l'analyse multiple : nom, nombre de moteurs, profondeurs proposées et par défaut.
 // Un Boost PC lancé avant cette version ne sait pas changer de profondeur (depthOption absent).
@@ -242,7 +268,7 @@ export function engineInfo() {
   }
   const d = wasmDepth();
   const depths = [...new Set([12, 14, 16, 18, 20, d])].sort((x, y) => x - y);
-  return { boost: false, label: `Navigateur : Stockfish 19 lite · ${WASM_ENGINES} moteur${WASM_ENGINES > 1 ? 's' : ''}`, engines: WASM_ENGINES, depths, def: d, fixed: false };
+  return { boost: false, label: `Navigateur : Stockfish 19 lite · ${wasmDesc()}`, engines: wasmThreads(), depths, def: d, fixed: false };
 }
 
 // Moteur et profondeur utilisés pour analyser une partie (réglages de la roue dentée).
@@ -250,13 +276,13 @@ export function engineInfo() {
 export function analysisSettings() {
   const b = status.boost;
   if (b) return { boost: true, name: b.engine || 'Stockfish 19', engines: b.engines, fixed: !b.depthOption, depth: b.depthOption ? pcDepth() : b.depth };
-  return { boost: false, name: 'Stockfish 19 Lite', engines: WASM_ENGINES, fixed: false, depth: wasmDepth() };
+  return { boost: false, name: 'Stockfish 19 Lite', engines: wasmThreads(), fixed: false, depth: wasmDepth() };
 }
 
 export function engineLabel() {
   if (!status.checked) return 'Recherche du moteur…';
   if (status.boost) return `Boost PC : ${status.boost.engine} · ${status.boost.engines} moteurs · profondeur ${analysisSettings().depth}`;
-  return `Navigateur : Stockfish 19 lite · ${WASM_ENGINES} moteur${WASM_ENGINES > 1 ? 's' : ''} · profondeur ${wasmDepth()}`;
+  return `Navigateur : Stockfish 19 lite · ${wasmDesc()} · profondeur ${wasmDepth()}`;
 }
 
 export const SOURCE_LABEL = (pos) => ({
@@ -324,7 +350,7 @@ async function localPosition(fen, played, useCloud, priority, cloudOnly, forcedD
   }
   if (result) delete result.tb;
   const pre = result;
-  result = await wasmPool.run(async (eng) => {
+  result = await getPool().run(async (eng) => {
     let r = pre;
     if (!r) {
       const infos = await eng.search(fen, { depth, multipv: npv, movetime });

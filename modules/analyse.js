@@ -7,6 +7,7 @@ import { $, esc, fr1, uciOf, local, toast, badge } from '../core/ui.js';
 import {
   analyzePosition, parallelism, SOURCE_LABEL, engineInfo, analysisSettings, maxTime, nLines, pcDepth, wasmDepth,
   PC_DEPTHS, WEB_DEPTHS, boostEnabled, detectBoost, status as engineStatus, onStatus as onEngineStatus,
+  MAX_THREADS, wasmThreads,
 } from '../core/engine.js';
 import { syncNow, cfg as syncCfg } from '../core/sync.js';
 import * as store from '../core/store.js';
@@ -715,7 +716,8 @@ function renderEngine() {
   if (!engineStatus.checked) { el.textContent = 'recherche du moteur…'; return; }
   const st = analysisSettings();
   const t = maxTime();
-  el.textContent = `profondeur ${st.depth}${t ? ` · ${t / 1000} s max` : ''} | ${st.name}${st.boost ? ' (PC)' : ''}`;
+  const thr = st.boost ? '' : ` · ${wasmThreads()} threads`;
+  el.textContent = `profondeur ${st.depth}${t ? ` · ${t / 1000} s max` : ''} | ${st.name}${st.boost ? ' (PC)' : thr}`;
 }
 
 // Bas du panneau : bouton « Analyser », progression ou « Reprendre ».
@@ -1004,18 +1006,30 @@ function openEngineDialog() {
         : 'Boost PC non détecté : lancez « Lancer l\'analyseur.bat » sur ce PC. En attendant, Stockfish 19 Lite (navigateur) est utilisé.')
       : 'Version allégée de Stockfish 19, directement dans le navigateur (aussi sur téléphone). Un peu moins forte et plus lente que le Boost PC.';
   };
-  choice.onchange = fill;
+  const thr = $('#eng-threads');
+  thr.max = MAX_THREADS;
+  thr.value = wasmThreads();
+  const fillThreads = () => {
+    const lite = choice.value === 'lite' || !engineStatus.boost;
+    $('#threads-row').classList.toggle('hidden', !lite);
+    $('#threads-hint').classList.toggle('hidden', !lite);
+    $('#threads-hint').textContent = `Nombre de moteurs Stockfish 19 Lite qui analysent en parallèle, un cœur chacun (1 à ${MAX_THREADS} sur cet appareil). Plus il y en a, plus l'analyse d'une partie est rapide, mais plus l'appareil chauffe.`;
+  };
+  choice.onchange = () => { fill(); fillThreads(); };
   fill();
+  fillThreads();
   $('#eng-time').value = String(maxTime());
   $('#eng-lines').value = String(nLines());
   dlg.returnValue = '';
   dlg.showModal();
-  dlg.onclose = async () => {
-    if (dlg.returnValue !== 'save') return;
+  // « submit » (et non « close ») : déclenché tout de suite par le bouton Sauvegarder.
+  dlg.querySelector('form').onsubmit = async (e) => {
+    if (!e.submitter || e.submitter.value !== 'save') return;
     const boost = choice.value === 'boost';
     if (!depthSel.disabled) local.set(boost ? 'depthPc' : 'wasmDepth', depthSel.value);
     local.set('movetime', $('#eng-time').value === '0' ? '' : $('#eng-time').value);
     local.set('multipv', $('#eng-lines').value);
+    local.set('threads', String(Math.min(MAX_THREADS, Math.max(1, Math.round(Number(thr.value)) || wasmThreads()))));
     const changed = boost !== boostEnabled();
     local.set('boost', boost ? '1' : '0');
     S.liveRes = null; S.livePending = null;
