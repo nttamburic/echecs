@@ -17,9 +17,8 @@ header { display: flex; align-items: center; gap: 16px; padding: 8px 18px; backg
 #tabs a { color: var(--muted); text-decoration: none; padding: 6px 12px; border-radius: 6px; font-weight: 600; white-space: nowrap; }
 #tabs a:hover { color: var(--text); background: var(--panel); }
 #tabs a.active { color: var(--text); background: var(--panel2); }
-#status-bar { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; font-size: 12px; line-height: 1.35; }
-#status-bar a { color: var(--muted); }
-#status-bar a.err { color: #ff8a80; }
+#tabs a.alert { position: relative; }
+#tabs a.alert::after { content: ''; position: absolute; top: 4px; right: 3px; width: 8px; height: 8px; border-radius: 50%; background: #fa412d; }
 .page { max-width: 1000px; margin: 20px auto; padding: 0 16px; }
 .page ul, .page ol { padding-left: 22px; }
 .page li { margin: 4px 0; }
@@ -43,8 +42,6 @@ input[type=checkbox] { padding: 0; vertical-align: middle; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 .btn.primary:hover { background: #95c95f; }
 .btn.small { padding: 2px 8px; font-size: 12.5px; }
-.btn.claude { background: #c96442; border-color: #c96442; color: #fff; font-weight: 600; }
-.btn.claude:hover { background: #d97757; }
 
 #home-view { max-width: 1000px; margin: 20px auto; padding: 0 16px; }
 #games { width: 100%; border-collapse: collapse; margin-top: 10px; }
@@ -136,9 +133,6 @@ input[type=checkbox] { padding: 0; vertical-align: middle; }
 
 #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px); background: #1f1e1c; border: 1px solid var(--border); padding: 10px 16px; border-radius: 8px; transition: transform .25s; z-index: 100; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
 #toast.show { transform: translateX(-50%) translateY(0); }
-#copy-fallback { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 200; }
-#copy-fallback .card { width: min(700px, 92vw); }
-#copy-fallback textarea { width: 100%; height: 300px; margin-bottom: 8px; }
 
 @media (max-width: 1000px) {
   #game-view { flex-direction: column; align-items: stretch; }
@@ -153,7 +147,6 @@ input[type=checkbox] { padding: 0; vertical-align: middle; }
   .logo-txt { display: none; }
   #tabs { flex: 1; overflow-x: auto; scrollbar-width: none; }
   #tabs a { padding: 6px 8px; font-size: 13.5px; }
-  #status-bar { width: 100%; flex-direction: row; justify-content: space-between; gap: 8px; margin-left: 0; font-size: 11px; }
   #home-view, .page { margin: 10px auto; padding: 0 8px; }
   .card { padding: 10px 12px; }
   #user { width: 100%; }

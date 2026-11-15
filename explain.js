@@ -1,6 +1,6 @@
 // Commentaires en français des coups et des variantes.
 import { Chess } from './vendor/chess.js';
-import { VALUES, materialGain, fmtScore, winPct, CLASSES } from './analysis.js';
+import { VALUES, materialGain, fmtScore, winPct } from './analysis.js';
 
 const FR_LETTERS = { K: 'R', Q: 'D', R: 'T', B: 'F', N: 'C' };
 export const frSan = (san) => san.replace(/[KQRBN]/g, (l) => FR_LETTERS[l]);
@@ -181,33 +181,4 @@ export function explainMove({ fenBefore, san, uci, color, r, pos, openingName, p
     if (line.length > 1) out.best = { san: line[0].san, uci, text: lineToText(line), items: line, isPlayed: true };
   }
   return out;
-}
-
-// Question prête à coller sur claude.ai
-export function claudePrompt({ fenBefore, san, color, r, pos, playerColor, openingName, moveLabel }) {
-  const camp = color === 'w' ? 'les Blancs' : 'les Noirs';
-  const lines = pos.lines.map((l, i) => `  ${i + 1}) ${lineToText(commentLine(fenBefore, l.pv, 10), false)}  [éval : ${fmtScore(l.score)}]`).join('\n');
-  const played = pos.played ? `${lineToText(commentLine(fenBefore, pos.played.pv, 10), false)}  [éval : ${fmtScore(pos.played.score)}]` : '';
-  const me = playerColor ? (playerColor === color ? ' (c\'est moi qui ai joué ce coup)' : ' (c\'est mon adversaire qui a joué ce coup)') : '';
-  const srcName = { stockfish: `Stockfish 19, profondeur ${pos.depth}`, cloud: `analyse cloud Lichess, profondeur ${pos.depth}`, tablebase: 'tables de finales Lichess' }[pos.source] || pos.source;
-  const bad = r && ['inaccuracy', 'mistake', 'miss', 'blunder'].includes(r.cls);
-  return `Je suis un joueur d'échecs amateur et j'analyse une de mes parties. Peux-tu m'expliquer simplement cette position ?
-
-Position (FEN, avant le coup) : ${fenBefore}
-Trait : ${camp}${me}
-${openingName ? 'Ouverture : ' + openingName + '\n' : ''}Coup joué : ${moveLabel || frSan(san)}${r ? ` — classé « ${CLASSES[r.cls].label} » (perte de ${r.loss.toFixed(1).replace('.', ',')} % de chances de gain)` : ''}
-
-Meilleures lignes du moteur (${srcName}) :
-${lines}
-Ligne après le coup joué (Stockfish) :
-  ${played}
-
-(Notation française : R = roi, D = dame, T = tour, F = fou, C = cavalier. Évaluations du point de vue des Blancs.)
-
-Questions :
-${bad ? `1. Pourquoi le coup joué est-il mauvais ? Quelle menace ou quelle idée a été manquée ?
-2. Quelle est l'idée du meilleur coup et quel plan suivre ensuite ?
-3. Quel principe général retenir pour ne pas refaire cette erreur ?` : `1. Quelle est l'idée de ce coup et pourquoi est-il bon ?
-2. Quel plan suivre ensuite pour chaque camp ?
-3. Y a-t-il un principe général à retenir de cette position ?`}`;
 }

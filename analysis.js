@@ -1,4 +1,4 @@
-// Classement des coups, précision et Elo estimé.
+// Classement des coups et précision.
 import { Chess } from './vendor/chess.js';
 
 export const VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
@@ -27,18 +27,6 @@ export function gameAccuracy(accs) {
   const mean = accs.reduce((s, a) => s + a, 0) / accs.length;
   const harmonic = accs.length / accs.reduce((s, a) => s + 1 / Math.max(1, a), 0);
   return 0.3 * mean + 0.7 * harmonic;
-}
-
-// Elo estimé à partir de la précision de la partie (interpolation linéaire, approximative).
-const ELO_TABLE = [[0, 100], [40, 400], [55, 700], [65, 1000], [72, 1250], [78, 1500], [83, 1750], [87, 2000], [90, 2250], [93, 2500], [95, 2700], [97, 2900], [99, 3150], [100, 3300]];
-export function estimateElo(acc) {
-  if (acc == null) return null;
-  for (let i = 1; i < ELO_TABLE.length; i++) {
-    const [a1, e1] = ELO_TABLE[i];
-    const [a0, e0] = ELO_TABLE[i - 1];
-    if (acc <= a1) return Math.round((e0 + (e1 - e0) * (acc - a0) / (a1 - a0)) / 25) * 25;
-  }
-  return 3300;
 }
 
 export const CLASSES = {
@@ -180,30 +168,15 @@ export function classifyGame(moves, positions, ratings, book) {
   return out;
 }
 
-export function summarize(moves, results, ratings = null) {
-  const s = { w: { counts: {}, accs: [], contested: [] }, b: { counts: {}, accs: [], contested: [] } };
+export function summarize(moves, results) {
+  const s = { w: { counts: {}, accs: [] }, b: { counts: {}, accs: [] } };
   results.forEach((r, i) => {
     if (!r) return;
     const c = moves[i].color;
     s[c].counts[r.cls] = (s[c].counts[r.cls] || 0) + 1;
     s[c].accs.push(r.acc);
-    // Pour l'Elo estimé on ne garde que les coups hors théorie joués quand la partie était encore disputée :
-    // dans une position déjà gagnée ou perdue, presque tous les coups paraissent "parfaits".
-    // On écarte aussi les coups forcés et les finales jouées d'après les tables (décisions triviales).
-    if (r.cls !== 'book' && !r.forced && !r.tablebase && r.winBefore >= 3 && r.winBefore <= 97) s[c].contested.push(r.acc);
   });
-  for (const c of ['w', 'b']) {
-    s[c].accuracy = gameAccuracy(s[c].accs);
-    const n = s[c].contested.length;
-    if (n >= 8) {
-      let elo = estimateElo(gameAccuracy(s[c].contested));
-      // Peu de coups disputés = estimation peu fiable : on la rapproche du classement réel du joueur.
-      const rating = ratings && ratings[c];
-      const K = 15;
-      if (rating) elo = Math.round((n * elo + K * rating) / (n + K) / 25) * 25;
-      s[c].elo = elo;
-    } else s[c].elo = null;
-  }
+  for (const c of ['w', 'b']) s[c].accuracy = gameAccuracy(s[c].accs);
   return s;
 }
 

@@ -2,8 +2,8 @@
 import { Chess } from '../vendor/chess.js';
 import { Board } from '../board.js';
 import { classifyMove, classifyGame, summarize, CLASSES, SUMMARY_ORDER, fmtScore, winPct, epd } from '../analysis.js';
-import { frSan, explainMove, claudePrompt } from '../explain.js';
-import { $, esc, fr1, uciOf, local, toast, badge, copyText } from '../core/ui.js';
+import { frSan, explainMove } from '../explain.js';
+import { $, esc, fr1, uciOf, local, toast, badge } from '../core/ui.js';
 import { analyzePosition, parallelism, SOURCE_LABEL } from '../core/engine.js';
 import * as store from '../core/store.js';
 import * as chesscom from '../core/chesscom.js';
@@ -133,7 +133,7 @@ function computeOpenings(g) {
 
 function recompute(g) {
   g.results = classifyGame(g.moves, g.positions, g.ratings, BOOK);
-  g.summary = summarize(g.moves, g.results, g.ratings);
+  g.summary = summarize(g.moves, g.results);
 }
 
 export async function openGame(id) {
@@ -180,7 +180,7 @@ async function saveAnalysis(g) {
   const s = g.summary;
   const analyzed = g.positions.filter(Boolean).length;
   const summary = {
-    accW: s.w.accuracy, accB: s.b.accuracy, eloW: s.w.elo, eloB: s.b.elo,
+    accW: s.w.accuracy, accB: s.b.accuracy,
     complete: analyzed === g.moves.length, analyzed, total: g.moves.length, date: Date.now(),
     month: g.game.month, end: g.game.end, white: g.game.white.name, black: g.game.black.name,
   };
@@ -379,7 +379,7 @@ function renderGame() {
     const p = c === 'w' ? g.game.white : g.game.black;
     const s = g.summary[c];
     return `<span class="color-dot ${c}"></span><b>${esc(p.name)}</b> <span class="muted">(${esc(p.rating)})</span>
-      <span class="pill">Précision ${fr1(s.accuracy)} %</span>${s.elo ? `<span class="pill">Elo estimé ${s.elo}</span>` : ''}`;
+      <span class="pill">Précision ${fr1(s.accuracy)} %</span>`;
   };
   $('#player-top').innerHTML = pl(top);
   $('#player-bottom').innerHTML = pl(bot);
@@ -442,7 +442,7 @@ function renderCoach(g, d) {
   if (ex.best) {
     html += `<div class="line good"><div class="lhead">${ex.best.isPlayed ? 'Suite prévue' : 'Meilleure suite'} <button class="btn small" data-line="${ex.best.isPlayed ? 'played' : 'best'}">▶ Voir</button></div>${esc(ex.best.text)}</div>`;
   }
-  html += `<div class="coach-foot"><span class="muted">${esc(SOURCE_LABEL(d.pos))}</span><button id="ask-claude" class="btn claude">✦ Demander à Claude</button></div>`;
+  html += `<div class="coach-foot"><span class="muted">${esc(SOURCE_LABEL(d.pos))}</span></div>`;
   el.innerHTML = html;
   bindCoach(g, d);
 }
@@ -469,19 +469,6 @@ function bindCoach(g, d) {
       } else showLine(base, d.fenBefore, pv);
     };
   });
-  const ask = $('#ask-claude');
-  if (ask) ask.onclick = () => askClaude(g, d);
-}
-
-async function askClaude(g, d) {
-  const moveNo = d.fenBefore.split(' ')[5];
-  const text = claudePrompt({
-    fenBefore: d.fenBefore, san: d.san, color: d.color, r: d.r, pos: d.pos, playerColor: g.playerColor,
-    openingName: g.openingAt[g.var ? g.var.basePly : g.ply],
-    moveLabel: `${moveNo}${d.color === 'w' ? '.' : '...'} ${frSan(d.san)}${d.inVar ? ' (coup essayé en variante)' : ''}`,
-  });
-  if (await copyText(text)) toast('Question copiée ! Collez-la sur <a href="https://claude.ai/new" target="_blank" rel="noopener">claude.ai</a>.', 7000);
-  else { $('#copy-fallback textarea').value = text; $('#copy-fallback').classList.remove('hidden'); }
 }
 
 function renderMoves(g) {
@@ -514,8 +501,6 @@ function renderSummary(g) {
   const name = (c) => esc((c === 'w' ? g.game.white : g.game.black).name);
   let html = `<table><thead><tr><th></th><th><span class="color-dot w"></span>${name('w')}</th><th><span class="color-dot b"></span>${name('b')}</th></tr></thead><tbody>`;
   html += `<tr class="acc-row"><td>Précision</td><td>${fr1(s.w.accuracy)} %</td><td>${fr1(s.b.accuracy)} %</td></tr>`;
-  const eloCell = (x) => (x.elo ? x.elo : `<span class="muted" title="Pas assez de coups joués dans une position encore disputée (${x.contested.length}/8)">–</span>`);
-  html += `<tr class="acc-row"><td title="Estimé à partir de la précision sur les coups joués quand la partie était encore disputée">Elo estimé de la partie</td><td>${eloCell(s.w)}</td><td>${eloCell(s.b)}</td></tr>`;
   for (const cls of SUMMARY_ORDER) {
     const c = CLASSES[cls];
     const cell = (col) => {
@@ -609,7 +594,6 @@ export async function init() {
     renderGame();
     runAnalysis(g);
   };
-  $('#copy-fallback button').onclick = () => $('#copy-fallback').classList.add('hidden');
   document.addEventListener('keydown', (e) => {
     if (!S.g || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     if (e.key === 'ArrowLeft') { step(-1); e.preventDefault(); }

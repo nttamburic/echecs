@@ -1,7 +1,7 @@
-// Point d'entrée : navigation entre les modules, état du moteur et de la synchronisation.
+// Point d'entrée : navigation entre les modules, démarrage du moteur et de la synchronisation.
 import { $, $$ } from './core/ui.js';
-import { detectBoost, onStatus, engineLabel } from './core/engine.js';
-import { onSync, syncNow, cfg, state as syncState } from './core/sync.js';
+import { detectBoost } from './core/engine.js';
+import { onSync, syncNow, cfg } from './core/sync.js';
 import * as analyse from './modules/analyse.js';
 import * as settings from './modules/settings.js';
 import { soon } from './modules/soon.js';
@@ -28,27 +28,17 @@ function route() {
   analyse.showHome();
 }
 
-function timeAgo(t) {
-  const s = Math.round((Date.now() - t) / 1000);
-  if (s < 60) return 'à l\'instant';
-  if (s < 3600) return `il y a ${Math.round(s / 60)} min`;
-  if (s < 86400) return `il y a ${Math.round(s / 3600)} h`;
-  return new Date(t).toLocaleDateString('fr-FR');
-}
-
-function renderSyncStatus(st) {
-  const el = $('#sync-status');
-  if (!cfg.configured) { el.innerHTML = '<a href="#/settings">☁ synchronisation non configurée</a>'; return; }
-  if (st.running) el.textContent = '☁ synchronisation…';
-  else if (st.error) el.innerHTML = `<a href="#/settings" class="err" title="${st.error.replace(/"/g, '&quot;')}">☁ erreur de synchronisation</a>`;
-  else el.textContent = st.lastSync ? `☁ synchronisé ${timeAgo(st.lastSync)}` : '☁ jamais synchronisé';
+// L'état du moteur et de la synchronisation est affiché dans les Réglages ; ici, seulement
+// une pastille rouge sur l'onglet ⚙ si la synchronisation échoue.
+function markSyncError(st) {
+  const tab = $('#tabs a[data-tab="settings"]');
+  tab.classList.toggle('alert', !!st.error);
+  tab.title = st.error ? 'Erreur de synchronisation : ' + st.error : 'Réglages et synchronisation';
 }
 
 async function init() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-  onStatus(() => { $('#engine').textContent = engineLabel(); });
-  onSync(renderSyncStatus);
-  setInterval(() => renderSyncStatus(syncState), 60000);
+  onSync(markSyncError);
   await analyse.init();
   window.addEventListener('hashchange', route);
   route();
