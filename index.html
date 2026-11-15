@@ -4,32 +4,53 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1f1e1c">
-<title>Échecs : analyse et entraînement</title>
+<title>Chess Journey</title>
 <link rel="icon" href="pieces/wN.svg">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header>
-  <a href="#/" class="logo"><img src="pieces/wN.svg" alt=""><span class="logo-txt">Échecs</span></a>
-  <nav id="tabs">
-    <a href="#/" data-tab="analyse">Analyse</a>
-    <a href="#/openings" data-tab="openings">Ouvertures</a>
-    <a href="#/middlegame" data-tab="middlegame">Milieu de jeu</a>
-    <a href="#/endgames" data-tab="endgames">Finales</a>
-    <a href="#/settings" data-tab="settings" title="Réglages et synchronisation">⚙</a>
-  </nav>
-</header>
+<!-- Téléphone : barre du haut avec le bouton du menu -->
+<div id="topbar">
+  <button id="menu-btn" class="icon-btn" aria-label="Menu" aria-controls="sidebar" aria-expanded="false">
+    <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <a href="#/games" class="brand"><img src="pieces/wN.svg" alt=""><span>Chess Journey</span></a>
+</div>
+<div id="scrim"></div>
 
-<main id="home-view" class="view">
+<aside id="sidebar">
+  <a href="#/games" class="brand"><img src="pieces/wN.svg" alt=""><span>Chess Journey</span></a>
+  <nav id="tabs">
+    <a href="#/play" data-tab="play" title="Jouer">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path class="fill" d="M10 8.2l6 3.8-6 3.8z"/></svg><span>Jouer</span></a>
+    <a href="#/openings" data-tab="openings" title="Ouvertures">
+      <svg viewBox="0 0 24 24"><path d="M2.5 5h6a3.5 3.5 0 0 1 3.5 3.5V20a2.5 2.5 0 0 0-2.5-2.5h-7z"/><path d="M21.5 5h-6A3.5 3.5 0 0 0 12 8.5V20a2.5 2.5 0 0 1 2.5-2.5h7z"/></svg><span>Ouvertures</span></a>
+    <a href="#/puzzles" data-tab="puzzles" title="Puzzles">
+      <svg viewBox="0 0 24 24"><path d="M4 8h4a2 2 0 1 1 4 0h4v4a2 2 0 1 1 0 4v4H4z"/></svg><span>Puzzles</span></a>
+    <a href="#/strategy" data-tab="strategy" title="Étude stratégique">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg><span>Étude stratégique</span></a>
+    <a href="#/endgames" data-tab="endgames" title="Finales">
+      <svg viewBox="0 0 24 24"><path d="M5 21V3.5"/><path d="M5 4h13l-2.5 4.5L18 13H5"/></svg><span>Finales</span></a>
+    <a href="#/games" data-tab="games" title="Historique des parties">
+      <svg viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4v4.5H8"/><path d="M12 7.5V12l3 2"/></svg><span>Historique des parties</span></a>
+  </nav>
+  <nav id="tabs-bottom">
+    <a href="#/settings" data-tab="settings" title="Paramètres">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/><circle cx="12" cy="12" r="6.5"/></svg><span>Paramètres</span></a>
+  </nav>
+</aside>
+
+<div id="content">
+<main id="home-view" class="view page">
   <section class="card">
-    <h1>Mes parties chess.com</h1>
-    <div class="row">
-      <input id="user" placeholder="Votre pseudo chess.com" autocomplete="off" spellcheck="false" autocapitalize="off">
-      <button id="load" class="btn primary">Récupérer mes parties</button>
+    <div class="row between">
+      <h1>Historique des parties <span id="hist-user" class="muted"></span></h1>
+      <button id="load" class="btn">Actualiser</button>
     </div>
-    <p id="load-progress" class="muted">Seules les parties terminées sont récupérées (jamais une partie en cours).</p>
+    <p id="hist-nouser" class="hidden">Indiquez d'abord votre pseudo chess.com dans <a href="#/settings/profile">Paramètres → Profil chess.com</a>.</p>
+    <p id="load-progress" class="muted small">Seules les parties terminées sont récupérées (jamais une partie en cours).</p>
   </section>
   <section class="card">
     <div class="row filters">
@@ -63,7 +84,7 @@
     </div>
     <div class="player" id="player-bottom"></div>
     <div class="controls">
-      <button id="back" class="btn" title="Retour à la liste">☰<span class="opt"> Parties</span></button>
+      <button id="back" class="btn" title="Retour à l'historique">☰<span class="opt"> Parties</span></button>
       <button id="first" class="btn" title="Début (↑)">⏮</button>
       <button id="prev" class="btn" title="Coup précédent (←)">◀</button>
       <button id="next" class="btn" title="Coup suivant (→)">▶</button>
@@ -86,10 +107,13 @@
   </div>
 </main>
 
+<main id="play-view" class="view hidden page"></main>
 <main id="openings-view" class="view hidden page"></main>
-<main id="middlegame-view" class="view hidden page"></main>
+<main id="puzzles-view" class="view hidden page"></main>
+<main id="strategy-view" class="view hidden page"></main>
 <main id="endgames-view" class="view hidden page"></main>
 <main id="settings-view" class="view hidden page"></main>
+</div>
 
 <div id="toast"></div>
 <script type="module" src="main.js"></script>

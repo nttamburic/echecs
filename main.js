@@ -1,4 +1,4 @@
-// Point d'entrée : navigation entre les modules, démarrage du moteur et de la synchronisation.
+// Point d'entrée : barre latérale, navigation entre les modules, démarrage du moteur et de la synchronisation.
 import { $, $$ } from './core/ui.js';
 import { detectBoost } from './core/engine.js';
 import { onSync, syncNow, cfg } from './core/sync.js';
@@ -6,38 +6,49 @@ import * as analyse from './modules/analyse.js';
 import * as settings from './modules/settings.js';
 import { soon } from './modules/soon.js';
 
-const VIEWS = ['home', 'game', 'openings', 'middlegame', 'endgames', 'settings'];
+const VIEWS = ['home', 'game', 'play', 'openings', 'puzzles', 'strategy', 'endgames', 'settings'];
+const MODULES = ['play', 'openings', 'puzzles', 'strategy', 'endgames']; // modules pas encore livrés
 
 export function showView(v) {
   for (const name of VIEWS) $(`#${name}-view`).classList.toggle('hidden', name !== v);
-  const tab = v === 'home' || v === 'game' ? 'analyse' : v;
-  $$('#tabs a').forEach((a) => a.classList.toggle('active', a.dataset.tab === tab));
+  const tab = v === 'home' || v === 'game' ? 'games' : v;
+  $$('#sidebar nav a').forEach((a) => a.classList.toggle('active', a.dataset.tab === tab));
   document.body.dataset.view = v;
+  closeMenu();
+  window.scrollTo(0, 0);
 }
 
 function route() {
-  const h = location.hash || '#/';
+  const h = location.hash || '#/games';
   const m = /^#\/game\/(.+)$/.exec(h);
   if (!m) analyse.leave();
   if (m) { showView('game'); analyse.openGame(decodeURIComponent(m[1])); return; }
-  if (h.startsWith('#/openings')) { showView('openings'); soon($('#openings-view'), 'openings'); return; }
-  if (h.startsWith('#/middlegame')) { showView('middlegame'); soon($('#middlegame-view'), 'middlegame'); return; }
-  if (h.startsWith('#/endgames')) { showView('endgames'); soon($('#endgames-view'), 'endgames'); return; }
-  if (h.startsWith('#/settings')) { showView('settings'); settings.render($('#settings-view')); return; }
+  const [, name, sub] = /^#\/([^/]*)\/?(.*)$/.exec(h) || [];
+  if (MODULES.includes(name)) { showView(name); soon($(`#${name}-view`), name); return; }
+  if (name === 'settings') { showView('settings'); settings.render($('#settings-view'), sub); return; }
+  if (name !== 'games') { history.replaceState(null, '', '#/games'); }
   showView('home');
   analyse.showHome();
 }
 
-// L'état du moteur et de la synchronisation est affiché dans les Réglages ; ici, seulement
-// une pastille rouge sur l'onglet ⚙ si la synchronisation échoue.
+// ---- menu latéral sur téléphone (tiroir) ----
+function openMenu() { document.body.classList.add('menu-open'); $('#menu-btn').setAttribute('aria-expanded', 'true'); }
+function closeMenu() { document.body.classList.remove('menu-open'); $('#menu-btn').setAttribute('aria-expanded', 'false'); }
+
+// L'état du moteur et de la synchronisation est affiché dans les Paramètres ; ici, seulement
+// une pastille rouge sur « Paramètres » si la synchronisation échoue.
 function markSyncError(st) {
-  const tab = $('#tabs a[data-tab="settings"]');
+  const tab = $('#sidebar a[data-tab="settings"]');
   tab.classList.toggle('alert', !!st.error);
-  tab.title = st.error ? 'Erreur de synchronisation : ' + st.error : 'Réglages et synchronisation';
+  tab.title = st.error ? 'Erreur de synchronisation : ' + st.error : 'Paramètres';
+  $('#menu-btn').classList.toggle('alert', !!st.error);
 }
 
 async function init() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
+  $('#menu-btn').onclick = () => (document.body.classList.contains('menu-open') ? closeMenu() : openMenu());
+  $('#scrim').onclick = closeMenu;
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
   onSync(markSyncError);
   await analyse.init();
   window.addEventListener('hashchange', route);

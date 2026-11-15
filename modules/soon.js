@@ -1,19 +1,31 @@
 // Modules pas encore livrés : simple page de présentation.
 const TEXT = {
+  play: {
+    title: 'Jouer',
+    items: [
+      'Parties contre des bots « humains » comme Maia, qui jouent comme un joueur de votre niveau.',
+      'Chaque partie jouée pourra ensuite être analysée.',
+    ],
+  },
   openings: {
     title: 'Ouvertures',
     items: [
       'Bilan de toutes vos parties : les erreurs que vous répétez dans l\'ouverture, et les réponses adverses qui vous posent problème.',
       'Votre répertoire (Blancs et Noirs) : construit avec l\'aide de l\'appli, tiré de vos parties ou importé d\'un PGN.',
-      'Entraînement par répétition espacée, comme Chessbook.',
+      'Entraînement par répétition espacée.',
     ],
   },
-  middlegame: {
-    title: 'Milieu de jeu',
+  puzzles: {
+    title: 'Puzzles',
     items: [
-      'Puzzles Lichess classés par thème, avec votre classement.',
+      'Puzzles de la base Lichess classés par thème, avec votre classement.',
       'Puzzles tirés de vos propres erreurs.',
-      '« Trouve le plan » avec Leela Chess Zero, et parties contre Maia (un adversaire « humain » de votre niveau).',
+    ],
+  },
+  strategy: {
+    title: 'Étude stratégique',
+    items: [
+      '« Trouve le plan » : comprendre les idées du milieu de jeu avec Leela Chess Zero.',
     ],
   },
   endgames: {

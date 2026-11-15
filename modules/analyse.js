@@ -41,10 +41,26 @@ async function setUser(user) {
   if (!cur || cur.chesscomUser !== user) await store.put('settings', 'profile', { ...(cur || {}), chesscomUser: user }, { file: 'settings.json' });
 }
 
-export async function loadGames() {
-  const user = $('#user').value.trim();
-  if (!user) return;
+// Pseudo choisi dans Paramètres → Profil chess.com : on enregistre puis on recharge les parties.
+export async function changeUser(user) {
+  user = (user || '').trim();
+  if (!user || user === S.user) return;
   await setUser(user);
+  showUser();
+  S.loading = loadGames();
+}
+
+function showUser() {
+  const has = !!S.user;
+  $('#hist-user').textContent = has ? S.user : '';
+  $('#hist-nouser').classList.toggle('hidden', has);
+  $('#load').classList.toggle('hidden', !has);
+  $('#load-progress').classList.toggle('hidden', !has);
+}
+
+export async function loadGames() {
+  const user = S.user;
+  if (!user) return;
   S.games = [];
   S.shown = 100;
   const token = (S.loadToken = {}); // un nouveau chargement annule le précédent
@@ -105,7 +121,7 @@ function renderList() {
       <td class="${res.cls}">${res.txt}</td>
       <td>${acc}</td></tr>`;
   }).join('');
-  $('#games tbody').innerHTML = rows || `<tr><td colspan="6" class="muted">${S.games.length ? 'Aucune partie ne correspond.' : 'Tapez votre pseudo chess.com puis « Récupérer mes parties ».'}</td></tr>`;
+  $('#games tbody').innerHTML = rows || `<tr><td colspan="6" class="muted">${S.games.length ? 'Aucune partie ne correspond.' : 'Aucune partie pour le moment.'}</td></tr>`;
   $('#more').classList.toggle('hidden', list.length <= S.shown);
   $('#count').textContent = S.games.length ? `${list.length} partie(s)` : '';
 }
@@ -567,9 +583,8 @@ export async function init() {
   board = new Board($('#board'), { onMove: onBoardMove });
   const profile = await store.get('settings', 'profile').catch(() => null);
   S.user = (profile && profile.chesscomUser) || local.get('user', '');
-  $('#user').value = S.user;
+  showUser();
   $('#load').onclick = () => { S.loading = loadGames(); };
-  $('#user').addEventListener('keydown', (e) => { if (e.key === 'Enter') S.loading = loadGames(); });
   $('#filter').oninput = () => { S.shown = 100; renderList(); };
   $('#tc').onchange = renderList;
   $('#only-analyzed').onchange = renderList;
@@ -578,7 +593,7 @@ export async function init() {
     const tr = e.target.closest('tr[data-id]');
     if (tr) location.hash = '#/game/' + encodeURIComponent(tr.dataset.id);
   };
-  $('#back').onclick = () => { location.hash = '#/'; };
+  $('#back').onclick = () => { location.hash = '#/games'; };
   $('#first').onclick = () => setPly(0);
   $('#prev').onclick = () => step(-1);
   $('#next').onclick = () => step(1);
@@ -610,7 +625,7 @@ export async function init() {
     if (info.col === 'analysisIndex') { await loadIndex(); if (!S.g) renderList(); }
     if (info.col === 'settings') {
       const p = await store.get('settings', 'profile');
-      if (p && p.chesscomUser && !S.user) { S.user = p.chesscomUser; $('#user').value = S.user; loadGames(); }
+      if (p && p.chesscomUser && !S.user) { S.user = p.chesscomUser; showUser(); loadGames(); }
     }
   });
 

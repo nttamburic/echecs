@@ -1,7 +1,7 @@
 {
-  "name": "Échecs : analyse et entraînement",
-  "short_name": "Échecs",
-  "description": "Analyse de parties chess.com, ouvertures, milieu de jeu et finales.",
+  "name": "Chess Journey",
+  "short_name": "Chess Journey",
+  "description": "Analyse de parties chess.com, ouvertures, puzzles, stratégie et finales.",
   "lang": "fr",
   "start_url": "./",
   "scope": "./",
