@@ -1,7 +1,7 @@
 // Service worker : permet d'installer l'appli et de l'ouvrir hors connexion.
 // - code de l'appli : réseau d'abord (toujours la dernière version), cache si hors ligne ;
 // - gros fichiers qui ne changent pas (moteur, pièces, ouvertures) : cache d'abord.
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE = 'echecs-' + VERSION;
 const SHELL = [
   './', 'index.html', 'style.css', 'main.js', 'manifest.webmanifest',
@@ -15,7 +15,7 @@ const SHELL = [
 const STATIC = /\/(vendor\/stockfish|pieces|icons|puzzles)\/|openings\.json$/;
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
@@ -34,7 +34,8 @@ self.addEventListener('fetch', (e) => {
     })));
     return;
   }
-  e.respondWith(fetch(req).then((res) => {
+  // « no-cache » : on revalide toujours auprès du serveur (GitHub Pages laisse sinon 10 min d'ancienne version).
+  e.respondWith(fetch(url.href, { cache: 'no-cache', credentials: 'same-origin' }).then((res) => {
     if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
     return res;
   }).catch(() => caches.match(req).then((hit) => hit || caches.match('index.html'))));

@@ -37,7 +37,7 @@ function markSyncError(st) {
 }
 
 async function init() {
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
   onSync(markSyncError);
   await analyse.init();
   window.addEventListener('hashchange', route);
