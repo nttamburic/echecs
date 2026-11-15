@@ -1,9 +1,10 @@
 // Réglages : synchronisation GitHub, moteur, installation sur téléphone.
 import { $, esc, local, toast } from '../core/ui.js';
 import { cfg, test, syncNow, state, onSync } from '../core/sync.js';
-import { detectBoost, engineLabel, status as engineStatus, wasmDepth } from '../core/engine.js';
+import { detectBoost, engineLabel, onStatus, status as engineStatus, wasmDepth } from '../core/engine.js';
 
 let unsub = null;
+let unsubEng = null;
 let installEvent = null;
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvent = e; });
 
@@ -92,7 +93,8 @@ export function render(el) {
   });
 
   const showEng = () => { const l = $('#eng-label'); if (l) l.textContent = engineLabel(); };
-  showEng();
+  if (unsubEng) unsubEng();
+  unsubEng = onStatus(showEng); // se met à jour quand la recherche du PC se termine
   $('#boost').onchange = async (e) => { local.set('boost', e.target.checked ? '1' : '0'); await detectBoost(); showEng(); };
   $('#wasm-depth').onchange = (e) => { local.set('wasmDepth', e.target.value); showEng(); };
   $('#boost-retry').onclick = async () => {
