@@ -4,7 +4,8 @@ import { Board } from '../board.js';
 import { classifyMove, classifyGame, summarize, CLASSES, SUMMARY_ORDER, fmtScore, winPct, epd } from '../analysis.js';
 import { frSan, explainMove } from '../explain.js';
 import { $, esc, fr1, uciOf, local, toast, badge } from '../core/ui.js';
-import { analyzePosition, parallelism, SOURCE_LABEL } from '../core/engine.js';
+import { analyzePosition, parallelism, SOURCE_LABEL, engineInfo } from '../core/engine.js';
+import { syncNow, cfg as syncCfg } from '../core/sync.js';
 import * as store from '../core/store.js';
 import * as chesscom from '../core/chesscom.js';
 
@@ -20,7 +21,7 @@ const S = {
   shown: 100,
   g: null, // partie ouverte
   cycle: {},
-  batch: null, // « Tout analyser » en cours : { stop, done, total, cur, failed }
+  batch: null, // l'analyse multiple en cours : { stop, done, total, cur, failed }
 };
 
 export const getUser = () => S.user;
@@ -56,7 +57,7 @@ function showUser() {
   $('#hist-user').textContent = has ? S.user : '';
   $('#hist-nouser').classList.toggle('hidden', has);
   $('#load').classList.toggle('hidden', !has);
-  $('#analyze-all').classList.toggle('hidden', !has);
+  $('#clear-hist').classList.toggle('hidden', !has);
   $('#load-progress').classList.toggle('hidden', !has);
 }
 
@@ -193,38 +194,96 @@ async function backfillOpenings() {
   if (changed && !S.g) renderList();
 }
 
-// ----- « Tout analyser » : analyse une par une toutes les parties pas encore (complètement) analysées.
+// ----- « Analyse multiple » : analyse une par une les parties pas encore (complètement) analysées,
+// sur toute la période ou sur les N derniers jours, à la profondeur choisie dans la fenêtre.
 // Les résultats sont enregistrés comme une analyse normale, donc synchronisés sur GitHub.
 // Pause quand on ouvre une autre partie, reprise au retour à la liste.
 const needsAnalysis = (game) => !S.index[game.id] || !S.index[game.id].complete;
+const PERIODS = [['all', 'Toutes les parties'], ['15', '15 derniers jours'], ['30', '30 derniers jours'], ['60', '60 derniers jours'], ['90', '90 derniers jours']];
+const inPeriod = (game, period) => period === 'all' || game.end * 1000 >= Date.now() - Number(period) * 86400000;
+// Débit mesuré sur le Boost PC avec 6 moteurs (positions / s, profondeur 16 extrapolée) ; ≈ 61 demi-coups par partie.
+const BOOST_RATE = { 16: 10.5, 18: 5.3, 20: 2.9, 22: 1.43, 24: 0.74 };
+const PLIES_PER_GAME = 61;
 
 function renderBatch() {
   const b = S.batch;
-  const btn = $('#analyze-all');
-  const todo = S.games.filter(needsAnalysis).length;
-  btn.textContent = b ? 'Arrêter l\'analyse' : 'Tout analyser';
-  btn.disabled = !b && !todo;
-  btn.title = b ? '' : todo ? `Analyser les ${todo} partie(s) pas encore analysées` : 'Toutes les parties sont analysées';
+  const btn = $('#multi');
+  btn.textContent = b ? 'Arrêter l\'analyse' : 'Analyse multiple';
+  btn.disabled = !b && !S.games.length;
+  btn.title = b ? 'Arrêter l\'analyse multiple (ce qui est déjà analysé est conservé)' : S.games.length ? 'Analyser plusieurs parties d\'un coup' : 'Récupérez d\'abord vos parties (Actualiser)';
   const el = $('#batch-progress');
   el.classList.toggle('hidden', !b);
   if (!b) return;
   const c = b.cur;
   el.textContent = S.g && S.g !== c
-    ? `Analyse de toutes les parties en pause pendant que vous consultez une partie (${b.done}/${b.total} terminées).`
-    : `Analyse de toutes les parties : ${b.done}/${b.total} terminées${c ? ` — en cours : ${c.game.white.name} – ${c.game.black.name} (${c.positions.filter(Boolean).length}/${c.moves.length} coups)` : ''}.`;
+    ? `Analyse multiple en pause pendant que vous consultez une partie (${b.done}/${b.total} terminées).`
+    : `Analyse multiple (${b.label}, profondeur ${b.depth}) : ${b.done}/${b.total} terminées${c ? ` — en cours : ${c.game.white.name} – ${c.game.black.name} (${c.positions.filter(Boolean).length}/${c.moves.length} coups)` : ''}.`;
 }
 
-async function analyzeAll() {
-  if (S.batch) { // deuxième clic : arrêt (la partie en cours garde ce qui est déjà analysé)
+function fmtDuration(s) {
+  if (s < 60) return 'moins d\'une minute';
+  const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
+  return h ? `${h} h ${String(m).padStart(2, '0')}` : `${m} min`;
+}
+
+// Fenêtre de choix : période, moteur et profondeur.
+async function openMultiDialog() {
+  if (S.batch) { // le bouton sert alors à arrêter (la partie en cours garde ce qui est déjà analysé)
     S.batch.stop = true;
     if (S.batch.cur && S.batch.cur !== S.g) S.batch.cur.abort = true;
     renderBatch();
     return;
   }
+  if (!S.games.length) return;
+  const dlg = $('#multi-dlg');
+  const eng = engineInfo();
+  const todo = (p) => S.games.filter((x) => inPeriod(x, p) && needsAnalysis(x)).length;
+  const prevPeriod = local.get('multiPeriod', 'all');
+  $('#multi-periods').innerHTML = PERIODS.map(([v, label]) => {
+    const n = todo(v), all = S.games.filter((x) => inPeriod(x, v)).length;
+    return `<label class="choice${n ? '' : ' off'}"><input type="radio" name="period" value="${v}"${n ? '' : ' disabled'}>
+      <span>${label}</span><span class="muted">${n ? `${n} à analyser sur ${all}` : all ? `déjà analysées (${all})` : 'aucune partie'}</span></label>`;
+  }).join('');
+  const radios = [...dlg.querySelectorAll('input[name=period]')];
+  (radios.find((r) => r.value === prevPeriod && !r.disabled) || radios.find((r) => !r.disabled) || {}).checked = true;
+  $('#multi-engine').textContent = eng.label;
+  const sel = $('#multi-depth');
+  const prevDepth = Number(local.get(eng.boost ? 'multiDepthPc' : 'multiDepthWeb', eng.def));
+  sel.innerHTML = eng.depths.map((d) => `<option value="${d}">${d}${d === eng.def ? ' (recommandé)' : ''}</option>`).join('');
+  sel.value = eng.depths.includes(prevDepth) ? prevDepth : eng.def;
+  sel.disabled = eng.fixed;
+  $('#multi-fixed').classList.toggle('hidden', !eng.fixed);
+  const update = () => {
+    const r = radios.find((x) => x.checked);
+    const n = r ? todo(r.value) : 0;
+    $('#multi-go').disabled = !n;
+    const rate = eng.boost && BOOST_RATE[sel.value] ? BOOST_RATE[sel.value] * eng.engines / 6 : 0;
+    $('#multi-est').textContent = !n ? 'Rien à analyser pour cette période.'
+      : rate ? `Durée estimée : environ ${fmtDuration(n * PLIES_PER_GAME / rate)} pour ${n} partie(s) (un peu moins grâce à l'analyse cloud Lichess).`
+      : `${n} partie(s) à analyser. Dans le navigateur, comptez nettement plus longtemps qu'avec le Boost PC.`;
+  };
+  radios.forEach((r) => { r.onchange = update; });
+  sel.onchange = update;
+  update();
+  dlg.returnValue = '';
+  dlg.showModal();
+  dlg.onclose = () => {
+    if (dlg.returnValue !== 'go') return;
+    const r = radios.find((x) => x.checked);
+    if (!r) return;
+    const depth = Number(sel.value);
+    local.set('multiPeriod', r.value);
+    local.set(eng.boost ? 'multiDepthPc' : 'multiDepthWeb', String(depth));
+    analyzeMany(r.value, eng.fixed ? null : depth, PERIODS.find((p) => p[0] === r.value)[1].toLowerCase(), depth);
+  };
+}
+
+async function analyzeMany(period, depth, label, shownDepth) {
+  if (S.batch) return;
   if (S.loading) await S.loading;
-  const queue = new Set(S.games.filter(needsAnalysis).map((x) => x.id));
+  const queue = new Set(S.games.filter((x) => inPeriod(x, period) && needsAnalysis(x)).map((x) => x.id));
   if (!queue.size) return;
-  const b = (S.batch = { stop: false, done: 0, total: queue.size, cur: null, failed: new Set() });
+  const b = (S.batch = { stop: false, done: 0, total: queue.size, cur: null, failed: new Set(), label, depth: shownDepth });
   renderBatch();
   try {
     while (!b.stop) {
@@ -235,6 +294,7 @@ async function analyzeAll() {
       const saved = await store.get('analysis', game.id).catch(() => null);
       let g;
       try { g = prepareGame(game.id, game, saved); } catch { b.failed.add(game.id); continue; }
+      g.depth = depth;
       b.cur = g;
       g.onProgress = renderBatch;
       renderBatch();
@@ -246,9 +306,42 @@ async function analyzeAll() {
       renderBatch();
     }
   } finally {
-    S.batch = null;
+    if (S.batch === b) S.batch = null;
     renderBatch();
     if (!S.g) renderList();
+  }
+}
+
+// ----- « Effacer l'historique » : vide la liste et supprime toutes les analyses, sur cet appareil
+// et sur GitHub (donc aussi sur les autres appareils à leur prochaine synchronisation).
+async function clearHistory() {
+  const n = Object.keys(S.index).length;
+  const ok = confirm(`Effacer l'historique ?\n\n`
+    + `• La liste des parties est vidée (cliquez ensuite sur « Actualiser » pour la récupérer à nouveau depuis chess.com).\n`
+    + `• ${n ? `Les ${n} analyse(s) enregistrée(s) sont supprimées` : 'Toutes les analyses enregistrées sont supprimées'} de cet appareil ET de votre dépôt GitHub, donc aussi de vos autres appareils.\n\n`
+    + `Cette action est définitive.`);
+  if (!ok) return;
+  const btn = $('#clear-hist');
+  btn.disabled = true;
+  try {
+    if (S.batch) { S.batch.stop = true; if (S.batch.cur) { S.batch.cur.abort = true; S.batch.cur.discard = true; } }
+    S.loadToken = {}; // annule un chargement en cours
+    S.loading = null;
+    S.games = [];
+    S.index = {};
+    await store.removeAll('analysis');
+    await store.removeAll('analysisIndex');
+    await store.cacheClear().catch(() => {});
+    $('#load-progress').textContent = 'Historique effacé. Cliquez sur « Actualiser » pour récupérer à nouveau vos parties.';
+    renderList();
+    if (syncCfg.configured) {
+      toast('Historique effacé. Suppression sur GitHub en cours…');
+      toast(await syncNow() ? 'Historique effacé, aussi sur GitHub.' : 'Historique effacé sur cet appareil. La suppression sur GitHub sera refaite à la prochaine synchronisation.', 5000);
+    } else toast('Historique effacé.');
+  } catch (e) {
+    toast('Effacement impossible : ' + esc(e.message), 6000);
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -288,7 +381,7 @@ export async function openGame(id) {
     $('#coach').innerHTML = '<p class="err">Partie inconnue sur cet appareil : récupérez d\'abord vos parties (onglet Analyse).</p>';
     return;
   }
-  // Partie justement en cours d'analyse par « Tout analyser » : on l'affiche telle quelle.
+  // Partie justement en cours d'analyse par l'analyse multiple : on l'affiche telle quelle.
   if (S.batch && S.batch.cur && S.batch.cur.id === id) {
     const g = S.batch.cur;
     S.g = g;
@@ -298,7 +391,7 @@ export async function openGame(id) {
     renderGame();
     return;
   }
-  if (S.batch && S.batch.cur) S.batch.cur.abort = true; // « Tout analyser » se met en pause
+  if (S.batch && S.batch.cur) S.batch.cur.abort = true; // l'analyse multiple se met en pause
   let g;
   try { g = prepareGame(id, game, saved); } catch (e) {
     $('#coach').innerHTML = `<p class="err">PGN illisible : ${esc(e.message)}</p>`;
@@ -330,6 +423,7 @@ function prepareGame(id, game, saved) {
 }
 
 async function saveAnalysis(g) {
+  if (g.discard) return; // historique effacé pendant l'analyse
   const s = g.summary;
   const analyzed = g.positions.filter(Boolean).length;
   const summary = {
@@ -355,7 +449,7 @@ async function runAnalysis(g) {
   g.positions.forEach((p, i) => { if (!p) todo.push(i); });
   const doOne = async (i, cloud, cloudOnly = false) => {
     const m = g.moves[i];
-    const pos = await analyzePosition(m.before, uciOf(m), { cloud, cloudOnly });
+    const pos = await analyzePosition(m.before, uciOf(m), { cloud, cloudOnly, depth: g.depth || null });
     if (pos.miss) return pos;
     g.positions[i] = pos;
     recompute(g);
@@ -717,7 +811,7 @@ function renderGraph(g) {
 // ------------------------------------------------------------------ navigation
 export function leave() {
   if (!S.g) return;
-  if (!S.batch || S.batch.cur !== S.g) S.g.abort = true; // la partie de « Tout analyser » continue
+  if (!S.batch || S.batch.cur !== S.g) S.g.abort = true; // la partie de l'analyse multiple continue
   S.g = null;
   renderBatch();
 }
@@ -732,7 +826,8 @@ export async function init() {
   $('#filter').oninput = () => { S.shown = 100; renderList(); };
   $('#tc').onchange = renderList;
   $('#op').onchange = () => { S.shown = 100; renderList(); };
-  $('#analyze-all').onclick = analyzeAll;
+  $('#multi').onclick = openMultiDialog;
+  $('#clear-hist').onclick = clearHistory;
   $('#more').onclick = () => { S.shown += 200; renderList(); };
   $('#games tbody').onclick = (e) => {
     const tr = e.target.closest('tr[data-id]');

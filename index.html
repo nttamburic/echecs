@@ -47,14 +47,13 @@
   <section class="card">
     <div class="row between">
       <h1>Historique des parties <span id="hist-user" class="muted"></span></h1>
-      <div class="row">
-        <button id="analyze-all" class="btn" disabled>Tout analyser</button>
+      <div class="stack">
         <button id="load" class="btn">Actualiser</button>
+        <button id="clear-hist" class="btn danger">Effacer l'historique</button>
       </div>
     </div>
     <p id="hist-nouser" class="hidden">Indiquez d'abord votre pseudo chess.com dans <a href="#/settings/profile">Paramètres → Profil chess.com</a>.</p>
     <p id="load-progress" class="muted small">Seules les parties terminées sont récupérées (jamais une partie en cours).</p>
-    <p id="batch-progress" class="small hidden"></p>
   </section>
   <section class="card">
     <div class="row filters">
@@ -68,7 +67,9 @@
       </select>
       <select id="op" title="Ouverture jouée (parties analysées)"><option value="">Toutes ouvertures</option></select>
       <span id="count" class="muted"></span>
+      <button id="multi" class="btn push-right" disabled>Analyse multiple</button>
     </div>
+    <p id="batch-progress" class="small hidden"></p>
     <div class="table-wrap">
     <table id="games">
       <thead><tr><th>Date</th><th class="opt">Cadence</th><th>Moi</th><th>Adversaire</th><th>Résultat</th><th>Précision</th></tr></thead>
@@ -78,6 +79,28 @@
     <button id="more" class="btn hidden">Afficher plus</button>
   </section>
 </main>
+
+<dialog id="multi-dlg" class="dlg">
+  <form method="dialog">
+    <h2>Analyse multiple</h2>
+    <fieldset>
+      <legend>Parties à analyser</legend>
+      <div id="multi-periods"></div>
+    </fieldset>
+    <fieldset>
+      <legend>Moteur</legend>
+      <p id="multi-engine"></p>
+      <label class="inline">Profondeur <select id="multi-depth"></select></label>
+      <p id="multi-fixed" class="muted small hidden">Pour choisir la profondeur, fermez puis relancez le Boost PC (« Lancer l'analyseur.bat »).</p>
+      <p class="muted small">Plus la profondeur est grande, plus l'analyse est précise et longue. 18 : verdicts quasi identiques à 22, environ 4 fois plus vite.</p>
+    </fieldset>
+    <p id="multi-est" class="small"></p>
+    <div class="row end">
+      <button value="cancel" class="btn">Annuler</button>
+      <button id="multi-go" value="go" class="btn primary">Lancer l'analyse</button>
+    </div>
+  </form>
+</dialog>
 
 <main id="game-view" class="view hidden">
   <div class="left">

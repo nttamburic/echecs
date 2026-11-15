@@ -77,6 +77,26 @@ export async function remove(col, id) {
   emit({ col, id, local: true });
 }
 
+// Supprime tous les enregistrements d'une collection, en une transaction. Les suppressions sont
+// gardées comme « marqueurs » (sans les données) pour que la synchronisation les efface aussi sur
+// GitHub et sur les autres appareils. Renvoie le nombre d'enregistrements supprimés.
+export async function removeAll(col) {
+  const rows = await tx('records', 'readonly', (s) => req2p(s.index('col').getAll(col)));
+  const live = rows.filter((r) => !r.deleted);
+  if (!live.length) return 0;
+  const now = Date.now();
+  await tx(['records', 'meta'], 'readwrite', async (s, m) => {
+    const dirty = (await req2p(m.get('dirty'))) || [];
+    for (const r of live) {
+      s.put({ key: r.key, col, id: r.id, data: null, deleted: true, updatedAt: now, file: r.file });
+      if (!dirty.includes(r.file)) dirty.push(r.file);
+    }
+    m.put(dirty, 'dirty');
+  });
+  emit({ col, local: true });
+  return live.length;
+}
+
 // ----- utilisé par la synchronisation
 export const recordsOfFile = (file) => tx('records', 'readonly', (s) => req2p(s.index('file').getAll(file)));
 export const allRecords = () => tx('records', 'readonly', (s) => req2p(s.getAll()));
@@ -94,3 +114,4 @@ export const metaSet = (k, v) => tx('meta', 'readwrite', (s) => { s.put(v, k); }
 // ------------------------------------------------------------------ cache local (non synchronisé)
 export const cacheGet = (k) => tx('cache', 'readonly', (s) => req2p(s.get(k)));
 export const cacheSet = (k, v) => tx('cache', 'readwrite', (s) => { s.put(v, k); });
+export const cacheClear = () => tx('cache', 'readwrite', (s) => { s.clear(); });

@@ -226,6 +226,18 @@ setInterval(() => { if (!status.boost && boostEnabled() && document.visibilitySt
 
 export function parallelism() { return status.boost ? status.boost.engines || 4 : WASM_ENGINES; }
 
+// Moteur utilisé par l'analyse multiple : nom, nombre de moteurs, profondeurs proposées et par défaut.
+// Un Boost PC lancé avant cette version ne sait pas changer de profondeur (depthOption absent).
+export function engineInfo() {
+  if (status.boost) {
+    const b = status.boost;
+    return { boost: true, label: `Boost PC : ${b.engine} · ${b.engines} moteurs`, engines: b.engines, depths: b.depthOption ? [16, 18, 20, 22, 24] : [b.depth], def: b.depthOption ? 18 : b.depth, fixed: !b.depthOption };
+  }
+  const d = wasmDepth();
+  const depths = [...new Set([12, 14, 16, 18, 20, d])].sort((x, y) => x - y);
+  return { boost: false, label: `Navigateur : Stockfish 19 lite · ${WASM_ENGINES} moteur${WASM_ENGINES > 1 ? 's' : ''}`, engines: WASM_ENGINES, depths, def: d, fixed: false };
+}
+
 export function engineLabel() {
   if (!status.checked) return 'Recherche du moteur…';
   if (status.boost) return `Boost PC : ${status.boost.engine} · ${status.boost.engines} moteurs · profondeur ${status.boost.depth}`;
@@ -252,14 +264,14 @@ async function boostPosition(body) {
 }
 
 // Analyse « fen », avec le coup joué « played » (UCI) évalué dans la même recherche.
-// opts : { cloud, priority, cloudOnly }. Renvoie { source, depth, lines:[{pv,score}], played:{pv,score} } ou { miss:true }.
-export async function analyzePosition(fen, played = null, { cloud = false, priority = false, cloudOnly = false } = {}) {
-  const key = `${fen}|${played || ''}`;
+// opts : { cloud, priority, cloudOnly, depth }. « depth » : profondeur imposée (analyse multiple), sinon celle par défaut. Renvoie { source, depth, lines:[{pv,score}], played:{pv,score} } ou { miss:true }.
+export async function analyzePosition(fen, played = null, { cloud = false, priority = false, cloudOnly = false, depth = null } = {}) {
+  const key = `${fen}|${played || ''}|${depth || ''}`;
   if (posCache.has(key)) return posCache.get(key);
   if (!status.checked) await detectBoost();
   if (status.boost) {
     try {
-      const r = await boostPosition({ fen, played, cloud, priority, cloudOnly });
+      const r = await boostPosition({ fen, played, cloud, priority, cloudOnly, ...(depth ? { depth } : {}) });
       if (!r.miss) remember(key, r);
       return r;
     } catch (e) {
@@ -267,20 +279,20 @@ export async function analyzePosition(fen, played = null, { cloud = false, prior
       status.boost = null; notify(); // le serveur a été fermé : on bascule sur le navigateur
     }
   }
-  const r = await localPosition(fen, played, cloud, priority, cloudOnly);
+  const r = await localPosition(fen, played, cloud, priority, cloudOnly, depth);
   if (!r.miss) remember(key, r);
   return r;
 }
 function remember(key, r) { posCache.set(key, r); if (posCache.size > 5000) posCache.delete(posCache.keys().next().value); }
 
-async function localPosition(fen, played, useCloud, priority, cloudOnly) {
-  const depth = wasmDepth();
+async function localPosition(fen, played, useCloud, priority, cloudOnly, forcedDepth = null) {
+  const depth = forcedDepth || wasmDepth();
   if (cloudOnly) {
     if (countPieces(fen) > 7) {
       const cl = await cloudEval(fen, depth);
       if (cl.miss) return { miss: true };
     }
-    return localPosition(fen, played, true, priority, false);
+    return localPosition(fen, played, true, priority, false, forcedDepth);
   }
   if (played) {
     const c = new Chess(fen);

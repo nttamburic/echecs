@@ -1,7 +1,7 @@
 // Service worker : permet d'installer l'appli et de l'ouvrir hors connexion.
 // - code de l'appli : réseau d'abord (toujours la dernière version), cache si hors ligne ;
 // - gros fichiers qui ne changent pas (moteur, pièces, ouvertures) : cache d'abord.
-const VERSION = 'v6';
+const VERSION = 'v7';
 const CACHE = 'echecs-' + VERSION;
 const SHELL = [
   './', 'index.html', 'style.css', 'main.js', 'manifest.webmanifest',

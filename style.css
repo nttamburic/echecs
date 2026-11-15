@@ -69,6 +69,24 @@ input[type=checkbox] { padding: 0; vertical-align: middle; }
 .btn:disabled { opacity: .5; cursor: default; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 .btn.primary:hover { background: #95c95f; }
+.btn.danger { color: #ff8a7a; border-color: #6b3a33; }
+.btn.danger:hover { background: #4a2a26; }
+.stack { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+.push-right { margin-left: auto; }
+#batch-progress { margin: 8px 0 0; }
+
+/* ---- fenêtre « Analyse multiple » ---- */
+.dlg { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; width: min(460px, calc(100vw - 32px)); box-sizing: border-box; }
+.dlg::backdrop { background: rgba(0, 0, 0, .55); }
+.dlg h2 { margin: 0 0 12px; font-size: 18px; }
+.dlg fieldset { border: 1px solid var(--border); border-radius: 8px; margin: 0 0 12px; padding: 8px 12px 10px; }
+.dlg legend { color: var(--muted); font-size: 13px; padding: 0 4px; }
+.dlg p { margin: 6px 0; }
+.dlg .choice { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 5px 0; cursor: pointer; }
+.dlg .choice.off { opacity: .5; cursor: default; }
+.dlg .inline { display: flex; gap: 8px; align-items: center; }
+.row.end { justify-content: flex-end; }
+
 .btn.small { padding: 2px 8px; font-size: 12.5px; }
 
 #games { width: 100%; border-collapse: collapse; margin-top: 10px; }
