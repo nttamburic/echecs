@@ -206,6 +206,7 @@ const PC_PORT = 8765;
 const sameOriginPc = location.hostname === '127.0.0.1' && Number(location.port) === PC_PORT;
 const boostBase = () => (sameOriginPc ? '' : (local.get('boostUrl') || `http://127.0.0.1:${PC_PORT}`));
 const boostEnabled = () => local.get('boost', '1') === '1';
+const LOOPBACK = sameOriginPc ? {} : { targetAddressSpace: 'loopback' };
 
 export const status = { boost: null, checked: false, listeners: new Set() };
 function notify() { for (const f of status.listeners) { try { f(status); } catch { /* */ } } }
@@ -213,7 +214,8 @@ export function onStatus(f) { status.listeners.add(f); f(status); return () => s
 
 export async function detectBoost() {
   if (!boostEnabled()) { status.boost = null; status.checked = true; notify(); return null; }
-  const { status: code, body } = await fetchJson(boostBase() + '/api/status', { timeout: sameOriginPc ? 60000 : 2500 });
+  // Chrome demande une fois l'autorisation « accéder aux appareils du réseau local » : on laisse le temps de répondre.
+  const { status: code, body } = await fetchJson(boostBase() + '/api/status', { timeout: sameOriginPc ? 60000 : 20000, ...LOOPBACK });
   status.boost = code === 200 && body && body.engine ? body : null;
   status.checked = true;
   notify();
@@ -242,7 +244,7 @@ const posCache = new Map();
 
 async function boostPosition(body) {
   const r = await fetchJson(boostBase() + '/api/position', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), timeout: 120000,
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), timeout: 120000, ...LOOPBACK,
   });
   if (r.status === 0) throw Object.assign(new Error('PC injoignable'), { down: true });
   if (!r.ok) throw new Error((r.body && r.body.error) || 'Erreur ' + r.status);
