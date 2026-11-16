@@ -3,7 +3,7 @@ import { Chess } from '../vendor/chess.js';
 import { Board } from '../board.js';
 import { classifyMove, classifyGame, summarize, CLASSES, SUMMARY_ORDER, fmtScore, winPct, epd } from '../analysis.js';
 import { frSan, explainMove } from '../explain.js';
-import { $, esc, fr1, uciOf, local, toast, badge } from '../core/ui.js';
+import { $, esc, fr1, uciOf, local, toast, badge, keyActivate } from '../core/ui.js';
 import {
   analyzePosition, parallelism, SOURCE_LABEL, analysisSettings, maxTime, nLines, pcDepth, wasmDepth,
   PC_DEPTHS, WEB_DEPTHS, boostEnabled, detectBoost, status as engineStatus, onStatus as onEngineStatus,
@@ -868,12 +868,12 @@ function linesHtml(fen, res) {
     });
     const sc = l.score;
     const neg = sc.mate !== undefined ? sc.mate < 0 : sc.cp < 0;
-    return `<div class="lrow" data-li="${i}" title="Cliquez pour jouer cette ligne sur l'échiquier"><span class="lscore${neg ? ' neg' : ''}">${fmtScore(sc)}</span><span class="lmoves">${moves}</span></div>`;
+    return `<div class="lrow" role="button" tabindex="0" data-li="${i}" title="Cliquez pour jouer cette ligne sur l'échiquier"><span class="lscore${neg ? ' neg' : ''}">${fmtScore(sc)}</span><span class="lmoves">${moves}</span></div>`;
   }).join('') + `<div class="lfoot muted small">${esc(SOURCE_LABEL(res))}</div>`;
 }
 
 function bindLines(el, fen, res) {
-  el.querySelectorAll('.lrow[data-li]').forEach((r) => { r.onclick = () => playLine(fen, res.lines[+r.dataset.li].pv); });
+  el.querySelectorAll('.lrow[data-li]').forEach((r) => { r.onclick = () => playLine(fen, res.lines[+r.dataset.li].pv); keyActivate(r); });
 }
 
 // ----- coach (bulle façon chess.com) : en mode Bilan, ou pendant une variante
@@ -888,7 +888,7 @@ function renderCoach(g, d, review) {
   if (g.var) {
     const items = g.var.items.map((it, i) => {
       const num = it.color === 'w' ? `${it.move.before.split(' ')[5]}. ` : (i === 0 ? `${it.move.before.split(' ')[5]}… ` : '');
-      return `<span class="vmove${i === g.var.idx - 1 ? ' cur' : ''}" data-vi="${i + 1}">${num}${esc(frSan(it.san))}${it.r ? badge(it.r.cls, true) : ''}</span>`;
+      return `<span class="vmove${i === g.var.idx - 1 ? ' cur' : ''}" role="button" tabindex="0" data-vi="${i + 1}">${num}${esc(frSan(it.san))}${it.r ? badge(it.r.cls, true) : ''}</span>`;
     }).join(' ');
     html += `<div class="variation"><div class="vhead">Variante <button id="exit-var" class="btn small">↩ Revenir ${g.free ? 'à la ligne principale' : 'à la partie'}</button></div><div class="vmoves">${items || '<span class="muted">Jouez un coup…</span>'}</div></div>`;
   }
@@ -939,7 +939,7 @@ const coachWrap = (html) => `<div class="coach-wrap"><div class="avatar"><img sr
 function bindCoach(g, d) {
   const ev = $('#exit-var');
   if (ev) ev.onclick = exitVar;
-  document.querySelectorAll('.vmove').forEach((s) => { s.onclick = () => { stopAuto(); g.var.idx = +s.dataset.vi; renderGame(); }; });
+  document.querySelectorAll('.vmove').forEach((s) => { s.onclick = () => { stopAuto(); g.var.idx = +s.dataset.vi; renderGame(); }; keyActivate(s); });
   if (!d) return;
   document.querySelectorAll('[data-line]').forEach((b) => {
     b.onclick = () => {
@@ -980,12 +980,12 @@ function renderMoves(g, review) {
       const cur = !g.var && g.ply === j + 1 ? ' cur' : g.var && g.var.basePly === j + 1 ? ' base' : '';
       const icon = keys && r && (NOTABLE.includes(r.cls) || (r.cls === 'book' && lastBook[m.color] === j));
       const col = keys && r && NOTABLE.includes(r.cls) ? ` style="color:${CLASSES[r.cls].color}"` : '';
-      html += `<span class="mv${cur}" data-ply="${j + 1}"${r ? ` title="${CLASSES[r.cls].label}"` : ''}><span class="ico">${icon ? badge(r.cls, true) : ''}</span><span class="san"${col}>${figSan(m.san, m.color)}</span></span>`;
+      html += `<span class="mv${cur}" role="button" tabindex="0" data-ply="${j + 1}"${r ? ` title="${CLASSES[r.cls].label}"` : ''}><span class="ico">${icon ? badge(r.cls, true) : ''}</span><span class="san"${col}>${figSan(m.san, m.color)}</span></span>`;
     }
     html += '</div>';
   }
   el.innerHTML = html || '<p class="muted pad">Aucun coup joué.</p>';
-  el.querySelectorAll('.mv[data-ply]').forEach((s) => { s.onclick = () => { stopAuto(); setPly(+s.dataset.ply); }; });
+  el.querySelectorAll('.mv[data-ply]').forEach((s) => { s.onclick = () => { stopAuto(); setPly(+s.dataset.ply); }; keyActivate(s); });
   const cur = el.querySelector('.mv.cur');
   if (cur) {
     const top = cur.offsetTop - el.offsetTop;
@@ -1005,13 +1005,13 @@ function renderSummary(g, review) {
     const c = CLASSES[cls];
     const cell = (col) => {
       const n = s[col].counts[cls] || 0;
-      return `<td>${n ? `<a class="jump" data-c="${col}" data-cls="${cls}" style="color:${c.color}">${n}</a>` : '<span class="muted">0</span>'}</td>`;
+      return `<td>${n ? `<button type="button" class="jump" data-c="${col}" data-cls="${cls}" style="color:${c.color}">${n}</button>` : '<span class="muted">0</span>'}</td>`;
     };
     html += `<tr><td>${badge(cls, true)} ${c.label}</td>${cell('w')}${cell('b')}</tr>`;
   }
   html += '</tbody></table>';
   el.innerHTML = html;
-  el.querySelectorAll('a.jump').forEach((a) => {
+  el.querySelectorAll('button.jump').forEach((a) => {
     a.onclick = () => {
       const col = a.dataset.c, cls = a.dataset.cls;
       const plies = [];
@@ -1074,7 +1074,7 @@ function renderNav() {
 // ----- roue dentée : moteur, profondeur, temps maximum, nombre de variantes
 // Champs « moteur » partagés par la roue dentée et l'analyse multiple (préfixe p pour les id).
 // onChange est appelé à chaque modification ; save() enregistre les réglages (mêmes clés pour les deux fenêtres).
-function engineFields(root, p, onChange = () => {}) {
+export function engineFields(root, p, onChange = () => {}) {
   root.innerHTML = `
     <div class="frow"><label for="${p}-choice">Moteur d'échecs</label><select id="${p}-choice">
       <option value="boost">Stockfish 19 (Boost PC)</option>

@@ -23,23 +23,23 @@
 <aside id="sidebar">
   <a href="#/games" class="brand"><img src="pieces/wN.svg" alt=""><span>Chess Journey</span></a>
   <nav id="tabs">
-    <a href="#/play" data-tab="play" title="Jouer">
+    <a href="#/play" data-tab="play" title="Jouer" aria-label="Jouer">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path class="fill" d="M10 8.2l6 3.8-6 3.8z"/></svg><span>Jouer</span></a>
-    <a href="#/free" data-tab="free" title="Analyse libre">
+    <a href="#/free" data-tab="free" title="Analyse libre" aria-label="Analyse libre">
       <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M8 13l2-3 2 2 2-3"/></svg><span>Analyse libre</span></a>
-    <a href="#/openings" data-tab="openings" title="Ouvertures">
+    <a href="#/openings" data-tab="openings" title="Ouvertures" aria-label="Ouvertures">
       <svg viewBox="0 0 24 24"><path d="M2.5 5h6a3.5 3.5 0 0 1 3.5 3.5V20a2.5 2.5 0 0 0-2.5-2.5h-7z"/><path d="M21.5 5h-6A3.5 3.5 0 0 0 12 8.5V20a2.5 2.5 0 0 1 2.5-2.5h7z"/></svg><span>Ouvertures</span></a>
-    <a href="#/puzzles" data-tab="puzzles" title="Puzzles">
+    <a href="#/puzzles" data-tab="puzzles" title="Puzzles" aria-label="Puzzles">
       <svg viewBox="0 0 24 24"><path d="M4 8h4a2 2 0 1 1 4 0h4v4a2 2 0 1 1 0 4v4H4z"/></svg><span>Puzzles</span></a>
-    <a href="#/strategy" data-tab="strategy" title="Étude stratégique">
+    <a href="#/strategy" data-tab="strategy" title="Étude stratégique" aria-label="Étude stratégique">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg><span>Étude stratégique</span></a>
-    <a href="#/endgames" data-tab="endgames" title="Finales">
+    <a href="#/endgames" data-tab="endgames" title="Finales" aria-label="Finales">
       <svg viewBox="0 0 24 24"><path d="M5 21V3.5"/><path d="M5 4h13l-2.5 4.5L18 13H5"/></svg><span>Finales</span></a>
-    <a href="#/games" data-tab="games" title="Historique des parties">
+    <a href="#/games" data-tab="games" title="Historique des parties" aria-label="Historique des parties">
       <svg viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4v4.5H8"/><path d="M12 7.5V12l3 2"/></svg><span>Historique des parties</span></a>
   </nav>
   <nav id="tabs-bottom">
-    <a href="#/settings" data-tab="settings" title="Paramètres">
+    <a href="#/settings" data-tab="settings" title="Paramètres" aria-label="Paramètres">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/><circle cx="12" cy="12" r="6.5"/></svg><span>Paramètres</span></a>
   </nav>
 </aside>
@@ -59,15 +59,15 @@
   </section>
   <section class="card">
     <div class="row filters">
-      <input id="filter" placeholder="Filtrer par adversaire">
-      <select id="tc">
+      <input id="filter" type="search" placeholder="Filtrer par adversaire" aria-label="Filtrer par adversaire" autocomplete="off">
+      <select id="tc" aria-label="Cadence">
         <option value="">Toutes cadences</option>
         <option value="bullet">Bullet</option>
         <option value="blitz">Blitz</option>
         <option value="rapid">Rapide</option>
         <option value="daily">Par jour</option>
       </select>
-      <select id="op" title="Ouverture jouée (parties analysées)"><option value="">Toutes ouvertures</option></select>
+      <select id="op" title="Ouverture jouée (parties analysées)" aria-label="Ouverture jouée"><option value="">Toutes ouvertures</option></select>
       <span id="count" class="muted"></span>
       <button id="multi" class="btn push-right" disabled>Analyse multiple</button>
     </div>
@@ -117,7 +117,7 @@
       <a id="cc-link" class="icon-btn" target="_blank" rel="noopener" title="Voir la partie sur chess.com"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
     </div>
     <div class="peng">
-      <label class="switch" title="Afficher les meilleures lignes du moteur pour la position"><input type="checkbox" id="live"><span></span></label>
+      <label class="switch" title="Afficher les meilleures lignes du moteur pour la position"><input type="checkbox" id="live" aria-label="Afficher les meilleures lignes du moteur"><span></span></label>
       <span>Analyse</span>
       <span id="eng-desc" class="muted small"></span>
       <button id="eng-gear" class="icon-btn" title="Paramètres d'analyse" aria-label="Paramètres d'analyse"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
@@ -252,7 +252,7 @@
 <main id="settings-view" class="view hidden page"></main>
 </div>
 
-<div id="toast"></div>
+<div id="toast" role="status" aria-live="polite"></div>
 <script type="module" src="main.js"></script>
 </body>
 </html>

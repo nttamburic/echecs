@@ -22,6 +22,14 @@ export function toast(msg, ms = 3500) {
   toast.timer = setTimeout(() => t.classList.remove('show'), ms);
 }
 
+// Rend un élément cliquable (span, div) utilisable au clavier : Entrée ou Espace le « clique ».
+// L'élément doit aussi avoir role="button" et tabindex="0" dans son HTML.
+export function keyActivate(el) {
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); }
+  });
+}
+
 export function badge(cls, small = false) {
   const c = CLASSES[cls];
   if (!c) return '';

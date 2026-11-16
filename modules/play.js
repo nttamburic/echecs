@@ -3,7 +3,7 @@
 import { Chess } from '../vendor/chess.js';
 import { Board } from '../board.js';
 import { fmtScore, winPct, epd } from '../analysis.js';
-import { $, esc, uciOf, local, toast } from '../core/ui.js';
+import { $, esc, uciOf, local, toast, keyActivate } from '../core/ui.js';
 import { analyzePosition, analysisSettings, maxTime } from '../core/engine.js';
 import { maiaMove, loadMaia, maiaModel, setMaiaProgress, MAIA_MODELS } from '../core/maia.js';
 import { BOOK, figSan, material, capturedHtml, stashFree } from './analyse.js';
@@ -281,12 +281,12 @@ function render() {
     for (const j of [i, i + 1]) {
       const m = P.moves[j];
       if (!m) { mh += '<span class="mv empty"></span>'; continue; }
-      mh += `<span class="mv${P.ply === j + 1 ? ' cur' : ''}" data-ply="${j + 1}"><span class="san">${figSan(m.san, m.color)}</span></span>`;
+      mh += `<span class="mv${P.ply === j + 1 ? ' cur' : ''}" role="button" tabindex="0" data-ply="${j + 1}"><span class="san">${figSan(m.san, m.color)}</span></span>`;
     }
     mh += '</div>';
   }
   el.innerHTML = mh || '<p class="muted pad">Aucun coup joué.</p>';
-  el.querySelectorAll('.mv[data-ply]').forEach((s) => { s.onclick = () => setPly(+s.dataset.ply); });
+  el.querySelectorAll('.mv[data-ply]').forEach((s) => { s.onclick = () => setPly(+s.dataset.ply); keyActivate(s); });
   const cur = el.querySelector('.mv.cur');
   if (cur && atLatest()) el.scrollTop = el.scrollHeight;
 }
