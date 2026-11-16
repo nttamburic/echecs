@@ -12,7 +12,7 @@ import {
 import { syncNow, cfg as syncCfg } from '../core/sync.js';
 import * as store from '../core/store.js';
 import * as chesscom from '../core/chesscom.js';
-import { scanGames } from './openings.js';
+import { scanGames, setBook } from './openings.js';
 
 const TIME_FR = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapide', daily: 'Par jour' };
 const DRAWS = ['agreed', 'repetition', 'stalemate', 'insufficient', '50move', 'timevsinsufficient'];
@@ -1238,6 +1238,7 @@ export async function init() {
   });
 
   try { BOOK = await (await fetch('openings.json')).json(); } catch { BOOK = {}; }
+  setBook(BOOK);
   await loadIndex();
   if (S.user) S.loading = loadGames();
 }

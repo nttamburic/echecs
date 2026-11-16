@@ -211,11 +211,52 @@ export function sharedConflicts(reps) {
   return out;
 }
 
+// ------------------------------------------------------------------ reconnaissance de l'ouverture
+// Livre d'ouvertures (openings.json, EPD → [ECO, nom]), le même que celui de l'analyse. Chargé par
+// analyse.js au démarrage ; tant qu'il est vide, tous les écarts sont comptés (ancien comportement).
+let BOOK = {};
+export function setBook(b) { BOOK = b || {}; }
+
+// Famille d'une ouverture : le nom avant « : » ou « , » (« Italian Game: Giuoco Piano » → « Italian Game »).
+export const familyOf = (name) => String(name).split(/[:,]/)[0].trim();
+
+// Familles d'ouverture traversées par le répertoire (la racine et chaque position atteinte).
+export function repFamilies(rep) {
+  const fams = new Set();
+  const add = (p) => { const o = BOOK[p]; if (o && o.length) fams.add(familyOf(o[1])); };
+  add(epd(rep.root));
+  for (const e of reachableEdges(rep)) add(e.fenAfter);
+  return fams;
+}
+
+// Famille de l'ouverture où mène le coup uci joué depuis la position p (EPD), ou null si la position
+// obtenue n'a pas de nom dans le livre (coup hors théorie, ou position de théorie sans nom propre).
+export function moveFamily(p, uci) {
+  try {
+    const c = new Chess(fenOf(p));
+    c.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+    const o = BOOK[epd(c.fen())];
+    return o && o.length ? familyOf(o[1]) : null;
+  } catch { return null; }
+}
+
+// Un coup de partie réelle qui n'est pas dans le répertoire n'est une faute que s'il reste dans une
+// ouverture du répertoire. S'il mène à une autre ouverture connue (d4 alors que le répertoire ne
+// contient que des ouvertures 1.e4, l'Espagnole alors qu'il ne contient que l'Italienne), c'est un
+// choix d'ouverture, pas une erreur : il n'est compté ni juste ni faux.
+// fams : repFamilies(rep), calculé une fois par l'appelant.
+export function otherOpening(fams, p, uci) {
+  const fam = moveFamily(p, uci);
+  return fam != null && !fams.has(fam);
+}
+
 // Maîtrise de chaque position où l'utilisateur joue dans rep : Map EPD → { correct, total, ratio, status, edges }.
+// Les événements d'entraînement sont toujours comptés : la question y porte sur le répertoire.
 export function computeMastery(rep, events, reps = [rep], now = Date.now()) {
   const conflicts = sharedConflicts(reps);
   const from = now - WINDOW_DAYS * 86400000;
   const out = new Map();
+  let fams = null; // familles d'ouverture du répertoire, calculées au premier écart
   for (const [p, edges] of userPositions(rep)) {
     out.set(p, { correct: 0, total: 0, ratio: null, status: conflicts.has(`${rep.color}|${p}`) ? 'shared' : 'new', edges });
   }
@@ -223,8 +264,10 @@ export function computeMastery(rep, events, reps = [rep], now = Date.now()) {
     if (ev.repId !== rep.id || ev.date < from || ev.date > now + 86400000) continue;
     const m = out.get(ev.epd);
     if (!m || m.status === 'shared') continue;
+    const ok = m.edges.some((e) => e.uci === ev.uci);
+    if (!ok && ev.source === 'game' && otherOpening(fams || (fams = repFamilies(rep)), ev.epd, ev.uci)) continue;
     m.total++;
-    if (m.edges.some((e) => e.uci === ev.uci)) m.correct++;
+    if (ok) m.correct++;
   }
   for (const m of out.values()) {
     if (m.status === 'shared') continue;
