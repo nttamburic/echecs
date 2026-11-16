@@ -653,6 +653,23 @@ function displayed(g) {
   return { fenBefore: m.before, fenAfter: m.after, san: m.san, uci: uciOf(m), color: m.color, pos: g.positions[g.ply - 1], r: g.results[g.ply - 1], move: m };
 }
 
+// Meilleur coup (uci) de la position affichée : analyse du coup suivant (partie ou variante),
+// sinon analyse en direct, sinon petite analyse dédiée (fin de partie, analyse libre…).
+function bestHere(g, fen) {
+  const c = new Chess(fen);
+  if (c.isGameOver()) return null;
+  const next = g.var ? g.var.items[g.var.idx]?.pos : g.positions[g.ply];
+  if (next && next.lines[0]) return next.lines[0].pv[0];
+  for (const r of [S.liveRes, S.bestRes]) if (r && r.fen === fen && r.res.lines[0]) return r.res.lines[0].pv[0];
+  if (S.bestPending === fen) return null;
+  S.bestPending = fen;
+  const st = analysisSettings();
+  analyzePosition(fen, null, { cloud: true, priority: true, multipv: 1, depth: st.fixed ? null : st.depth, movetime: maxTime() })
+    .then((res) => { if (S.bestPending !== fen) return; S.bestPending = null; if (!res.miss) { S.bestRes = { fen, res }; if (S.g === g && currentFen(g) === fen) renderGame(); } })
+    .catch(() => { if (S.bestPending === fen) S.bestPending = null; });
+  return null;
+}
+
 function scoreAfter(g) {
   const d = displayed(g);
   if (d) return d.pos && d.pos.played ? d.pos.played.score : null;
@@ -671,7 +688,8 @@ export function figSan(san, color) {
 
 // ------------------------------------------------------------------ rendu partie
 // Réglages de l'onglet « Interface » de la roue dentée.
-const uiArrows = () => local.get('arrows', 'best');
+// Flèche verte : meilleur coup de la position affichée (anciens réglages « coach » / « both » = oui).
+const uiArrows = () => (local.get('arrows', 'best') === 'none' ? 'none' : 'best');
 const uiOn = (k) => local.get(k, '1') !== '0';
 
 // Matériel : pièces adverses capturées par chaque camp et avantage matériel (P 1, C/F 3, T 5, D 9).
@@ -707,17 +725,10 @@ function renderGame() {
   const annotate = d && d.r && (review || d.inVar);
 
   // échiquier : case du coup coloriée et annotée (Brillant, Théorique, Gaffe…), flèche du meilleur coup
+  // de la position affichée (avant que le coup suivant ne soit joué)
   const arrows = [];
-  const ar = uiArrows();
-  if ((ar === 'best' || ar === 'both') && annotate && d.pos && !d.r.isBest && d.r.cls !== 'book' && d.pos.lines[0]) {
-    const b = d.pos.lines[0].pv[0];
-    arrows.push({ from: b.slice(0, 2), to: b.slice(2, 4), color: '#4caf50' });
-  }
-  const nextPos = review && !g.var && g.ply < g.moves.length ? g.positions[g.ply] : null;
-  if ((ar === 'coach' || ar === 'both') && nextPos && nextPos.lines[0]) {
-    const b = nextPos.lines[0].pv[0];
-    arrows.push({ from: b.slice(0, 2), to: b.slice(2, 4), color: '#3b82f6', opacity: 0.75 });
-  }
+  const best = uiArrows() === 'best' && (review || g.var) ? bestHere(g, fen) : null;
+  if (best) arrows.push({ from: best.slice(0, 2), to: best.slice(2, 4), color: '#4caf50' });
   const mark = annotate && uiOn('boardClass') ? { sq: d.uci.slice(2, 4), color: CLASSES[d.r.cls].color, sym: CLASSES[d.r.cls].sym, label: CLASSES[d.r.cls].label } : null;
   board.setPosition(fen, { lastMove: d ? [d.uci.slice(0, 2), d.uci.slice(2, 4)] : null, arrows, mark });
 
@@ -1116,7 +1127,7 @@ function engineFields(root, p, onChange = () => {}) {
       local.set('threads', String(threads()));
       const changed = boost !== boostEnabled();
       local.set('boost', boost ? '1' : '0');
-      S.liveRes = null; S.livePending = null;
+      S.liveRes = null; S.livePending = null; S.bestRes = null; S.bestPending = null;
       if (changed) {
         await detectBoost();
         if (boost && !engineStatus.boost) toast('Boost PC non trouvé : lancez « Lancer l\'analyseur.bat » sur ce PC. Stockfish 19 Lite (navigateur) est utilisé en attendant.', 6000);

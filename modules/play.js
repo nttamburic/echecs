@@ -319,7 +319,7 @@ export function init() {
   if (local.get('playEval') == null) local.set('playEval', '1');
   if (local.get('playArrows') == null) local.set('playArrows', '0');
   $('#play-elo').min = ELO_MIN; $('#play-elo').max = ELO_MAX;
-  $('#play-elo').oninput = () => { $('#play-elo-val').textContent = $('#play-elo').value; render(); };
+  $('#play-elo').oninput = () => { local.set('playElo', $('#play-elo').value); $('#play-elo-val').textContent = $('#play-elo').value; render(); };
   $('#play-side').onclick = (e) => {
     const b = e.target.closest('button[data-side]');
     if (!b) return;
