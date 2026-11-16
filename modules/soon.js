@@ -1,13 +1,5 @@
 // Modules pas encore livrés : simple page de présentation.
 const TEXT = {
-  openings: {
-    title: 'Ouvertures',
-    items: [
-      'Bilan de toutes vos parties : les erreurs que vous répétez dans l\'ouverture, et les réponses adverses qui vous posent problème.',
-      'Votre répertoire (Blancs et Noirs) : construit avec l\'aide de l\'appli, tiré de vos parties ou importé d\'un PGN.',
-      'Entraînement par répétition espacée.',
-    ],
-  },
   puzzles: {
     title: 'Puzzles',
     items: [

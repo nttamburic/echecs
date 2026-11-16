@@ -12,6 +12,7 @@ import {
 import { syncNow, cfg as syncCfg } from '../core/sync.js';
 import * as store from '../core/store.js';
 import * as chesscom from '../core/chesscom.js';
+import { scanGames } from './openings.js';
 
 const TIME_FR = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapide', daily: 'Par jour' };
 const DRAWS = ['agreed', 'repetition', 'stalemate', 'insufficient', '50move', 'timevsinsufficient'];
@@ -91,7 +92,10 @@ export async function loadGames() {
   } catch (e) {
     if (token === S.loadToken) prog.textContent = 'Erreur : ' + e.message;
   } finally {
-    if (token === S.loadToken) { await backfillOpenings(); renderList(); renderBatch(); }
+    if (token === S.loadToken) {
+      await backfillOpenings(); renderList(); renderBatch();
+      scanGames(S.games, user); // situations du module Ouvertures tirées des parties récentes
+    }
   }
 }
 

@@ -3,6 +3,7 @@
 import { $, esc, local, toast } from '../core/ui.js';
 import { cfg, test, syncNow, state, onSync } from '../core/sync.js';
 import { getUser, changeUser } from './analyse.js';
+import { lichessCfg, setToken, forgetToken } from '../core/lichess.js';
 
 const SECTIONS = [
   ['profile', 'Profil chess.com'],
@@ -79,6 +80,29 @@ function connection(el) {
         <li>« Generate token », copiez-le, collez-le ci-dessus. Faites de même sur le téléphone (ou copiez-le-vous dans un endroit sûr).</li>
       </ol>
     </details>
+  </section>
+  <section class="card">
+    <h2>Connexion à Lichess</h2>
+    <p class="muted">Le module « Ouvertures » affiche les statistiques des bases Masters et Lichess. Lichess demande pour cela
+      un jeton personnel. Il reste uniquement sur cet appareil et ne donne accès à rien sur votre compte.</p>
+    <div class="form">
+      <label>Jeton Lichess <input id="li-token" type="password" value="${esc(lichessCfg.token)}" placeholder="lip_…" autocomplete="off" spellcheck="false"></label>
+    </div>
+    <div class="row">
+      <button id="li-save" class="btn primary">Enregistrer et tester</button>
+      <button id="li-forget" class="btn">Oublier le jeton</button>
+    </div>
+    <p id="li-msg" class="muted">${lichessCfg.connected ? 'Jeton enregistré' + (lichessCfg.user ? ' (' + esc(lichessCfg.user) + ')' : '') + '.' : ''}</p>
+    <details>
+      <summary>Comment créer le jeton (une seule fois)</summary>
+      <ol>
+        <li>Connecté à Lichess, allez sur <a href="https://lichess.org/account/oauth/token/create" target="_blank" rel="noopener">lichess.org/account/oauth/token/create</a>.</li>
+        <li>Description : « Chess Journey ». <b>Ne cochez aucune case</b> : l'explorateur n'en a pas besoin.</li>
+        <li>« Créer », copiez le jeton (il commence par <b>lip_</b>), collez-le ci-dessus, puis « Enregistrer et tester ».</li>
+      </ol>
+    </details>
+  </section>
+  <section class="card">
     <details>
       <summary>Installer l'appli sur le téléphone</summary>
       <p>Sur Android, ouvrez cette page dans Chrome, puis menu <b>⋮</b> → <b>« Ajouter à l'écran d'accueil »</b> (ou « Installer l'application »).</p>
@@ -115,5 +139,15 @@ function connection(el) {
     else if (st.error) { msg.className = 'err'; msg.textContent = st.error; }
     else if (st.lastSync && cfg.configured) { msg.className = 'muted'; msg.textContent = 'Dernière synchronisation : ' + new Date(st.lastSync).toLocaleString('fr-FR'); }
   });
-  $('#install').onclick = async () => { if (installEvent) { installEvent.prompt(); installEvent = null; $('#install').classList.add('hidden'); } };
+  const liMsg = $('#li-msg');
+  $('#li-save').onclick = async () => {
+    liMsg.className = 'muted'; liMsg.textContent = 'Test du jeton…';
+    const r = await setToken($('#li-token').value);
+    liMsg.className = r.ok ? 'ok' : 'err'; liMsg.textContent = r.msg;
+  };
+  $('#li-forget').onclick = () => {
+    if (!confirm('Supprimer le jeton Lichess de cet appareil ?')) return;
+    forgetToken(); $('#li-token').value = ''; liMsg.className = 'muted'; liMsg.textContent = 'Jeton supprimé de cet appareil.';
+  };
+  $('#install').onclick =async () => { if (installEvent) { installEvent.prompt(); installEvent = null; $('#install').classList.add('hidden'); } };
 }

@@ -7,9 +7,11 @@ import * as settings from './modules/settings.js';
 import { soon } from './modules/soon.js';
 import * as play from './modules/play.js';
 import * as setup from './modules/setup.js';
+import * as openingsUi from './modules/openings-ui.js';
+import * as train from './modules/openings-train.js';
 
-const VIEWS = ['home', 'game', 'play', 'free', 'setup', 'openings', 'puzzles', 'strategy', 'endgames', 'settings'];
-const MODULES = ['openings', 'puzzles', 'strategy', 'endgames']; // modules pas encore livrés
+const VIEWS = ['home', 'game', 'play', 'free', 'setup', 'openings', 'rep', 'train', 'puzzles', 'strategy', 'endgames', 'settings'];
+const MODULES = ['puzzles', 'strategy', 'endgames']; // modules pas encore livrés
 
 export function showView(v, tab = v === 'home' || v === 'game' ? 'games' : v === 'setup' ? 'free' : v) {
   for (const name of VIEWS) $(`#${name}-view`).classList.toggle('hidden', name !== v);
@@ -23,6 +25,8 @@ function route() {
   const h = location.hash || '#/games';
   const m = /^#\/game\/(.+)$/.exec(h);
   if (!m) analyse.leave();
+  if (!/^#\/openings\/./.test(h) || /^#\/openings\/train/.test(h)) openingsUi.leaveRepertoire();
+  if (!/^#\/openings\/train/.test(h)) train.leave();
   if (m) { showView('game'); analyse.openGame(decodeURIComponent(m[1])); return; }
   const [, name, sub] = /^#\/([^/]*)\/?(.*)$/.exec(h) || [];
   if (name === 'play') { showView('play'); play.show(); return; }
@@ -30,6 +34,14 @@ function route() {
     if (sub === 'new') { showView('game', 'free'); analyse.openFree(); return; }
     if (sub === 'setup') { showView('setup'); setup.renderEditor($('#setup-view')); return; }
     showView('free'); setup.renderHome($('#free-view')); return;
+  }
+  if (name === 'openings') {
+    if (sub.startsWith('train')) {
+      const [, mode, id] = sub.split('/');
+      showView('train', 'openings'); train.start($('#train-view'), mode, id && decodeURIComponent(id)); return;
+    }
+    if (sub) { showView('rep', 'openings'); openingsUi.openRepertoire($('#rep-view'), decodeURIComponent(sub)); return; }
+    showView('openings'); openingsUi.renderHome($('#openings-view')); return;
   }
   if (MODULES.includes(name)) { showView(name); soon($(`#${name}-view`), name); return; }
   if (name === 'settings') { showView('settings'); settings.render($('#settings-view'), sub); return; }
