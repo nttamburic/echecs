@@ -1,18 +1,20 @@
 // Service worker : permet d'installer l'appli et de l'ouvrir hors connexion.
 // - code de l'appli : réseau d'abord (toujours la dernière version), cache si hors ligne ;
 // - gros fichiers qui ne changent pas (moteur, pièces, ouvertures) : cache d'abord.
-const VERSION = 'v11';
+const VERSION = 'v12';
 const CACHE = 'echecs-' + VERSION;
 const SHELL = [
   './', 'index.html', 'style.css', 'main.js', 'manifest.webmanifest',
   'analysis.js', 'explain.js', 'board.js',
   'core/ui.js', 'core/engine.js', 'core/store.js', 'core/sync.js', 'core/chesscom.js', 'core/srs.js',
-  'modules/analyse.js', 'modules/settings.js', 'modules/soon.js',
+  'modules/analyse.js', 'modules/settings.js', 'modules/soon.js', 'modules/play.js', 'modules/setup.js',
+  'core/maia.js', 'core/maia-worker.js',
   'vendor/chess.js', 'vendor/stockfish/stockfish-19-lite-single.js', 'vendor/stockfish/stockfish-19-lite-single.wasm',
   'openings.json', 'icons/icon-192.png', 'icons/icon-512.png',
   ...['w', 'b'].flatMap((c) => ['K', 'Q', 'R', 'B', 'N', 'P'].map((p) => `pieces/${c}${p}.svg`)),
 ];
-const STATIC = /\/(vendor\/stockfish|pieces|icons|puzzles)\/|openings\.json$/;
+// Les modèles Maia (10 et 44 Mo) ne sont pas préchargés : mis en cache au premier usage.
+const STATIC = /\/(vendor\/stockfish|vendor\/maia3|vendor\/onnxruntime|pieces|icons|puzzles)\/|openings\.json$/;
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));

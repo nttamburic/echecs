@@ -5,13 +5,14 @@ import { onSync, syncNow, cfg } from './core/sync.js';
 import * as analyse from './modules/analyse.js';
 import * as settings from './modules/settings.js';
 import { soon } from './modules/soon.js';
+import * as play from './modules/play.js';
+import * as setup from './modules/setup.js';
 
-const VIEWS = ['home', 'game', 'play', 'openings', 'puzzles', 'strategy', 'endgames', 'settings'];
-const MODULES = ['play', 'openings', 'puzzles', 'strategy', 'endgames']; // modules pas encore livrés
+const VIEWS = ['home', 'game', 'play', 'free', 'setup', 'openings', 'puzzles', 'strategy', 'endgames', 'settings'];
+const MODULES = ['openings', 'puzzles', 'strategy', 'endgames']; // modules pas encore livrés
 
-export function showView(v) {
+export function showView(v, tab = v === 'home' || v === 'game' ? 'games' : v === 'setup' ? 'free' : v) {
   for (const name of VIEWS) $(`#${name}-view`).classList.toggle('hidden', name !== v);
-  const tab = v === 'home' || v === 'game' ? 'games' : v;
   $$('#sidebar nav a').forEach((a) => a.classList.toggle('active', a.dataset.tab === tab));
   document.body.dataset.view = v;
   closeMenu();
@@ -24,6 +25,12 @@ function route() {
   if (!m) analyse.leave();
   if (m) { showView('game'); analyse.openGame(decodeURIComponent(m[1])); return; }
   const [, name, sub] = /^#\/([^/]*)\/?(.*)$/.exec(h) || [];
+  if (name === 'play') { showView('play'); play.show(); return; }
+  if (name === 'free') {
+    if (sub === 'new') { showView('game', 'free'); analyse.openFree(); return; }
+    if (sub === 'setup') { showView('setup'); setup.renderEditor($('#setup-view')); return; }
+    showView('free'); setup.renderHome($('#free-view')); return;
+  }
   if (MODULES.includes(name)) { showView(name); soon($(`#${name}-view`), name); return; }
   if (name === 'settings') { showView('settings'); settings.render($('#settings-view'), sub); return; }
   if (name !== 'games') { history.replaceState(null, '', '#/games'); }
@@ -51,6 +58,7 @@ async function init() {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
   onSync(markSyncError);
   await analyse.init();
+  play.init();
   window.addEventListener('hashchange', route);
   route();
   detectBoost();

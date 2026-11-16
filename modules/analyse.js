@@ -347,7 +347,7 @@ function recompute(g) {
   g.summary = summarize(g.moves, g.results);
 }
 
-const isComplete = (g) => g.positions.every(Boolean);
+const isComplete = (g) => g.free || g.positions.every(Boolean);
 
 export async function openGame(id) {
   stopAuto();
@@ -406,8 +406,52 @@ function prepareGame(id, game, saved) {
   return g;
 }
 
+// ----- « Analyse libre » : position de départ ou position définie, coups joués librement (jamais sauvegardés).
+// Réutilise toute la vue partie : roue dentée, lignes du moteur, coach, classification, variantes.
+const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+let freeStash = null;
+// Prépare la prochaine analyse libre (position, coups déjà joués, orientation), ouverte par la route #/free/new.
+export function stashFree(x) { freeStash = x; }
+export function openFree() {
+  stopAuto();
+  const { fen = START_FEN, ucis = [], orient = null } = freeStash || {};
+  freeStash = null;
+  if (S.g) S.g.abort = true;
+  if (S.batch && S.batch.cur) S.batch.cur.abort = true;
+  const c = new Chess(fen);
+  for (const u of ucis) { try { c.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] }); } catch { break; } }
+  const moves = c.history({ verbose: true });
+  const g = {
+    id: 'free', free: true, custom: fen !== START_FEN,
+    game: { white: { name: 'Blancs', rating: '' }, black: { name: 'Noirs', rating: '' }, end: Date.now() / 1000 },
+    moves, startFen: fen, positions: new Array(moves.length).fill(null),
+    ply: moves.length, var: null, analyzing: false, abort: false, playerColor: null,
+    ratings: { w: 1500, b: 1500 },
+  };
+  computeOpenings(g);
+  recompute(g);
+  S.g = g;
+  S.cycle = {};
+  board.setOrientation(orient || fen.split(' ')[1]);
+  renderGame();
+  if (moves.length) startAnalysis(); // partie importée (module Jouer) : analyse complète
+}
+
+// Analyse libre : analyse un coup ajouté à la ligne principale.
+async function analyzeFreeMove(g, i) {
+  const m = g.moves[i];
+  try {
+    const st = analysisSettings();
+    const pos = await analyzePosition(m.before, uciOf(m), { cloud: true, priority: true, depth: st.fixed ? null : st.depth, movetime: maxTime() });
+    if (g.moves[i] !== m || pos.miss) return;
+    g.positions[i] = pos;
+    recompute(g);
+  } catch (e) { toast('Analyse impossible : ' + esc(e.message)); }
+  if (S.g === g) renderGame();
+}
+
 async function saveAnalysis(g) {
-  if (g.discard) return; // historique effacé pendant l'analyse
+  if (g.discard || g.free) return; // historique effacé pendant l'analyse / analyse libre (jamais sauvegardée)
   const s = g.summary;
   const analyzed = g.positions.filter(Boolean).length;
   const summary = {
@@ -510,6 +554,18 @@ function onBoardMove(from, to, promo) {
   const item = makeVarItem(fen, from, to, promo);
   if (!item) return;
   if (!g.var && g.ply < g.moves.length && uciOf(g.moves[g.ply]) === item.uci) { setPly(g.ply + 1); return; }
+  if (g.free && !g.var && g.ply === g.moves.length) {
+    const c = new Chess(fen);
+    const m = c.move({ from, to, promotion: promo });
+    g.moves.push(m);
+    g.positions.push(null);
+    computeOpenings(g);
+    recompute(g);
+    g.ply = g.moves.length;
+    renderGame();
+    analyzeFreeMove(g, g.moves.length - 1);
+    return;
+  }
   if (g.var && g.var.idx < g.var.items.length && g.var.items[g.var.idx].uci === item.uci) { g.var.idx++; renderGame(); return; }
   if (!g.var) g.var = { basePly: g.ply, items: [], idx: 0 };
   g.var.items = g.var.items.slice(0, g.var.idx);
@@ -607,7 +663,7 @@ function scoreAfter(g) {
 }
 
 // Notation en figurines (comme chess.com) : « Cf3 » → icône du cavalier + « f3 ».
-function figSan(san, color) {
+export function figSan(san, color) {
   const m = /^([NBRQK])(.*)$/.exec(san);
   if (!m) return esc(frSan(san));
   return `<img class="fig${color === 'b' ? ' dark' : ''}" src="pieces/w${m[1]}.svg" alt="${esc(frSan(m[1]))}">${esc(frSan(m[2]))}`;
@@ -621,7 +677,7 @@ const uiOn = (k) => local.get(k, '1') !== '0';
 // Matériel : pièces adverses capturées par chaque camp et avantage matériel (P 1, C/F 3, T 5, D 9).
 const MAT_VAL = { p: 1, n: 3, b: 3, r: 5, q: 9 };
 const MAT_START = { p: 8, n: 2, b: 2, r: 2, q: 1 };
-function material(fen) {
+export function material(fen) {
   const cnt = { w: { p: 0, n: 0, b: 0, r: 0, q: 0 }, b: { p: 0, n: 0, b: 0, r: 0, q: 0 } };
   for (const ch of fen.split(' ')[0]) {
     const l = ch.toLowerCase();
@@ -629,7 +685,7 @@ function material(fen) {
   }
   return cnt;
 }
-function capturedHtml(cnt, c) {
+export function capturedHtml(cnt, c) {
   const opp = c === 'w' ? 'b' : 'w';
   const score = (x) => Object.entries(cnt[x]).reduce((a, [t, n]) => a + MAT_VAL[t] * n, 0);
   let html = '';
@@ -689,19 +745,22 @@ function renderGame() {
   const pl = (c) => {
     const p = c === 'w' ? g.game.white : g.game.black;
     return `<span class="avatar-sm ${c}"><img src="pieces/${c}P.svg" alt=""></span>
-      <span class="pinfo"><span><b>${esc(p.name)}</b> <span class="muted">(${esc(p.rating)})</span></span>${capturedHtml(mat, c)}</span>`;
+      <span class="pinfo"><span><b>${esc(p.name)}</b>${p.rating ? ` <span class="muted">(${esc(p.rating)})</span>` : ''}</span>${capturedHtml(mat, c)}</span>`;
   };
   $('#player-top').innerHTML = pl(top);
   $('#player-bottom').innerHTML = pl(bot);
 
   // panneau
   $('#gpanel').classList.toggle('review', review);
-  $('#ptitle').innerHTML = review ? `<span class="badge" style="background:${CLASSES.best.color}">★</span> Bilan` : 'Analyse';
+  $('#ptitle').innerHTML = g.free ? 'Analyse libre' : review ? `<span class="badge" style="background:${CLASSES.best.color}">★</span> Bilan` : 'Analyse';
   $('#cc-link').href = g.game.url || '#';
+  $('#cc-link').classList.toggle('hidden', !!g.free);
+  $('#back').title = g.free ? 'Retour à l\'analyse libre' : 'Retour à l\'historique des parties';
+  $('#reanalyze').parentElement.classList.toggle('hidden', !!g.free);
   const k = g.var ? g.var.basePly : g.ply;
-  $('#opening').textContent = k === 0 && !g.var ? 'Position de départ' : (g.openingAt[k] || g.openingAt[g.openingAt.length - 1] || 'Ouverture inconnue');
+  $('#opening').textContent = k === 0 && !g.var ? (g.custom ? 'Position définie' : 'Position de départ') : (g.openingAt[k] || g.openingAt[g.openingAt.length - 1] || 'Ouverture inconnue');
   const date = new Date(g.game.end * 1000).toLocaleDateString('fr-FR');
-  $('#game-meta').textContent = `${TIME_FR[g.game.timeClass] || ''} · ${date} · ${g.game.result || ''}`;
+  $('#game-meta').textContent = g.free ? '' : `${TIME_FR[g.game.timeClass] || ''} · ${date} · ${g.game.result || ''}`;
 
   renderEngine();
   renderLive(g);
@@ -731,7 +790,7 @@ function renderFoot(g) {
   const review = isComplete(g);
   const prog = $('#progress');
   const btn = $('#analyze');
-  $('#pfoot').classList.toggle('hidden', review && !g.analyzing);
+  $('#pfoot').classList.toggle('hidden', (review || g.free) && !g.analyzing);
   if (g.analyzing) {
     prog.classList.remove('hidden');
     btn.classList.add('hidden');
@@ -807,7 +866,7 @@ function renderCoach(g, d, review) {
   const el = $('#coach');
   const show = review || !!g.var;
   el.classList.toggle('hidden', !show);
-  $('#next-wrap').classList.toggle('hidden', !review);
+  $('#next-wrap').classList.toggle('hidden', !review || !!g.free);
   $('#suivant').disabled = atEnd(g);
   if (!show) { el.innerHTML = ''; return; }
   let html = '';
@@ -816,10 +875,14 @@ function renderCoach(g, d, review) {
       const num = it.color === 'w' ? `${it.move.before.split(' ')[5]}. ` : (i === 0 ? `${it.move.before.split(' ')[5]}… ` : '');
       return `<span class="vmove${i === g.var.idx - 1 ? ' cur' : ''}" data-vi="${i + 1}">${num}${esc(frSan(it.san))}${it.r ? badge(it.r.cls, true) : ''}</span>`;
     }).join(' ');
-    html += `<div class="variation"><div class="vhead">Variante <button id="exit-var" class="btn small">↩ Revenir à la partie</button></div><div class="vmoves">${items || '<span class="muted">Jouez un coup…</span>'}</div></div>`;
+    html += `<div class="variation"><div class="vhead">Variante <button id="exit-var" class="btn small">↩ Revenir ${g.free ? 'à la ligne principale' : 'à la partie'}</button></div><div class="vmoves">${items || '<span class="muted">Jouez un coup…</span>'}</div></div>`;
   }
   if (!d) {
-    if (review) {
+    if (g.free) {
+      html += `<div class="coach-title">Analyse libre</div>
+        <p>Jouez les coups de votre choix, pour les deux camps : Stockfish note chaque coup.</p>
+        <p class="muted">Revenez en arrière et jouez un autre coup pour ouvrir une variante.</p>`;
+    } else if (review) {
       const s = g.summary;
       const me = g.playerColor;
       const who = (c) => esc((c === 'w' ? g.game.white : g.game.black).name);
@@ -837,7 +900,7 @@ function renderCoach(g, d, review) {
     return;
   }
   if (!d.pos || !d.r) {
-    html += `<div class="coach-title">${esc(frSan(d.san))}</div><p class="muted">${d.pending || g.analyzing ? 'Analyse en cours…' : 'Pas encore analysé.'}</p>`;
+    html += `<div class="coach-title">${esc(frSan(d.san))}</div><p class="muted">${d.pending || g.analyzing || g.free ? 'Analyse en cours…' : 'Pas encore analysé.'}</p>`;
     el.innerHTML = coachWrap(html);
     bindCoach(g);
     return;
@@ -890,8 +953,11 @@ function renderMoves(g, review) {
   if (review) g.results.forEach((r, i) => { if (r && r.cls === 'book') lastBook[g.moves[i].color] = i; });
   const keys = uiOn('keyMoves');
   let html = '';
-  for (let i = 0; i < g.moves.length; i += 2) {
-    html += `<div class="mrow"><span class="mno">${i / 2 + 1}.</span>`;
+  // position définie avec les Noirs au trait : le premier coup va dans la colonne des Noirs
+  const off = g.startFen.split(' ')[1] === 'b' ? 1 : 0;
+  const no0 = Number(g.startFen.split(' ')[5]) || 1;
+  for (let i = -off; i < g.moves.length; i += 2) {
+    html += `<div class="mrow"><span class="mno">${no0 + (i + off) / 2}.</span>`;
     for (const j of [i, i + 1]) {
       const m = g.moves[j];
       if (!m) { html += '<span class="mv empty"></span>'; continue; }
@@ -1113,7 +1179,7 @@ export async function init() {
     const tr = e.target.closest('tr[data-id]');
     if (tr) location.hash = '#/game/' + encodeURIComponent(tr.dataset.id);
   };
-  $('#back').onclick = () => { location.hash = '#/games'; };
+  $('#back').onclick = () => { location.hash = S.g && S.g.free ? '#/free' : '#/games'; };
   $('#first').onclick = nav(() => setPly(0));
   $('#prev').onclick = nav(() => step(-1));
   $('#next').onclick = nav(() => step(1));

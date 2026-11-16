@@ -1,12 +1,5 @@
 // Modules pas encore livrés : simple page de présentation.
 const TEXT = {
-  play: {
-    title: 'Jouer',
-    items: [
-      'Parties contre des bots « humains » comme Maia, qui jouent comme un joueur de votre niveau.',
-      'Chaque partie jouée pourra ensuite être analysée.',
-    ],
-  },
   openings: {
     title: 'Ouvertures',
     items: [
