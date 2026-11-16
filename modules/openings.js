@@ -2,7 +2,11 @@
 //
 // Modèle de données (synchronisé comme les analyses, via store.js / sync.js) :
 //   openingRepertoire / <id> : { name, color: 'w'|'b', root (FEN complète), edges: [Edge], createdAt }
-//     Edge = { fenBefore (EPD), uci, san, fenAfter (EPD) }
+//     Edge = { fenBefore (EPD), uci, san, fenAfter (EPD), disabled?, note?, auto? }
+//       disabled : coup gardé mais ni entraîné ni compté dans la maîtrise (absent = actif)
+//       note     : commentaire de l'utilisateur (texte libre)
+//       auto     : ajouté par le remplissage automatique (peut être retiré en bloc)
+//     Les champs optionnels sont absents des anciens répertoires : toujours les lire avec un défaut.
 //     Le répertoire est un ensemble d'arêtes, pas un arbre imbriqué : deux chemins qui mènent à la
 //     même position (transposition) se rejoignent simplement sur la même EPD.
 //   openingEvents / <id> : { repId, epd, uci, correct, date, source: 'game'|'train', gameId?, ply? }
@@ -99,6 +103,9 @@ export function importPgn(rep, text) {
   out.added = rep.edges.length - before;
   return out;
 }
+
+// Un coup actif est entraîné et compté dans la maîtrise (voir Edge.disabled).
+export const isActive = (e) => !e.disabled;
 
 // Coups enregistrés depuis une position (EPD ou FEN).
 export const childrenOf = (rep, fen) => { const p = epd(fen); return rep.edges.filter((e) => e.fenBefore === p); };

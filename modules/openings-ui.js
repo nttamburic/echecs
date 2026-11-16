@@ -7,7 +7,7 @@ import { epd } from '../analysis.js';
 import { figSan, BOOK, getGames, getUser, engineFields } from './analyse.js';
 import * as store from '../core/store.js';
 import { frSan } from '../explain.js';
-import { lichessCfg, explore } from '../core/lichess.js';
+import { lichessCfg, explore, expRatings, expSpeeds } from '../core/lichess.js';
 import { analyzePosition, analysisSettings, maxTime, nLines, SOURCE_LABEL, onStatus } from '../core/engine.js';
 import {
   newRepertoire, addMove, childrenOf, reachableEdges, deleteMove, fenOf,
@@ -67,9 +67,6 @@ store.onChange((info) => {
   }, 400);
 });
 
-function readJson(k, def) { try { const v = JSON.parse(local.get(k, '')); return Array.isArray(v) && v.length ? v : def; } catch { return def; } }
-const expRatings = () => readJson('expRatings', [1400, 1600, 1800, 2000]);
-const expSpeeds = () => readJson('expSpeeds', ['blitz', 'rapid', 'classical']);
 const colorFr = (c) => (c === 'w' ? 'Blancs' : 'Noirs');
 const plural = (n, s) => `${n} ${s}${n > 1 ? 's' : ''}`;
 
