@@ -2,12 +2,13 @@
 // (coups des deux camps, variantes, suppression au clic droit ou à l'appui long) et explorateur
 // Lichess (Masters / Lichess, filtres d'Elo et de cadence sous la roue dentée).
 import { Board } from '../board.js';
-import { $, esc, local, toast } from '../core/ui.js';
+import { $, esc, local, toast, keyActivate } from '../core/ui.js';
 import { epd } from '../analysis.js';
-import { figSan, BOOK, getGames, getUser } from './analyse.js';
+import { figSan, BOOK, getGames, getUser, engineFields } from './analyse.js';
 import * as store from '../core/store.js';
 import { frSan } from '../explain.js';
 import { lichessCfg, explore } from '../core/lichess.js';
+import { analyzePosition, analysisSettings, maxTime, nLines, SOURCE_LABEL, onStatus } from '../core/engine.js';
 import {
   newRepertoire, addMove, childrenOf, reachableEdges, deleteMove, fenOf,
   listRepertoires, getRepertoire, saveRepertoire, deleteRepertoire,
@@ -15,7 +16,7 @@ import {
   findSuggestions, applySuggestion, pathTo, SUGGEST_MIN, importPgn,
 } from './openings.js';
 import { Chess } from '../vendor/chess.js';
-import { classifyGame, CLASSES } from '../analysis.js';
+import { classifyGame, CLASSES, fmtScore, winPct } from '../analysis.js';
 
 const SVG_GEAR = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
 const RATINGS = [0, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500];
@@ -23,7 +24,8 @@ const SPEEDS = [['ultraBullet', 'UltraBullet'], ['bullet', 'Bullet'], ['blitz', 
 const LONG_PRESS = 2000;
 
 // État de l'éditeur : path = ligne suivie (arêtes depuis la racine), k = nombre de coups affichés.
-const E = { rep: null, path: [], k: 0, board: null, db: local.get('expDb', 'masters'), nodes: [], expSeq: 0, events: [], reps: [], mastery: new Map() };
+const E = { rep: null, path: [], k: 0, board: null, db: local.get('expDb', 'masters'), nodes: [], expSeq: 0, events: [], reps: [], mastery: new Map(), eng: null, engPending: null, engTimer: null };
+const repOn = (k) => local.get(k, '0') === '1'; // réglages « Interface » : flèche du meilleur coup, barre d'évaluation
 
 // Maîtrise : recalculée à partir des événements (parties réelles et entraînement) des 90 derniers jours.
 async function loadMastery() {
@@ -298,7 +300,7 @@ function trainBox(reps, events) {
 function buildEditor(el) {
   el.innerHTML = `
   <div class="left">
-    <div class="board-wrap"><div id="rep-board"></div></div>
+    <div class="board-wrap"><div id="rep-evalbar" class="evalbar hidden"><div class="white"></div><span class="label"></span></div><div id="rep-board"></div></div>
     <div class="board-opts"><button id="rep-flip" class="btn small" title="Retourner l'échiquier (F)">⇅ Retourner</button>
       <a id="rep-train" class="btn small primary" title="S'entraîner sur ce répertoire">▶ S'entraîner</a>
       <span class="muted small">Clic droit sur un coup (appui long de 2 s sur téléphone) pour le supprimer.</span></div>
@@ -314,8 +316,8 @@ function buildEditor(el) {
     <div class="pmoves rtree" id="rep-moves"></div>
     <div class="exp">
       <div class="exp-head">
-        <div class="exp-tabs" role="tablist"><button type="button" role="tab" data-db="masters">Masters</button><button type="button" role="tab" data-db="lichess">Lichess</button></div>
-        <button id="exp-gear" class="icon-btn" title="Filtres de la base Lichess" aria-label="Filtres de la base Lichess">${SVG_GEAR}</button>
+        <div class="exp-tabs" role="tablist"><button type="button" role="tab" data-db="masters">Masters</button><button type="button" role="tab" data-db="lichess">Lichess</button><button type="button" role="tab" data-db="stockfish">Stockfish</button></div>
+        <button id="exp-gear" class="icon-btn" title="Paramètres : filtres Lichess, interface, moteur" aria-label="Paramètres">${SVG_GEAR}</button>
       </div>
       <div id="exp-body"></div>
     </div>
@@ -327,10 +329,26 @@ function buildEditor(el) {
     </div>
   </aside>
   <dialog id="exp-dlg" class="dlg"><form method="dialog">
-    <h2>Filtres de la base Lichess</h2>
-    <fieldset id="exp-ratings"><legend>Elo moyen des joueurs</legend><div class="chk-grid">${RATINGS.map((r, i) => `<label><input type="checkbox" value="${r}"> ${r === 0 ? 'moins de 1000' : r === 2500 ? '2500 et plus' : `${r} – ${RATINGS[i + 1] - 1}`}</label>`).join('')}</div></fieldset>
-    <fieldset id="exp-speeds"><legend>Cadences</legend><div class="chk-grid">${SPEEDS.map(([k, l]) => `<label><input type="checkbox" value="${k}"> ${l}</label>`).join('')}</div></fieldset>
-    <p class="muted small">Ces filtres ne concernent que l'onglet « Lichess ». La base Masters regroupe les parties de joueurs titrés et de plus de 2200 Elo.</p>
+    <h2>Paramètres</h2>
+    <div class="dtabs" role="tablist">
+      <button type="button" role="tab" data-pane="lichess" class="on">Filtres Lichess</button>
+      <button type="button" role="tab" data-pane="ui">Interface</button>
+      <button type="button" role="tab" data-pane="eng">Moteur</button>
+    </div>
+    <div data-epane="lichess">
+      <fieldset id="exp-ratings"><legend>Elo moyen des joueurs</legend><div class="chk-grid">${RATINGS.map((r, i) => `<label><input type="checkbox" value="${r}"> ${r === 0 ? 'moins de 1000' : r === 2500 ? '2500 et plus' : `${r} – ${RATINGS[i + 1] - 1}`}</label>`).join('')}</div></fieldset>
+      <fieldset id="exp-speeds"><legend>Cadences</legend><div class="chk-grid">${SPEEDS.map(([k, l]) => `<label><input type="checkbox" value="${k}"> ${l}</label>`).join('')}</div></fieldset>
+      <p class="muted small">Ces filtres ne concernent que l'onglet « Lichess ». La base Masters regroupe les parties de joueurs titrés et de plus de 2200 Elo.</p>
+    </div>
+    <div data-epane="ui" class="hidden">
+      <div class="frow"><label for="rep-arrow">Meilleur coup (flèche verte)</label><select id="rep-arrow"><option value="1">Activé</option><option value="0">Désactivé</option></select></div>
+      <div class="frow"><label for="rep-bar">Barre d'évaluation</label><select id="rep-bar"><option value="1">Activée</option><option value="0">Désactivée</option></select></div>
+      <p class="muted small">La flèche montre le meilleur coup de la position affichée. La barre, à gauche de l'échiquier, donne l'évaluation de Stockfish (du point de vue des Blancs).</p>
+    </div>
+    <div data-epane="eng" class="hidden">
+      <div id="rep-eng-fields"></div>
+      <p class="muted small">Mêmes réglages que l'onglet moteur de l'analyse de partie. Ils valent aussi pour la flèche, la barre et l'onglet Stockfish.</p>
+    </div>
     <div class="row end"><button value="cancel" class="btn">Annuler</button><button value="ok" class="btn primary">Appliquer</button></div>
   </form></dialog>`;
 
@@ -340,25 +358,43 @@ function buildEditor(el) {
   $('#rep-prev', el).onclick = () => go(E.k - 1);
   $('#rep-next', el).onclick = () => forward();
   $('#rep-last', el).onclick = () => { while (forward(false)); render(); };
-  el.querySelectorAll('.exp-tabs button').forEach((b) => { b.onclick = () => { E.db = b.dataset.db; local.set('expDb', E.db); renderExplorer(); }; });
+  el.querySelectorAll('.exp-tabs button').forEach((b) => { b.onclick = () => { E.db = b.dataset.db; local.set('expDb', E.db); updateEngine(); renderExplorer(); }; });
 
+  // Paramètres (roue dentée) : trois onglets. « Appliquer » enregistre tout ; le moteur est celui de l'analyse.
   const dlg = $('#exp-dlg', el);
   enterIsPrimary(dlg);
+  let pane = 'lichess', engF = null;
+  const showPane = (t) => {
+    pane = t;
+    dlg.querySelectorAll('.dtabs button').forEach((b) => b.classList.toggle('on', b.dataset.pane === t));
+    dlg.querySelectorAll('[data-epane]').forEach((p) => p.classList.toggle('hidden', p.dataset.epane !== t));
+  };
+  dlg.querySelectorAll('.dtabs button').forEach((b) => { b.onclick = () => showPane(b.dataset.pane); });
   $('#exp-gear', el).onclick = () => {
     const rs = expRatings(), ss = expSpeeds();
     dlg.querySelectorAll('#exp-ratings input').forEach((i) => { i.checked = rs.includes(+i.value); });
     dlg.querySelectorAll('#exp-speeds input').forEach((i) => { i.checked = ss.includes(i.value); });
+    $('#rep-arrow', el).value = repOn('repArrow') ? '1' : '0';
+    $('#rep-bar', el).value = repOn('repBar') ? '1' : '0';
+    engF = engineFields($('#rep-eng-fields', el), 'oeng');
+    showPane('lichess');
+    dlg.returnValue = '';
     dlg.showModal();
   };
-  dlg.addEventListener('close', () => {
-    if (dlg.returnValue !== 'ok') return;
+  dlg.querySelector('form').onsubmit = async (e) => {
+    if (!e.submitter || e.submitter.value !== 'ok') return;
     const rs = [...dlg.querySelectorAll('#exp-ratings input:checked')].map((i) => +i.value);
     const ss = [...dlg.querySelectorAll('#exp-speeds input:checked')].map((i) => i.value);
     local.set('expRatings', JSON.stringify(rs.length ? rs : RATINGS));
     local.set('expSpeeds', JSON.stringify(ss.length ? ss : SPEEDS.map(([k]) => k)));
-    E.db = 'lichess'; local.set('expDb', E.db);
-    renderExplorer();
-  });
+    local.set('repArrow', $('#rep-arrow', el).value);
+    local.set('repBar', $('#rep-bar', el).value);
+    if (pane === 'lichess') { E.db = 'lichess'; local.set('expDb', E.db); }
+    if (engF) { await engF.save(); E.eng = null; E.engPending = null; }
+    render();
+  };
+  // Moteur changé ailleurs (Boost PC détecté ou arrêté) : on recalcule la position affichée.
+  onStatus(() => { if (E.rep) { updateEngine(); refreshEngine(); } });
 
   bindTree($('#rep-moves', el));
 
@@ -484,7 +520,7 @@ function renderTree() {
     let cls = m ? ` mine st-${m.status}` : '';
     if (onLine(prefix) && E.path[prefix.length] === e) cls += e === cur && prefix.length === E.k - 1 ? ' cur' : ' onpath';
     const tip = m ? ` title="${esc(masteryTip(m))}"` : '';
-    return `${num}<span class="rm${cls}" data-n="${n}"${tip}>${figSan(e.san, white ? 'w' : 'b')}</span> `;
+    return `${num}<span class="rm${cls}" role="button" tabindex="0" data-n="${n}"${tip}>${figSan(e.san, white ? 'w' : 'b')}</span> `;
   };
   const cont = (e, ply, prefix, forceNum) => {
     if (owner.get(e.fenAfter) !== e) return '<span class="rtrans" title="Cette position est déjà dans le répertoire par un autre ordre de coups">↪ transposition</span> ';
@@ -524,6 +560,11 @@ function bindTree(el) {
   el.addEventListener('pointermove', (e) => { if (timer && Math.abs(e.clientX - x0) + Math.abs(e.clientY - y0) > 12) cancel(); });
   el.addEventListener('pointerup', cancel);
   el.addEventListener('pointercancel', cancel);
+  // Clavier : Entrée ou Espace sur un coup = clic (aller au coup).
+  el.addEventListener('keydown', (e) => {
+    const t = e.target.closest && e.target.closest('.rm');
+    if (t && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); t.click(); }
+  });
   el.addEventListener('click', (e) => {
     const t = e.target.closest('.rm');
     if (!t) return;
@@ -552,8 +593,8 @@ function barHtml(w, d, b) {
 async function renderExplorer() {
   const body = $('#exp-body');
   document.querySelectorAll('.exp-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.db === E.db));
-  $('#exp-gear').classList.toggle('hidden', E.db !== 'lichess');
   const seq = ++E.expSeq;
+  if (E.db === 'stockfish') { renderStockfish(body); return; }
   if (!lichessCfg.connected) {
     body.innerHTML = '<p class="muted pad">Pour voir les statistiques des bases Masters et Lichess, enregistrez votre jeton Lichess dans <a href="#/settings/connection">Paramètres → Connexion</a>.</p>';
     return;
@@ -601,10 +642,8 @@ function openingName() {
 
 function render() {
   if (!E.rep) return;
-  const cur = E.k ? E.path[E.k - 1] : null;
   const atFocus = E.focus && curEpd() === E.focus.epd;
-  const arrows = atFocus && E.focus.best ? [{ from: E.focus.best.slice(0, 2), to: E.focus.best.slice(2, 4), color: '#4caf50' }] : [];
-  E.board.setPosition(fenOf(curEpd()), { lastMove: cur ? [cur.uci.slice(0, 2), cur.uci.slice(2, 4)] : null, arrows });
+  drawBoard();
   const sg = $('#rep-suggest');
   if (atFocus && !childrenOf(E.rep, curEpd()).length) {
     const played = [...new Set(E.focus.errors.map((e) => frSan(e.san)))].join(', ');
@@ -621,5 +660,115 @@ function render() {
   refreshMastery();
   renderMastery();
   renderTree();
+  updateEngine();
   renderExplorer();
+}
+
+// ------------------------------------------------------------------ moteur (Stockfish)
+// Évaluation de la position affichée : sert à l'onglet « Stockfish », à la flèche du meilleur coup et à la
+// barre d'évaluation. Calculée seulement si l'une de ces trois choses est active. Même moteur que l'analyse.
+const engOn = () => E.db === 'stockfish' || repOn('repArrow') || repOn('repBar');
+function engKey(fen) { const st = analysisSettings(); return `${fen}|${st.boost}|${st.depth}|${maxTime()}|${nLines()}`; }
+// Évaluation de la position affichée, si elle est déjà calculée avec les réglages actuels.
+function engHere() {
+  const fen = fenOf(curEpd());
+  return E.eng && E.eng.fen === fen && E.eng.key === engKey(fen) ? E.eng : null;
+}
+
+function updateEngine() {
+  const fen = fenOf(curEpd());
+  if (!engOn() || new Chess(fen).isGameOver()) { E.eng = null; E.engPending = null; return; }
+  const key = engKey(fen);
+  if (E.eng && E.eng.key === key) return;
+  if (E.engPending === key) return; // calcul déjà lancé pour cette position
+  E.engPending = key;
+  E.eng = null;
+  clearTimeout(E.engTimer);
+  // petit délai : pas de calcul pendant qu'on fait défiler les coups
+  E.engTimer = setTimeout(async () => {
+    const st = analysisSettings();
+    let eng;
+    try {
+      const res = await analyzePosition(fen, null, { cloud: true, priority: true, multipv: nLines(), depth: st.fixed ? null : st.depth, movetime: maxTime() });
+      eng = { key, fen, res };
+    } catch (e) {
+      eng = { key, fen, err: e.message };
+    }
+    if (E.engPending !== key) return; // la position a changé entre-temps
+    E.engPending = null;
+    E.eng = eng;
+    if (E.rep) refreshEngine();
+  }, 200);
+}
+
+// Redessine ce qui dépend du moteur, sans recalculer le reste de l'éditeur.
+function refreshEngine() {
+  if (!E.rep) return;
+  drawBoard();
+  if (E.db === 'stockfish') renderExplorer();
+}
+
+// Échiquier : flèche « suggestion » (si la position vient d'une suggestion), flèche du meilleur coup
+// (moteur, si activée), barre d'évaluation (si activée).
+function drawBoard() {
+  const cur = E.k ? E.path[E.k - 1] : null;
+  const p = curEpd();
+  const fen = fenOf(p);
+  const atFocus = E.focus && p === E.focus.epd;
+  const arrows = atFocus && E.focus.best ? [{ from: E.focus.best.slice(0, 2), to: E.focus.best.slice(2, 4), color: '#4caf50' }] : [];
+  const eng = engHere();
+  const best = repOn('repArrow') && eng && eng.res && eng.res.lines && eng.res.lines[0] ? eng.res.lines[0].pv[0] : null;
+  if (best && !(atFocus && E.focus.best === best)) arrows.push({ from: best.slice(0, 2), to: best.slice(2, 4), color: '#4caf50' });
+  E.board.setPosition(fen, { lastMove: cur ? [cur.uci.slice(0, 2), cur.uci.slice(2, 4)] : null, arrows });
+  drawBar(fen, eng);
+}
+
+function drawBar(fen, eng) {
+  const bar = $('#rep-evalbar');
+  const on = repOn('repBar');
+  bar.classList.toggle('hidden', !on);
+  if (!on) return;
+  const chess = new Chess(fen);
+  const s = eng && eng.res && eng.res.lines && eng.res.lines[0] ? eng.res.lines[0].score : null;
+  let wp, label;
+  if (chess.isCheckmate()) { wp = chess.turn() === 'w' ? 0 : 100; label = chess.turn() === 'w' ? '0-1' : '1-0'; }
+  else if (chess.isDraw()) { wp = 50; label = '½-½'; }
+  else { wp = s ? winPct(s, 'w') : 50; label = s ? fmtScore(s) : ''; }
+  bar.classList.toggle('flipped', E.board.orientation === 'b');
+  bar.querySelector('.white').style.height = wp + '%';
+  const lb = bar.querySelector('.label');
+  lb.textContent = label;
+  lb.className = 'label ' + (wp >= 50 ? 'on-white' : 'on-black');
+}
+
+// Coups d'une ligne en figurines, avec les numéros (au plus 8 demi-coups).
+function lineHtml(fen, pv) {
+  const c = new Chess(fen);
+  let out = '';
+  pv.slice(0, 8).forEach((u, i) => {
+    const turn = c.turn();
+    const no = c.fen().split(' ')[5];
+    let m;
+    try { m = c.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] }); } catch { return; }
+    if (turn === 'w') out += `${no}. `;
+    else if (i === 0) out += `${no}… `;
+    out += figSan(m.san, m.color) + ' ';
+  });
+  return out.trim() || esc(pv[0]);
+}
+
+// Onglet « Stockfish » : meilleurs coups de la position, avec leur évaluation. Un clic joue le coup.
+function renderStockfish(body) {
+  const fen = fenOf(curEpd());
+  if (new Chess(fen).isGameOver()) { body.innerHTML = '<p class="muted pad">Partie terminée à cette position.</p>'; return; }
+  const eng = engHere();
+  if (!eng) { body.innerHTML = '<p class="muted pad">Calcul en cours…</p>'; return; }
+  if (eng.err) { body.innerHTML = `<p class="err pad">Analyse impossible : ${esc(eng.err)}</p>`; return; }
+  const lines = eng.res.lines || [];
+  if (!lines.length) { body.innerHTML = '<p class="muted pad">Pas d\'analyse disponible pour cette position.</p>'; return; }
+  const rows = lines.slice(0, nLines()).map((l) => `<tr data-uci="${esc(l.pv[0])}" role="button" tabindex="0" title="Cliquer pour jouer ce coup sur l'échiquier">
+      <td class="emv">${fmtScore(l.score)}</td><td class="smv" colspan="3">${lineHtml(fen, l.pv)}</td></tr>`).join('');
+  body.innerHTML = `<table class="exp-table"><tbody>${rows}
+    <tr class="etot"><td colspan="4" class="small">${esc(SOURCE_LABEL(eng.res))}</td></tr></tbody></table>`;
+  body.querySelectorAll('tr[data-uci]').forEach((tr) => { tr.onclick = () => playMove(tr.dataset.uci); keyActivate(tr); });
 }
