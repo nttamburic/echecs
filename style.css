@@ -73,6 +73,7 @@ input[type=checkbox] { padding: 0; vertical-align: middle; }
 #op { max-width: 260px; }
 #user { width: 260px; font-size: 16px; }
 .btn { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: var(--r); padding: 7px 12px; font: inherit; cursor: pointer; }
+a.btn { text-decoration: none; }
 @media (hover: hover) { .btn:hover { background: #4a4743; } }
 .btn:disabled { opacity: .5; cursor: default; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-strong); font-weight: 600; }
@@ -399,7 +400,9 @@ input[type=checkbox] { padding: 0; vertical-align: middle; }
 @media (hover: hover) { .rm:hover { background: var(--panel2); } }
 .rm.onpath { background: #2f3b26; }
 .rm.cur { background: var(--cur); color: var(--text-strong); box-shadow: 0 2px 0 var(--hover); }
-.rm.pressing { background: #6b3a33; transition: background 2s linear; }
+.rm.pressing { background: var(--cur); transition: background 2s linear; }
+.rm.off { opacity: .45; }
+.rm.off.mine { border-bottom-color: transparent; }
 .rvar { margin: 2px 0 2px 6px; padding-left: 10px; border-left: 2px solid var(--border); font-size: 13.5px; }
 .rtrans { color: var(--link); font-size: 12.5px; white-space: nowrap; }
 .exp { border-top: 1px solid var(--line); }
@@ -484,3 +487,5 @@ input[type=checkbox] { padding: 0; vertical-align: middle; }
   .icon-btn { min-width: 44px; min-height: 44px; justify-content: center; align-items: center; }
   .btn.small { min-height: 36px; }
 }
+.rep-info .due { color: var(--warn); font-weight: 700; }
+.train-mode.due-mode { box-shadow: inset 3px 0 0 var(--accent); }

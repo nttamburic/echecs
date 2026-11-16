@@ -27,4 +27,4 @@ export function review(card, grade, now = Date.now()) {
 
 export const isDue = (card, now = Date.now()) => !card || card.due <= now;
 
-function startOfDay(t) { const d = new Date(t); d.setHours(4, 0, 0, 0); return d.getTime(); }
+export function startOfDay(t) { const d = new Date(t); d.setHours(4, 0, 0, 0); return d.getTime(); }

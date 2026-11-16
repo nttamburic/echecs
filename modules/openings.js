@@ -15,6 +15,7 @@
 import { Chess } from '../vendor/chess.js';
 import { epd } from '../analysis.js';
 import * as store from '../core/store.js';
+import { review, startOfDay } from '../core/srs.js';
 
 export const REP = 'openingRepertoire';
 export const EVT = 'openingEvents';
@@ -111,7 +112,8 @@ export const isActive = (e) => !e.disabled;
 export const childrenOf = (rep, fen) => { const p = epd(fen); return rep.edges.filter((e) => e.fenBefore === p); };
 
 // Arêtes atteignables depuis la racine (parcours en largeur). Sert à la suppression et à l'entraînement.
-export function reachableEdges(rep) {
+// activeOnly : ne suit pas les coups désactivés (leur suite n'est alors atteinte que par transposition).
+export function reachableEdges(rep, activeOnly = false) {
   const byFrom = new Map();
   for (const e of rep.edges) { if (!byFrom.has(e.fenBefore)) byFrom.set(e.fenBefore, []); byFrom.get(e.fenBefore).push(e); }
   const seen = new Set([epd(rep.root)]);
@@ -119,6 +121,7 @@ export function reachableEdges(rep) {
   const out = [];
   while (queue.length) {
     for (const e of byFrom.get(queue.shift()) || []) {
+      if (activeOnly && !isActive(e)) continue;
       out.push(e);
       if (!seen.has(e.fenAfter)) { seen.add(e.fenAfter); queue.push(e.fenAfter); }
     }
@@ -141,9 +144,11 @@ export function deleteMove(rep, fenBefore, uci) {
 }
 
 // Positions où c'est au tour de l'utilisateur (sa couleur), avec ses coups enregistrés.
-export function userPositions(rep) {
+// Par défaut seulement les coups actifs (entraînement, maîtrise) ; activeOnly = false : tous les coups
+// du répertoire (parcours des parties, suggestions : un coup désactivé reste « dans le répertoire »).
+export function userPositions(rep, activeOnly = true) {
   const m = new Map();
-  for (const e of reachableEdges(rep)) {
+  for (const e of reachableEdges(rep, activeOnly)) {
     if (e.fenBefore.split(' ')[1] !== rep.color) continue;
     if (!m.has(e.fenBefore)) m.set(e.fenBefore, []);
     m.get(e.fenBefore).push(e);
@@ -271,7 +276,7 @@ export function computeMastery(rep, events, reps = [rep], now = Date.now()) {
     if (ev.repId !== rep.id || ev.date < from || ev.date > now + 86400000) continue;
     const m = out.get(ev.epd);
     if (!m || m.status === 'shared') continue;
-    const ok = m.edges.some((e) => e.uci === ev.uci);
+    const ok = childrenOf(rep, ev.epd).some((e) => e.uci === ev.uci); // un coup désactivé reste juste
     if (!ok && ev.source === 'game' && otherOpening(fams || (fams = repFamilies(rep)), ev.epd, ev.uci)) continue;
     m.total++;
     if (ok) m.correct++;
@@ -291,8 +296,53 @@ export function masterySummary(mastery) {
   return s;
 }
 
+// ------------------------------------------------------------------ répétition espacée
+// Une carte par position où l'utilisateur joue (coups actifs). Son état n'est pas stocké : il est
+// recalculé en rejouant dans l'ordre les événements déjà enregistrés (entraînement et parties
+// réelles) avec review() de core/srs.js. La synchro des événements suffit donc.
+//   - juste = 'good', faux (ou indice) = 'again' ;
+//   - partie réelle : mêmes règles que la maîtrise (position partagée ou autre ouverture : ignoré) ;
+//   - une bonne réponse avant l'échéance ne fait pas avancer la carte (pas d'intervalle gonflé par
+//     plusieurs parties le même jour) ; une erreur la fait toujours reculer.
+export const NEW_PER_DAY = () => {
+  let v = null;
+  try { v = localStorage.getItem('repNewPerDay'); } catch { /* stockage indisponible */ }
+  return v == null ? 10 : Math.max(0, Number(v) || 0);
+};
+
+export function computeCards(rep, events, reps = [rep]) {
+  const conflicts = sharedConflicts(reps);
+  const out = new Map();
+  for (const [p, edges] of userPositions(rep)) out.set(p, { epd: p, edges, card: null, first: null, shared: conflicts.has(`${rep.color}|${p}`) });
+  let fams = null;
+  const evs = events.filter((ev) => ev.repId === rep.id && out.has(ev.epd)).sort((a, b) => a.date - b.date);
+  for (const ev of evs) {
+    const c = out.get(ev.epd);
+    const ok = childrenOf(rep, ev.epd).some((e) => e.uci === ev.uci);
+    if (ev.source === 'game' && (c.shared || (!ok && otherOpening(fams || (fams = repFamilies(rep)), ev.epd, ev.uci)))) continue;
+    const grade = ok ? 'good' : 'again';
+    if (!c.card) { c.card = review(null, grade, ev.date); c.first = ev.date; continue; }
+    if (grade === 'good' && c.card.due > ev.date) continue;
+    c.card = review(c.card, grade, ev.date);
+  }
+  return out;
+}
+
+// Résumé : cartes dues, cartes jamais vues, nouvelles cartes déjà commencées aujourd'hui.
+export function cardsSummary(cards, now = Date.now()) {
+  const today = startOfDay(now) > now ? startOfDay(now) - 86400000 : startOfDay(now);
+  const s = { due: 0, fresh: 0, newToday: 0, total: 0 };
+  for (const c of cards.values()) {
+    s.total++;
+    if (!c.card) s.fresh++;
+    else if (c.card.due <= now) s.due++;
+    if (c.first != null && c.first >= today) s.newToday++;
+  }
+  return s;
+}
+
 // Chemin le plus court (arêtes) de from vers to dans rep, ou null.
-export function pathTo(rep, from, to) {
+export function pathTo(rep, from, to, activeOnly = false) {
   from = epd(from); to = epd(to);
   if (from === to) return [];
   const prev = new Map([[from, null]]);
@@ -300,6 +350,7 @@ export function pathTo(rep, from, to) {
   while (q.length) {
     const p = q.shift();
     for (const e of childrenOf(rep, p)) {
+      if (activeOnly && !isActive(e)) continue;
       if (prev.has(e.fenAfter)) continue;
       prev.set(e.fenAfter, e);
       if (e.fenAfter === to) {
@@ -329,7 +380,7 @@ export function findSuggestions(reps, games) {
     if (!g.moves.length) continue;
     for (const r of reps) {
       if (r.color !== g.color || epd(g.moves[0].before) !== epd(r.root)) continue;
-      const cov = userPositions(r);
+      const cov = userPositions(r, false);
       let left = -1;
       for (let i = 0; i < g.moves.length && i <= MAX_PLY; i++) {
         const m = g.moves[i];
@@ -395,7 +446,7 @@ async function doScan(games, user, now) {
   if (!user || !games || !games.length) return 0;
   const reps = await listRepertoires();
   if (!reps.length) return 0;
-  const covered = new Map(reps.map((r) => [r.id, userPositions(r)]));
+  const covered = new Map(reps.map((r) => [r.id, userPositions(r, false)]));
   const have = new Set((await store.all(EVT)).map((r) => r.id));
   const from = now - WINDOW_DAYS * 86400000;
   const me = user.toLowerCase();

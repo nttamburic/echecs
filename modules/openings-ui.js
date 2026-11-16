@@ -1,5 +1,5 @@
 // Module « Ouvertures » — interface : liste des répertoires, création, éditeur sur l'échiquier
-// (coups des deux camps, variantes, suppression au clic droit ou à l'appui long) et explorateur
+// (coups des deux camps, variantes, désactivation et suppression au clic droit ou à l'appui long) et explorateur
 // Lichess (Masters / Lichess, filtres d'Elo et de cadence sous la roue dentée).
 import { Board } from '../board.js';
 import { $, esc, local, toast, keyActivate } from '../core/ui.js';
@@ -13,6 +13,7 @@ import {
   newRepertoire, addMove, childrenOf, reachableEdges, deleteMove, fenOf,
   listRepertoires, getRepertoire, saveRepertoire, deleteRepertoire,
   listEvents, computeMastery, masterySummary, scanGames, STATUS, EVT, REP, WINDOW_DAYS, MIN_SITUATIONS, THRESHOLD,
+  computeCards, cardsSummary, NEW_PER_DAY,
   findSuggestions, applySuggestion, pathTo, SUGGEST_MIN, importPgn,
 } from './openings.js';
 import { Chess } from '../vendor/chess.js';
@@ -79,7 +80,7 @@ export async function renderHome(el) {
   <div class="rep-list">${reps.length ? reps.map((r) => `
     <a class="card rep-card" href="#/openings/${esc(r.id)}">
       <span class="avatar-sm ${r.color}"><img src="pieces/${r.color}K.svg" alt=""></span>
-      <span class="rep-info"><b>${esc(r.name)}</b><span class="muted small">${colorFr(r.color)} · ${plural(reachableEdges(r).length, 'coup')}</span>
+      <span class="rep-info"><b>${esc(r.name)}</b><span class="muted small">${colorFr(r.color)} · ${plural(reachableEdges(r).length, 'coup')}${dueLabel(r, events, reps)}</span>
         <span class="mst-row small">${summaryHtml(masterySummary(computeMastery(r, events, reps)))}</span></span>
       <button class="btn small danger" data-del="${esc(r.id)}" title="Supprimer ce répertoire">Supprimer</button>
     </a>`).join('') : '<p class="muted">Aucun répertoire pour le moment. Créez-en un, puis jouez vos coups sur l\'échiquier.</p>'}</div>
@@ -118,6 +119,8 @@ export async function renderHome(el) {
   if (reps.length) renderSuggestions($('#sugg-box', el), reps);
   const pickRep = $('#train-pick', el);
   if (pickRep) $('#train-rep', el).onclick = () => { location.hash = '#/openings/train/rep/' + encodeURIComponent(pickRep.value); };
+  const styleSel = $('#train-style', el);
+  if (styleSel) styleSel.onchange = () => local.set('trainStyle', styleSel.value);
   const dlg = $('#rep-dlg', el);
   let color = 'w';
   dlg.querySelectorAll('.side-pick button').forEach((b) => {
@@ -272,13 +275,30 @@ async function renderSuggestions(box, reps) {
   });
 }
 
+// « · 3 à revoir » sur la fiche d'un répertoire (rien si aucune carte n'est due).
+function dueLabel(r, events, reps) {
+  const s = cardsSummary(computeCards(r, events, reps));
+  return s.due ? ` · <b class="due">${s.due} à revoir</b>` : '';
+}
+
 function trainBox(reps, events) {
-  let target = 0;
-  for (const r of reps) { const s = masterySummary(computeMastery(r, events, reps)); target += s.weak + s.new; }
+  let target = 0, due = 0, fresh = 0, newToday = 0;
+  for (const r of reps) {
+    const s = masterySummary(computeMastery(r, events, reps)); target += s.weak + s.new;
+    const c = cardsSummary(computeCards(r, events, reps)); due += c.due; fresh += c.fresh; newToday += c.newToday;
+  }
+  const newLeft = Math.min(fresh, Math.max(0, NEW_PER_DAY() - newToday));
+  const style = local.get('trainStyle', 'isolated') === 'lines' ? 'lines' : 'isolated';
   return `
   <section class="card train-box">
     <h2>S'entraîner</h2>
     <div class="train-modes">
+      <div class="train-mode due-mode"><h3>À revoir</h3>
+        <p class="muted small">Répétition espacée : chaque coup revient juste avant que vous l'oubliiez. <b>${plural(due, 'coup')} à revoir</b>${newLeft ? ` et ${newLeft} nouveau${newLeft > 1 ? 'x' : ''} aujourd'hui` : ''}.</p>
+        <div class="row"><select id="train-style" aria-label="Façon de revoir les coups">
+            <option value="isolated"${style === 'isolated' ? ' selected' : ''}>Coups isolés</option>
+            <option value="lines"${style === 'lines' ? ' selected' : ''}>Lignes complètes</option></select>
+          <a class="btn primary${due + newLeft ? '' : ' disabled'}" href="${due + newLeft ? '#/openings/train/due' : '#/openings'}">Commencer</a></div></div>
       <div class="train-mode"><h3>Tout le répertoire</h3>
         <p class="muted small">Des lignes tirées au hasard dans tous vos répertoires. Vous jouez votre couleur, l'adversaire répond par un coup de votre répertoire.</p>
         <div class="row"><a class="btn primary" href="#/openings/train/all">Commencer</a></div></div>
@@ -300,7 +320,7 @@ function buildEditor(el) {
     <div class="board-wrap"><div id="rep-evalbar" class="evalbar hidden"><div class="white"></div><span class="label"></span></div><div id="rep-board"></div></div>
     <div class="board-opts"><button id="rep-flip" class="btn small" title="Retourner l'échiquier (F)">⇅ Retourner</button>
       <a id="rep-train" class="btn small primary" title="S'entraîner sur ce répertoire">▶ S'entraîner</a>
-      <span class="muted small">Clic droit sur un coup (appui long de 2 s sur téléphone) pour le supprimer.</span></div>
+      <span class="muted small">Clic droit sur un coup (appui long de 2 s sur téléphone) pour le désactiver ou le supprimer.</span></div>
   </div>
   <aside class="panel" id="rep-panel">
     <div class="phead">
@@ -447,6 +467,44 @@ async function playMove(uci) {
   if (E.rep.edges.length !== before) { await saveRepertoire(E.rep); rescanSoon(); }
 }
 
+// Menu d'un coup (clic droit, appui long, touche Suppr) : désactiver / réactiver, ou supprimer.
+// Un coup désactivé reste dans le répertoire mais n'est plus entraîné ni compté dans la maîtrise.
+function moveMenu(n) {
+  const line = E.nodes[n];
+  if (!line) return;
+  const edge = line[line.length - 1];
+  const label = moveLabel(edge, line.length - 1) + frSan(edge.san);
+  let dlg = $('#mv-dlg');
+  if (!dlg) {
+    dlg = document.createElement('dialog');
+    dlg.id = 'mv-dlg';
+    dlg.className = 'dlg';
+    document.body.appendChild(dlg);
+  }
+  dlg.innerHTML = `<form method="dialog">
+    <h2>${esc(label)}</h2>
+    <p class="muted small">${edge.disabled
+      ? 'Ce coup est désactivé : il reste dans le répertoire, mais n\'est ni entraîné ni compté dans la maîtrise, pas plus que la suite qui en dépend.'
+      : 'Désactiver garde le coup dans le répertoire sans l\'entraîner ni le compter dans la maîtrise (la suite qui en dépend aussi).'}</p>
+    <div class="row end"><button value="cancel" class="btn">Annuler</button>
+      <button value="toggle" class="btn">${edge.disabled ? 'Réactiver' : 'Désactiver'}</button>
+      <button value="delete" class="btn danger">Supprimer…</button></div></form>`;
+  dlg.onclose = async () => {
+    if (dlg.returnValue === 'toggle') await toggleMove(edge, label);
+    else if (dlg.returnValue === 'delete') await deleteNode(n);
+  };
+  dlg.returnValue = '';
+  dlg.showModal();
+  dlg.querySelector('button[value="toggle"]').focus();
+}
+
+async function toggleMove(edge, label) {
+  if (edge.disabled) delete edge.disabled; else edge.disabled = true;
+  await saveRepertoire(E.rep);
+  render();
+  toast(edge.disabled ? `${label} désactivé : il n'est plus entraîné.` : `${label} réactivé.`);
+}
+
 async function deleteNode(n) {
   const line = E.nodes[n];
   if (!line) return;
@@ -506,6 +564,7 @@ function renderTree() {
   const owner = new Map([[epd(rep.root), null]]);
   (function own(p) { for (const e of childrenOf(rep, p)) if (!owner.has(e.fenAfter)) { owner.set(e.fenAfter, e); own(e.fenAfter); } })(epd(rep.root));
   const cur = E.k ? E.path[E.k - 1] : null;
+  const active = new Set(reachableEdges(rep, true)); // coups entraînés (hors coups désactivés et leur suite)
   // vrai si prefix est le début de la ligne suivie (pour ne surligner que celle-ci)
   const onLine = (prefix) => prefix.length < E.k && prefix.every((e, i) => E.path[i] === e);
   let count = 0;
@@ -514,9 +573,12 @@ function renderTree() {
     const white = e.fenBefore.split(' ')[1] === 'w';
     const num = white || forceNum ? `<span class="rnum">${moveLabel(e, ply)}</span>` : '';
     const m = e.fenBefore.split(' ')[1] === rep.color ? E.mastery.get(e.fenBefore) : null;
-    let cls = m ? ` mine st-${m.status}` : '';
+    const off = !active.has(e);
+    let cls = m && !off ? ` mine st-${m.status}` : off && e.fenBefore.split(' ')[1] === rep.color ? ' mine' : '';
+    if (off) cls += ' off';
     if (onLine(prefix) && E.path[prefix.length] === e) cls += e === cur && prefix.length === E.k - 1 ? ' cur' : ' onpath';
-    const tip = m ? ` title="${esc(masteryTip(m))}"` : '';
+    const tip = off ? ` title="${e.disabled ? 'Coup désactivé' : 'Suite d\'un coup désactivé'} : ni entraîné ni compté dans la maîtrise"`
+      : m ? ` title="${esc(masteryTip(m))}"` : '';
     return `${num}<span class="rm${cls}" role="button" tabindex="0" data-n="${n}"${tip}>${figSan(e.san, white ? 'w' : 'b')}</span> `;
   };
   const cont = (e, ply, prefix, forceNum) => {
@@ -541,7 +603,7 @@ function renderTree() {
   }
 }
 
-// Clic : aller au coup. Clic droit (souris) ou appui long de 2 s (tactile) : supprimer.
+// Clic : aller au coup. Clic droit (souris) ou appui long de 2 s (tactile) : menu du coup (désactiver, supprimer).
 function bindTree(el) {
   let timer = null, pressed = null, fired = false, x0 = 0, y0 = 0, lastType = 'mouse';
   const cancel = () => { clearTimeout(timer); timer = null; if (pressed) pressed.classList.remove('pressing'); pressed = null; };
@@ -552,15 +614,16 @@ function bindTree(el) {
     if (!t || e.pointerType === 'mouse') return;
     pressed = t; x0 = e.clientX; y0 = e.clientY;
     t.classList.add('pressing');
-    timer = setTimeout(() => { const n = +t.dataset.n; cancel(); fired = true; if (navigator.vibrate) navigator.vibrate(30); deleteNode(n); }, LONG_PRESS);
+    timer = setTimeout(() => { const n = +t.dataset.n; cancel(); fired = true; if (navigator.vibrate) navigator.vibrate(30); moveMenu(n); }, LONG_PRESS);
   });
   el.addEventListener('pointermove', (e) => { if (timer && Math.abs(e.clientX - x0) + Math.abs(e.clientY - y0) > 12) cancel(); });
   el.addEventListener('pointerup', cancel);
   el.addEventListener('pointercancel', cancel);
-  // Clavier : Entrée ou Espace sur un coup = clic (aller au coup).
+  // Clavier : Entrée ou Espace sur un coup = clic (aller au coup) ; Suppr ou Menu = menu du coup.
   el.addEventListener('keydown', (e) => {
     const t = e.target.closest && e.target.closest('.rm');
     if (t && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); t.click(); }
+    else if (t && (e.key === 'Delete' || e.key === 'ContextMenu')) { e.preventDefault(); moveMenu(+t.dataset.n); }
   });
   el.addEventListener('click', (e) => {
     const t = e.target.closest('.rm');
@@ -574,7 +637,7 @@ function bindTree(el) {
     const t = e.target.closest('.rm');
     if (!t) return;
     e.preventDefault(); // sur téléphone, le menu du navigateur ne doit pas s'ouvrir : l'appui long est géré ci-dessus
-    if (lastType !== 'touch') deleteNode(+t.dataset.n);
+    if (lastType !== 'touch') moveMenu(+t.dataset.n);
   });
 }
 
