@@ -9,7 +9,7 @@
 import { Chess } from '../vendor/chess.js';
 import { fetchJson, local, isMobile } from './ui.js';
 
-export const DEPTH_PC = 22;
+export const DEPTH_PC = 18;
 const MULTIPV = 2;
 const SEARCH_TIMEOUT_MS = 45000;
 

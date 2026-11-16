@@ -88,9 +88,7 @@
     <fieldset>
       <legend>Moteur</legend>
       <div id="multi-fields"></div>
-      <p class="muted small">Ce sont les mêmes réglages que la roue dentée ⚙ d'une partie. Profondeur 18 : verdicts quasi identiques à 22, environ 4 fois plus vite. Le nombre de variantes ne change pas la durée (il sert à l'analyse en direct).</p>
     </fieldset>
-    <p id="multi-est" class="small"></p>
     <div class="row end">
       <button value="cancel" class="btn">Annuler</button>
       <button id="multi-go" value="go" class="btn primary">Lancer l'analyse</button>
@@ -108,7 +106,6 @@
     <div class="player" id="player-bottom"></div>
     <div class="board-opts">
       <button id="flip" class="btn small" title="Retourner l'échiquier (F)">⇅ Retourner</button>
-      <label class="muted small"><input type="checkbox" id="show-next"> Flèche du meilleur coup suivant</label>
     </div>
   </div>
   <aside class="panel" id="gpanel">
@@ -148,11 +145,28 @@
 
 <dialog id="eng-dlg" class="dlg">
   <form method="dialog">
-    <h2>Paramètres d'analyse</h2>
+    <h2>Paramètres</h2>
+    <div class="dtabs" role="tablist">
+      <button type="button" role="tab" data-tab="eng" class="on">Moteur</button>
+      <button type="button" role="tab" data-tab="ui">Interface</button>
+    </div>
+    <div data-pane="ui" class="hidden">
+      <div class="frow"><label for="ui-arrows">Afficher les flèches</label><select id="ui-arrows">
+        <option value="none">Non</option><option value="best">Meilleur coup (vert)</option>
+        <option value="coach">Flèche de l'entraîneur (bleu)</option><option value="both">Meilleur coup + entraîneur</option>
+      </select></div>
+      <div class="frow"><label for="ui-keys">Marquer les coups clés</label><select id="ui-keys"><option value="1">Oui</option><option value="0">Non</option></select></div>
+      <div class="frow"><label for="ui-class">Afficher la classification des coups sur l'échiquier</label><select id="ui-class"><option value="1">Oui</option><option value="0">Non</option></select></div>
+      <p class="muted small">Meilleur coup (vert) : le coup qu'il fallait jouer quand le coup joué n'est pas le meilleur.
+        Flèche de l'entraîneur (bleu) : le meilleur coup à jouer dans la position affichée.
+        Coups clés : pastilles et couleurs (Brillant, Gaffe…) dans la liste des coups.</p>
+    </div>
+    <div data-pane="eng">
     <div id="eng-fields"></div>
     <p class="muted small">Profondeur et temps maximum s'appliquent à chaque position : le moteur s'arrête au premier des deux atteint.
       Le nombre de variantes est celui des lignes affichées quand « Analyse » est activé.
       Les nouveaux réglages valent pour les prochaines analyses (« Relancer l'analyse » pour une partie déjà analysée).</p>
+    </div>
     <div class="row end">
       <button value="cancel" class="btn">Annuler</button>
       <button value="save" class="btn primary">Sauvegarder</button>

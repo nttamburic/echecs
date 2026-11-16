@@ -103,22 +103,33 @@ input[type=checkbox] { padding: 0; vertical-align: middle; }
 /* ---- vue partie (façon chess.com) : échiquier au centre, barre d'évaluation à gauche, panneau à droite ---- */
 #game-view { display: flex; gap: 16px; padding: 12px 16px; align-items: flex-start; justify-content: center; }
 .left { width: min(calc(100vh - 118px), 760px, calc(100vw - var(--side) - 520px)); min-width: 300px; }
-.player { padding: 6px 2px 6px 34px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 44px; }
+.player { padding: 6px 2px 6px 44px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 44px; }
 .avatar-sm { width: 32px; height: 32px; border-radius: 4px; display: grid; place-items: center; background: #ebecd0; flex: none; }
 .avatar-sm.b { background: #3c3a37; }
 .avatar-sm img { width: 26px; height: 26px; }
-.player .pill { margin-left: auto; background: #fff; color: #312e2b; font-weight: 700; font-size: 13px; padding: 2px 10px; border-radius: 4px; }
+
 .pill { background: var(--panel2); border-radius: 10px; padding: 1px 8px; font-size: 12.5px; margin-left: 4px; }
 .board-wrap { display: flex; gap: 8px; }
-#evalbar { position: relative; width: 26px; flex: none; background: #403d39; border-radius: 3px; overflow: hidden; display: flex; flex-direction: column-reverse; }
+#evalbar { position: relative; width: 36px; flex: none; background: #403d39; border-radius: 3px; overflow: hidden; display: flex; flex-direction: column-reverse; }
 #evalbar .white { background: #f0f0f0; transition: height .3s; width: 100%; }
 #evalbar.flipped { flex-direction: column; }
-#evalbar .label { position: absolute; left: 0; right: 0; text-align: center; font-size: 10.5px; font-weight: 700; }
+#evalbar .label { position: absolute; left: 0; right: 0; text-align: center; font-size: 12.5px; font-weight: 700; }
 #evalbar .label.on-white { bottom: 4px; color: #333; }
 #evalbar .label.on-black { top: 4px; color: #ddd; }
 #evalbar.flipped .label.on-white { bottom: auto; top: 4px; }
 #evalbar.flipped .label.on-black { top: auto; bottom: 4px; }
-.board-opts { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; padding: 4px 0 0 34px; }
+.board-opts { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; padding: 4px 0 0 44px; }
+.player .pinfo { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.captured { display: flex; align-items: center; min-height: 16px; }
+.captured .capg { display: inline-flex; margin-right: 6px; }
+.captured .capg img { width: 19px; height: 19px; margin-right: -10px; }
+.captured .capg img[src*="/b"] { filter: drop-shadow(0 0 1px rgba(255, 255, 255, .7)); }
+.captured .capg img:last-child { margin-right: 0; }
+.captured .adv { font-size: 12px; color: var(--muted); font-weight: 600; }
+.dtabs { display: flex; margin: 0 -20px 10px; border-bottom: 1px solid var(--border); }
+.dtabs button { flex: 1; background: none; border: 0; border-bottom: 3px solid transparent; color: var(--muted); font: inherit; font-weight: 700; padding: 10px 8px; cursor: pointer; }
+.dtabs button.on { color: var(--text); border-bottom-color: var(--text); }
+.dtabs button:hover { color: var(--text); }
 
 .board { position: relative; width: 100%; aspect-ratio: 1; user-select: none; touch-action: none; border-radius: 3px; overflow: hidden; container-type: inline-size; }
 .board .squares, .board .pieces { position: absolute; inset: 0; }
@@ -288,12 +299,13 @@ input[type=checkbox] { padding: 0; vertical-align: middle; }
   .opt { display: none; }
   #games td.opp { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #game-view { padding: 6px 4px; gap: 8px; }
-  .player { padding-left: 22px; font-size: 13px; min-height: 38px; }
+  .player { padding-left: 30px; font-size: 13px; min-height: 38px; }
   .avatar-sm { width: 26px; height: 26px; } .avatar-sm img { width: 21px; height: 21px; }
   .board-wrap { gap: 4px; }
-  #evalbar { width: 18px; }
-  #evalbar .label { font-size: 8.5px; }
-  .board-opts { padding-left: 22px; }
+  #evalbar { width: 26px; }
+  #evalbar .label { font-size: 10px; }
+  .board-opts { padding-left: 30px; }
+  .captured .capg img { width: 14px; height: 14px; margin-right: -7px; }
   .board .coord { font-size: 9px; }
   .navbar { top: 52px; padding: 8px; gap: 6px; }
   #moves { max-height: 220px; }

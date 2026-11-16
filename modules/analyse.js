@@ -205,24 +205,6 @@ async function backfillOpenings() {
 const needsAnalysis = (game) => !S.index[game.id] || !S.index[game.id].complete;
 const PERIODS = [['all', 'Toutes les parties'], ['15', '15 derniers jours'], ['30', '30 derniers jours'], ['60', '60 derniers jours'], ['90', '90 derniers jours']];
 const inPeriod = (game, period) => period === 'all' || game.end * 1000 >= Date.now() - Number(period) * 86400000;
-// Débits mesurés sur le PC (Ryzen 5 5600X), en positions / s, ≈ 61 demi-coups par partie.
-// Boost PC : 6 moteurs natifs. Lite : par moteur, tant qu'il y a un cœur physique par moteur ;
-// au-delà, les moteurs en plus ne rapportent presque rien (≈ 10 % chacun).
-const BOOST_RATE = { 16: 10.5, 18: 5.3, 20: 2.9, 22: 1.43, 24: 0.74 };
-const LITE_RATE = { 12: 3, 14: 1.5, 16: 0.75, 18: 0.38, 20: 0.2 };
-const PLIES_PER_GAME = 61;
-function estRate({ boost, depth, movetime, threads }) {
-  let rate, engines;
-  if (boost) { engines = engineStatus.boost.engines || 6; rate = (BOOST_RATE[depth] || 0) * engines / 6; }
-  else {
-    const cores = Math.max(1, Math.round(MAX_THREADS / 2));
-    engines = threads;
-    rate = (LITE_RATE[depth] || 0) * (Math.min(threads, cores) + 0.1 * Math.max(0, threads - cores));
-  }
-  // Le temps maximum plafonne chaque recherche : au pire « movetime » par position et par moteur.
-  if (rate && movetime) rate = Math.max(rate, engines / (movetime / 1000));
-  return rate;
-}
 function renderBatch() {
   const b = S.batch;
   const btn = $('#multi');
@@ -236,12 +218,6 @@ function renderBatch() {
   el.textContent = S.g && S.g !== c
     ? `Analyse multiple en pause pendant que vous consultez une partie (${b.done}/${b.total} terminées).`
     : `Analyse multiple (${b.label}, profondeur ${b.depth}${b.movetime ? `, ${b.movetime / 1000} s max` : ''}) : ${b.done}/${b.total} terminées${c ? ` — en cours : ${c.game.white.name} – ${c.game.black.name} (${c.positions.filter(Boolean).length}/${c.moves.length} coups)` : ''}.`;
-}
-
-function fmtDuration(s) {
-  if (s < 60) return 'moins d\'une minute';
-  const t = Math.round(s / 60), h = Math.floor(t / 60), m = t % 60;
-  return h ? `${h} h ${String(m).padStart(2, '0')}` : `${m} min`;
 }
 
 // Fenêtre de choix : période (menu déroulant) et réglages du moteur (les mêmes que la roue dentée).
@@ -265,13 +241,8 @@ async function openMultiDialog() {
     const n = todo(sel.value), all = total(sel.value);
     $('#multi-count').textContent = n ? `${n} à analyser sur ${all}.` : all ? `Déjà toutes analysées (${all}).` : 'Aucune partie.';
     $('#multi-go').disabled = !n;
-    const st = f.read();
-    const rate = estRate(st);
-    $('#multi-est').textContent = !n ? 'Rien à analyser pour cette période.'
-      : rate ? `Durée estimée : environ ${fmtDuration(n * PLIES_PER_GAME / rate)} pour ${n} partie(s) (un peu moins grâce à l'analyse cloud Lichess${st.boost ? '' : ' ; dans le navigateur, l\'estimation est approximative'}).`
-      : `${n} partie(s) à analyser.`;
   };
-  const f = engineFields($('#multi-fields'), 'multi', update);
+  const f = engineFields($('#multi-fields'), 'multi');
   sel.onchange = update;
   update();
   dlg.returnValue = '';
@@ -643,6 +614,33 @@ function figSan(san, color) {
 }
 
 // ------------------------------------------------------------------ rendu partie
+// Réglages de l'onglet « Interface » de la roue dentée.
+const uiArrows = () => local.get('arrows', 'best');
+const uiOn = (k) => local.get(k, '1') !== '0';
+
+// Matériel : pièces adverses capturées par chaque camp et avantage matériel (P 1, C/F 3, T 5, D 9).
+const MAT_VAL = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+const MAT_START = { p: 8, n: 2, b: 2, r: 2, q: 1 };
+function material(fen) {
+  const cnt = { w: { p: 0, n: 0, b: 0, r: 0, q: 0 }, b: { p: 0, n: 0, b: 0, r: 0, q: 0 } };
+  for (const ch of fen.split(' ')[0]) {
+    const l = ch.toLowerCase();
+    if (MAT_VAL[l]) cnt[ch === l ? 'b' : 'w'][l]++;
+  }
+  return cnt;
+}
+function capturedHtml(cnt, c) {
+  const opp = c === 'w' ? 'b' : 'w';
+  const score = (x) => Object.entries(cnt[x]).reduce((a, [t, n]) => a + MAT_VAL[t] * n, 0);
+  let html = '';
+  for (const t of ['p', 'b', 'n', 'r', 'q']) {
+    const k = Math.max(0, MAT_START[t] - cnt[opp][t]);
+    if (k) html += `<span class="capg">${`<img src="pieces/${opp}${t.toUpperCase()}.svg" alt="">`.repeat(k)}</span>`;
+  }
+  const adv = score(c) - score(opp);
+  return `<span class="captured">${html}${adv > 0 ? `<span class="adv">+${adv}</span>` : ''}</span>`;
+}
+
 function renderGame() {
   const g = S.g;
   if (!g) return;
@@ -654,16 +652,17 @@ function renderGame() {
 
   // échiquier : case du coup coloriée et annotée (Brillant, Théorique, Gaffe…), flèche du meilleur coup
   const arrows = [];
-  if (annotate && d.pos && !d.r.isBest && d.r.cls !== 'book' && d.pos.lines[0]) {
+  const ar = uiArrows();
+  if ((ar === 'best' || ar === 'both') && annotate && d.pos && !d.r.isBest && d.r.cls !== 'book' && d.pos.lines[0]) {
     const b = d.pos.lines[0].pv[0];
     arrows.push({ from: b.slice(0, 2), to: b.slice(2, 4), color: '#4caf50' });
   }
   const nextPos = review && !g.var && g.ply < g.moves.length ? g.positions[g.ply] : null;
-  if ($('#show-next').checked && nextPos && nextPos.lines[0]) {
+  if ((ar === 'coach' || ar === 'both') && nextPos && nextPos.lines[0]) {
     const b = nextPos.lines[0].pv[0];
-    arrows.push({ from: b.slice(0, 2), to: b.slice(2, 4), color: '#3b82f6', opacity: 0.6 });
+    arrows.push({ from: b.slice(0, 2), to: b.slice(2, 4), color: '#3b82f6', opacity: 0.75 });
   }
-  const mark = annotate ? { sq: d.uci.slice(2, 4), color: CLASSES[d.r.cls].color, sym: CLASSES[d.r.cls].sym, label: CLASSES[d.r.cls].label } : null;
+  const mark = annotate && uiOn('boardClass') ? { sq: d.uci.slice(2, 4), color: CLASSES[d.r.cls].color, sym: CLASSES[d.r.cls].sym, label: CLASSES[d.r.cls].label } : null;
   board.setPosition(fen, { lastMove: d ? [d.uci.slice(0, 2), d.uci.slice(2, 4)] : null, arrows, mark });
 
   // barre d'évaluation (analyse de la partie, sinon analyse en direct de la position)
@@ -686,11 +685,11 @@ function renderGame() {
   // joueurs
   const top = flipped ? 'w' : 'b';
   const bot = flipped ? 'b' : 'w';
+  const mat = material(fen);
   const pl = (c) => {
     const p = c === 'w' ? g.game.white : g.game.black;
-    const s = g.summary[c];
-    return `<span class="avatar-sm ${c}"><img src="pieces/${c}P.svg" alt=""></span><b>${esc(p.name)}</b> <span class="muted">(${esc(p.rating)})</span>
-      ${review ? `<span class="pill" title="Précision">${fr1(s.accuracy)} %</span>` : ''}`;
+    return `<span class="avatar-sm ${c}"><img src="pieces/${c}P.svg" alt=""></span>
+      <span class="pinfo"><span><b>${esc(p.name)}</b> <span class="muted">(${esc(p.rating)})</span></span>${capturedHtml(mat, c)}</span>`;
   };
   $('#player-top').innerHTML = pl(top);
   $('#player-bottom').innerHTML = pl(bot);
@@ -889,6 +888,7 @@ function renderMoves(g, review) {
   // icône « théorie » seulement sur le dernier coup théorique de chaque camp
   const lastBook = { w: -1, b: -1 };
   if (review) g.results.forEach((r, i) => { if (r && r.cls === 'book') lastBook[g.moves[i].color] = i; });
+  const keys = uiOn('keyMoves');
   let html = '';
   for (let i = 0; i < g.moves.length; i += 2) {
     html += `<div class="mrow"><span class="mno">${i / 2 + 1}.</span>`;
@@ -897,8 +897,8 @@ function renderMoves(g, review) {
       if (!m) { html += '<span class="mv empty"></span>'; continue; }
       const r = review ? g.results[j] : null;
       const cur = !g.var && g.ply === j + 1 ? ' cur' : g.var && g.var.basePly === j + 1 ? ' base' : '';
-      const icon = r && (NOTABLE.includes(r.cls) || (r.cls === 'book' && lastBook[m.color] === j));
-      const col = r && NOTABLE.includes(r.cls) ? ` style="color:${CLASSES[r.cls].color}"` : '';
+      const icon = keys && r && (NOTABLE.includes(r.cls) || (r.cls === 'book' && lastBook[m.color] === j));
+      const col = keys && r && NOTABLE.includes(r.cls) ? ` style="color:${CLASSES[r.cls].color}"` : '';
       html += `<span class="mv${cur}" data-ply="${j + 1}"${r ? ` title="${CLASSES[r.cls].label}"` : ''}><span class="ico">${icon ? badge(r.cls, true) : ''}</span><span class="san"${col}>${figSan(m.san, m.color)}</span></span>`;
     }
     html += '</div>';
@@ -1062,11 +1062,24 @@ function engineFields(root, p, onChange = () => {}) {
 function openEngineDialog() {
   const dlg = $('#eng-dlg');
   const f = engineFields($('#eng-fields'), 'eng');
+  const tabs = [...dlg.querySelectorAll('.dtabs button')];
+  const show = (t) => {
+    tabs.forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
+    dlg.querySelectorAll('[data-pane]').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== t));
+  };
+  tabs.forEach((b) => { b.onclick = () => show(b.dataset.tab); });
+  show('eng');
+  $('#ui-arrows').value = uiArrows();
+  $('#ui-keys').value = uiOn('keyMoves') ? '1' : '0';
+  $('#ui-class').value = uiOn('boardClass') ? '1' : '0';
   dlg.returnValue = '';
   dlg.showModal();
   // « submit » (et non « close ») : déclenché tout de suite par le bouton Sauvegarder.
   dlg.querySelector('form').onsubmit = async (e) => {
     if (!e.submitter || e.submitter.value !== 'save') return;
+    local.set('arrows', $('#ui-arrows').value);
+    local.set('keyMoves', $('#ui-keys').value);
+    local.set('boardClass', $('#ui-class').value);
     await f.save();
     if (S.g) renderGame();
   };
@@ -1108,7 +1121,6 @@ export async function init() {
   $('#play').onclick = toggleAuto;
   $('#suivant').onclick = nav(() => step(1));
   $('#flip').onclick = () => { board.flip(); renderGame(); };
-  $('#show-next').onchange = () => renderGame();
   $('#analyze').onclick = startAnalysis;
   $('#stop').onclick = () => { if (S.g && S.g.analyzing) S.g.abort = true; };
   $('#eng-gear').onclick = openEngineDialog;
