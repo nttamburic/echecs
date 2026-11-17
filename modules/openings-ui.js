@@ -741,14 +741,17 @@ function moveMenu(n) {
     dlg.className = 'dlg';
     document.body.appendChild(dlg);
   }
+  const subOff = subtreeEdges(edge).filter((e) => e.disabled);
   const act = (v, ic, txt, cls = '') => `<button value="${v}" class="mv-act ${cls}" role="menuitem"><span aria-hidden="true">${ic}</span>${txt}</button>`;
   dlg.innerHTML = `<form method="dialog" class="mv-menu">
     <div class="mv-head">${miniBoard(edge.fenAfter.split(' ')[0], 64)}
       <span class="mv-title"><b id="mv-t">${esc(label)}</b><span class="muted small">${esc(E.rep.name)}${edge.disabled ? ' · coup désactivé' : ''}</span></span></div>
     <div role="menu" aria-labelledby="mv-t" class="mv-list">
       ${act('note', '✎', edge.note ? 'Modifier la note' : 'Ajouter une note')}
-      ${act('toggle', edge.disabled ? '↻' : '⊘', edge.disabled ? 'Réactiver la ligne' : 'Désactiver la ligne')}
+      ${act('toggle', edge.disabled ? '↺' : '⊘', edge.disabled ? 'Réactiver la ligne' : 'Désactiver la ligne')}
+      ${subOff.length ? act('resub', '↻', `Réactiver les sous-lignes (${subOff.length})`) : ''}
       ${act('train', '▶', 'S’entraîner sur ce répertoire')}
+      <span class="mv-sep" role="separator"></span>
       ${act('delete', '✕', 'Supprimer à partir d’ici', 'danger')}
     </div>
     <p class="muted small mv-help">${edge.disabled
@@ -758,6 +761,7 @@ function moveMenu(n) {
   dlg.onclose = async () => {
     const v = dlg.returnValue;
     if (v === 'toggle') await toggleMove(edge, label);
+    else if (v === 'resub') await reactivateSub(edge, label);
     else if (v === 'delete') await deleteNode(n);
     else if (v === 'train') location.hash = '#/openings/train/rep/' + encodeURIComponent(E.rep.id);
     else if (v === 'note') {
@@ -769,6 +773,37 @@ function moveMenu(n) {
   dlg.returnValue = '';
   dlg.showModal();
   dlg.querySelector('.mv-act').focus();
+}
+
+// Coups situés après `edge` (toutes les suites, transpositions comprises), sans `edge` lui-même.
+function subtreeEdges(edge) {
+  const seen = new Set([edge]), todo = [edge.fenAfter], out = [], done = new Set();
+  while (todo.length) {
+    const f = todo.pop();
+    if (done.has(f)) continue;
+    done.add(f);
+    for (const e of childrenOf(E.rep, f)) { if (seen.has(e)) continue; seen.add(e); out.push(e); todo.push(e.fenAfter); }
+  }
+  return out;
+}
+
+// « Réactiver les sous-lignes » : remet en service les coups désactivés après ce coup (lui-même inchangé).
+async function reactivateSub(edge, label) {
+  const off = subtreeEdges(edge).filter((e) => e.disabled);
+  if (!off.length) return;
+  const rep = E.rep;
+  off.forEach((e) => { delete e.disabled; });
+  await saveRepertoire(rep);
+  render();
+  toast(`${plural(off.length, 'coup')} réactivé${off.length > 1 ? 's' : ''} après ${label}.`, {
+    type: 'ok',
+    action: { label: 'Annuler', fn: async () => {
+      if (E.rep !== rep) { toast('Annulation impossible : ce répertoire n’est plus ouvert.', { type: 'err' }); return; }
+      off.forEach((e) => { e.disabled = true; });
+      await saveRepertoire(rep); render();
+      toast('Sous-lignes de nouveau désactivées.', { type: 'ok' });
+    } },
+  });
 }
 
 async function toggleMove(edge, label) {
