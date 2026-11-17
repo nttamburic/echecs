@@ -1202,3 +1202,26 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 @media (max-width: 760px), (max-width: 1279px) and (orientation: portrait) {
   #game-view:has(#astrip:not(.hidden)) #gpanel[data-detent="mid"] { height: max(150px, calc(100dvh - var(--topbar) - env(safe-area-inset-top) - var(--nav-h) - min(var(--board), 100vw) - 2 * 40px - 50px - 58px)); }
 }
+
+/* ---- Phase 9 : lignes « Meilleure suite / Après ce coup » ---- */
+.bubble .line { display: flex; align-items: center; gap: 10px; }
+.bubble .lhead { flex: 0 0 auto; margin: 0; display: block; }
+.bubble .line .ltext { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bubble .line .btn { flex: 0 0 auto; height: 44px; min-height: 44px; padding: 0 12px; border-radius: 4px; }
+.coach-btns { display: none; }
+@media (max-width: 760px), (max-width: 1279px) and (orientation: portrait) {
+  #gpanel[data-detent="mid"] .bubble .coach-btns, #gpanel[data-detent="min"] .bubble .coach-btns { display: flex; gap: 8px; margin: 8px 16px 0; }
+  .coach-btns .cb { flex: 1; height: 44px; border: 0; border-radius: 6px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+  .coach-btns .cb.good { background: #29341f; color: #d9f0bf; }
+  .coach-btns .cb.bad { background: #3d2420; color: #ffd2cb; }
+}
+@media (hover: hover) { .coach-btns .cb.good:hover { background: #33421f; } .coach-btns .cb.bad:hover { background: #4a2a25; } }
+@media (max-width: 760px), (max-width: 1279px) and (orientation: portrait) {
+  #gpanel[data-detent="mid"] .bubble .coach-title, #gpanel[data-detent="min"] .bubble .coach-title { padding: 8px 12px; margin: 0 0 8px; font-size: 15px; gap: 10px; }
+  #gpanel[data-detent="mid"] .bubble .coach-title .badge, #gpanel[data-detent="min"] .bubble .coach-title .badge { width: 30px; height: 30px; min-width: 30px; }
+  #gpanel[data-detent="mid"] .bubble p, #gpanel[data-detent="min"] .bubble p { margin: 0 12px 6px; font-size: 14px; line-height: 20px; }
+  #gpanel[data-detent="mid"] .bubble .coach-btns, #gpanel[data-detent="min"] .bubble .coach-btns { margin: 6px 12px 0; }
+}
+@media (max-width: 760px), (max-width: 1279px) and (orientation: portrait) {
+  #gpanel[data-detent="mid"]:has(.coach-btns) { min-height: 226px; }
+}

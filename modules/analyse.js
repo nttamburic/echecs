@@ -1046,12 +1046,16 @@ function renderCoach(g, d, review) {
   const open = S.coachOpen === g.ply + ':' + (g.var ? g.var.idx : '');
   html += ex.paras.map((p, i) => `<p${!open && i === 2 ? ' class="clamp"' : ''}${!open && i > 2 ? ' hidden' : ''}>${esc(p)}</p>`).join('');
   if (ex.paras.length > 3) html += `<button type="button" class="link coach-more" id="coach-more" aria-expanded="${open}">${open ? 'Réduire' : 'Lire la suite'}</button>`;
-  if (ex.refutation && ex.refutation.items.length > 1) {
-    html += `<div class="line bad"><div class="lhead">Après ce coup <button class="btn small" data-line="played">▶ Voir</button></div>${esc(ex.refutation.text)}</div>`;
+  const hasAfter = !!(ex.refutation && ex.refutation.items.length > 1);
+  const bestLbl = ex.best ? (ex.best.isPlayed ? 'Suite prévue' : 'Meilleure suite') : '';
+  const bestKey = ex.best && ex.best.isPlayed ? 'played' : 'best';
+  // Boutons pleine largeur (feuille mobile repliée) : ▶ Meilleure suite / ▶ Après ce coup
+  if (ex.best || hasAfter) {
+    html += `<div class="coach-btns">${ex.best ? `<button type="button" class="cb good" data-line="${bestKey}">▶ ${bestLbl}</button>` : ''}${hasAfter ? '<button type="button" class="cb bad" data-line="played">▶ Après ce coup</button>' : ''}</div>`;
   }
-  if (ex.best) {
-    html += `<div class="line good"><div class="lhead">${ex.best.isPlayed ? 'Suite prévue' : 'Meilleure suite'} <button class="btn small" data-line="${ex.best.isPlayed ? 'played' : 'best'}">▶ Voir</button></div>${esc(ex.best.text)}</div>`;
-  }
+  const lineRow = (cls, label, text, key) => `<div class="line ${cls}"><span class="lhead">${label}</span><span class="ltext" title="${esc(text)}">${esc(text)}</span><button type="button" class="btn small" data-line="${key}" aria-label="Voir : ${label}">▶ Voir</button></div>`;
+  if (hasAfter) html += lineRow('bad', 'Après ce coup', ex.refutation.text, 'played');
+  if (ex.best) html += lineRow('good', bestLbl, ex.best.text, bestKey);
   html += `<div class="coach-foot muted">${esc(SOURCE_LABEL(d.pos))}</div>`;
   el.innerHTML = coachWrap(html);
   bindCoach(g, d);
