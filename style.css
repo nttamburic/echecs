@@ -953,3 +953,44 @@ button.link { background: none; border: 0; padding: 0; font: inherit; color: var
 #rep-panel .ptabs { padding: 0 8px; }
 #rep-panel .ptabs button { flex: none; padding: 0 14px; font-weight: 600; }
 #rep-panel .ptabs button[aria-selected="true"] { font-weight: 650; }
+
+/* ---- Phase 9 : Paramètres et pages « Bientôt » ---- */
+.settings-nav { background: none; padding: 0; gap: 2px; }
+.settings-nav a { color: var(--text-soft); font-weight: 500; font-size: 15px; min-height: 44px; padding: 0 12px; }
+.settings-nav a.active { color: var(--text-strong); font-weight: 650; background: var(--surface-1); }
+.settings-body .card, #settings-view .card { padding: 20px; margin-bottom: 16px; }
+.settings-body .card h2 { font-size: 18px; font-weight: 650; margin: 0 0 12px; }
+.settings-body .form label, .settings-body .card > label { font-size: 13px; font-weight: 600; color: var(--text); }
+.settings-body input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .settings-body select { height: 44px; box-sizing: border-box; padding: 0 12px; border-radius: var(--r); border: 1px solid #55524d; background: var(--bg); color: var(--text); font-size: 15px; font-weight: 400; }
+.settings-body .btn { min-height: 44px; padding: 0 16px; }
+.settings-body .btn.primary { box-shadow: 0 3px 0 var(--accent-press); }
+.if-card { display: flex; flex-direction: column; gap: 18px; }
+.if-card h2 { margin: 0 0 4px; }
+.board-picks { display: grid !important; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.board-picks button { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px; border: 1px solid #55524d; border-radius: var(--r-lg); background: var(--bg); color: var(--text); font-weight: 600; font-size: 13px; cursor: pointer; }
+.board-picks button[aria-checked="true"] { border: 2px solid var(--accent); background: #2f3a25; padding: 7px; }
+.board-picks .mini { width: 96px; height: 96px; max-width: 100%; }
+.if-opts { display: flex; flex-direction: column; }
+.if-opt { display: flex; align-items: center; gap: 16px; min-height: 52px; border-bottom: 1px solid var(--surface-2); font-size: 14px; }
+.if-opt > span { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.if-opt strong { font-weight: 600; }
+input.sw { appearance: none; -webkit-appearance: none; width: 44px; height: 26px; border-radius: 999px; background: #55524d; position: relative; cursor: pointer; flex: none; margin: 0; }
+input.sw::after { content: ''; position: absolute; left: 3px; top: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--text); transition: left var(--dur-fast); }
+input.sw:checked { background: var(--accent); }
+input.sw:checked::after { left: 21px; background: var(--on-accent); }
+input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (max-width: 760px) { .board-picks { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.soon2 { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; padding: 16px 0; }
+.soon-hero { display: flex; flex-direction: column; gap: 16px; align-items: flex-start; max-width: 640px; }
+.soon2 .soon-badge { display: inline-flex; align-items: center; height: 28px; padding: 0 12px; border-radius: 999px; background: #25384d; color: var(--link); font-size: 13px; font-weight: 700; }
+.soon-hero h1 { margin: 0; font-size: 40px; line-height: 46px; font-weight: 800; letter-spacing: -.01em; display: block; }
+.soon-lead { margin: 0; font-size: 18px; line-height: 27px; color: var(--text-soft); }
+.soon-cta .btn { min-height: 48px; padding: 0 18px; font-weight: 800; box-shadow: 0 3px 0 var(--accent-press); margin-top: 0; }
+.soon-feats { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.soon-feats article { background: var(--surface-1); border-radius: var(--r-lg); padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+.soon-feats .soon-ico { width: 44px; height: 44px; border-radius: var(--r-lg); background: var(--surface-2); }
+.soon-feats .soon-ico svg { width: 24px; height: 24px; }
+.soon-feats h2 { margin: 0; font-size: 17px; font-weight: 700; }
+.soon-feats p { margin: 0; font-size: 14px; line-height: 21px; }
+@media (max-width: 760px) { .soon-hero h1 { font-size: 32px; line-height: 38px; } }
+.soon-cta .btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }

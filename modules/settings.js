@@ -12,7 +12,7 @@ import { MAIA_MODELS, maiaModel } from '../core/maia.js';
 const SECTIONS = [
   ['profile', 'Profil', 'Pseudo chess.com'],
   ['connection', 'Connexions', 'GitHub (synchro) et Lichess'],
-  ['engine', 'Moteur', 'Stockfish, profondeur, Maia'],
+  ['engine', 'Moteur d’analyse', 'Stockfish, profondeur, Maia'],
   ['interface', 'Interface', 'Échiquier et coordonnées'],
   ['app', 'Application', 'Installation, hors ligne, crédits'],
 ];
@@ -204,17 +204,18 @@ function interfaceTab(el) {
   const put = (k, v) => { try { localStorage.setItem(k, v); } catch { /* */ } };
   const theme = get('cj-board', 'tournoi');
   el.innerHTML = `
-  <section class="card">
-    <h2>Échiquier</h2>
-    <p class="muted">Réglage propre à cet appareil. Il s'applique à toutes les parties, aux ouvertures et à l'entraînement.</p>
-    <div id="st-boards" class="board-picks" role="radiogroup" aria-label="Modèle d'échiquier">${BOARDS.map(([k, l, a, b]) => `
+  <section class="card if-card">
+    <div><h2>Interface</h2>
+    <p class="muted small">Appliqué immédiatement à tous les écrans et enregistré sur cet appareil.</p></div>
+    <span class="lbl-up" id="lbl-boards">Modèle d’échiquier</span>
+    <div id="st-boards" class="board-picks" role="radiogroup" aria-labelledby="lbl-boards">${BOARDS.map(([k, l, a, b]) => `
       <button type="button" role="radio" data-b="${k}" aria-checked="${k === theme}" tabindex="${k === theme ? 0 : -1}">
         <span class="mini" aria-hidden="true" style="--a:${a};--b:${b}"></span><span>${l}</span></button>`).join('')}</div>
-    <label class="check"><input type="checkbox" id="st-coords" ${get('cj-coords', '1') !== '0' ? 'checked' : ''}> Afficher les coordonnées dans les cases</label>
-  </section>
-  <section class="card">
-    <h2>Pièces</h2>
-    <p class="muted">Jeu de pièces « cburnett » (Colin M.L. Burnett), licence CC BY-SA 3.0.</p>
+    <div class="if-opts">
+      <div class="if-opt"><span><strong>Pièces</strong><span class="muted small">cburnett (Colin M.L. Burnett), licence CC BY-SA 3.0</span></span></div>
+      <label class="if-opt"><span><strong>Coordonnées sur l’échiquier</strong><span class="muted small">Lettres et chiffres dans les cases du bord</span></span>
+        <input type="checkbox" role="switch" class="sw" id="st-coords" ${get('cj-coords', '1') !== '0' ? 'checked' : ''}></label>
+    </div>
   </section>`;
   const box = $('#st-boards', el);
   const choose = (k) => {
