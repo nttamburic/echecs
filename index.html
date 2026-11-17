@@ -12,6 +12,8 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<a href="#content" class="skip" id="skip">Aller au contenu</a>
+<div id="sr-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 <!-- Téléphone : barre du haut avec le bouton du menu -->
 <div id="topbar">
   <button id="menu-btn" class="icon-btn" aria-label="Menu" aria-controls="sidebar" aria-expanded="false">
@@ -45,7 +47,7 @@
   </nav>
 </aside>
 
-<div id="content">
+<div id="content" tabindex="-1">
 <main id="home-view" class="view page">
   <section class="card">
     <div class="row between">

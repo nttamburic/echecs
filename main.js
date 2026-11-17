@@ -1,5 +1,6 @@
 // Point d'entrée : barre latérale, navigation entre les modules, démarrage du moteur et de la synchronisation.
 import { $, $$ } from './core/ui.js';
+import { applyBoardPrefs } from './board.js';
 import { detectBoost } from './core/engine.js';
 import { onSync, syncNow, cfg } from './core/sync.js';
 import * as analyse from './modules/analyse.js';
@@ -51,8 +52,15 @@ function route() {
 }
 
 // ---- menu latéral sur téléphone (tiroir) ----
-function openMenu() { document.body.classList.add('menu-open'); $('#menu-btn').setAttribute('aria-expanded', 'true'); }
-function closeMenu() { document.body.classList.remove('menu-open'); $('#menu-btn').setAttribute('aria-expanded', 'false'); }
+function openMenu() {
+  document.body.classList.add('menu-open'); $('#menu-btn').setAttribute('aria-expanded', 'true');
+  setTimeout(() => { const a = $('#sidebar nav a.active') || $('#sidebar nav a'); if (a) a.focus(); }, 0);
+}
+function closeMenu() {
+  const was = document.body.classList.contains('menu-open');
+  document.body.classList.remove('menu-open'); $('#menu-btn').setAttribute('aria-expanded', 'false');
+  if (was && $('#sidebar').contains(document.activeElement)) $('#menu-btn').focus();
+}
 
 // L'état du moteur et de la synchronisation est affiché dans les Paramètres ; ici, seulement
 // une pastille rouge sur « Paramètres » si la synchronisation échoue.
@@ -67,6 +75,8 @@ async function init() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
   $('#menu-btn').onclick = () => (document.body.classList.contains('menu-open') ? closeMenu() : openMenu());
   $('#scrim').onclick = closeMenu;
+  applyBoardPrefs();
+  $('#skip').onclick = (e) => { e.preventDefault(); $('#content').focus(); };
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
   onSync(markSyncError);
   await analyse.init();
