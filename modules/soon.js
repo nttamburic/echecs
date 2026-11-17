@@ -1,3 +1,5 @@
+import { miniBoard } from './setup.js';
+
 // Modules pas encore livrés : page de présentation avec une action utile en attendant.
 const TEXT = {
   puzzles: {
@@ -43,8 +45,25 @@ const TEXT = {
   },
 };
 
+const MOBILE = {
+  puzzles: { pitch: 'Votre tactique, à commencer par les positions que vous avez ratées en partie.', fen: 'r3k2r/ppp2ppp/2n5/3q4/3P4/2N5/PP3PPP/R2QK2R', arrows: 'c3d5:#81b64c', feats: [['Par thème', 'Fourchettes, clouages, mats en 2…'], ['Classement puzzle', 'Un Elo dédié et sa courbe.'], ['Tirés de vos erreurs', 'Vos gaffes devenues puzzles.']], cta: ['Revoir mes erreurs en attendant', '#/games'] },
+  strategy: { pitch: '« Trouve le plan » : proposez une idée, Leela Chess Zero compare et explique.', fen: 'r2q1rk1/pp2bppp/2n1pn2/3p4/2PP4/2N1PN2/PP3PPP/R2QKB1R', arrows: 'c4c5:#81b64c,a2a4:#8fc3ff', feats: [['Positions calmes', 'Tirées de vos parties.'], ['Votre plan', 'Flèches ou phrase libre.'], ['Comparaison', 'Les plans de Leela, commentés.']], cta: ['Analyser une position', '#/free'] },
+  endgames: { pitch: 'Les finales à connaître, puis l’entraînement contre les tables de finales.', fen: '8/8/8/4k3/8/3K4/4P3/8', arrows: 'd3e3:#81b64c', feats: [['Cours théoriques', 'Opposition, Lucena, Philidor…'], ['Contre les tables', 'Jusqu’à 7 pièces.'], ['Vos finales ratées', 'À rejouer depuis vos parties.']], cta: ['Jouer contre Maia', '#/play'] },
+};
+
+// Flèches « e2e4:#couleur » superposées au mini-échiquier (240 px, sans coordonnées).
+function arrowsSvg(spec, size) {
+  const u = size / 8, c = (sq) => [(sq.charCodeAt(0) - 97 + .5) * u, (7 - (+sq[1] - 1) + .5) * u];
+  return `<svg class="soon-arrows" viewBox="0 0 ${size} ${size}" aria-hidden="true">${spec.split(',').filter(Boolean).map((a) => {
+    const [mv, col] = a.split(':'), [x1, y1] = c(mv.slice(0, 2)), [x2, y2] = c(mv.slice(2, 4));
+    const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L, hl = u * .42, hw = u * .26;
+    const bx = x2 - ux * hl, by = y2 - uy * hl;
+    return `<g fill="${col}" stroke="${col}" opacity=".85"><line x1="${x1}" y1="${y1}" x2="${bx}" y2="${by}" stroke-width="${u * .2}" stroke-linecap="round"/><polygon points="${x2},${y2} ${bx - uy * hw},${by + ux * hw} ${bx + uy * hw},${by - ux * hw}" stroke="none"/></g>`;
+  }).join('')}</svg>`;
+}
+
 export function soon(el, key) {
-  const t = TEXT[key];
+  const t = TEXT[key], m = MOBILE[key];
   el.innerHTML = `<div class="soon2">
     <section class="soon-hero">
       <span class="soon-badge">Bientôt</span>
@@ -55,5 +74,16 @@ export function soon(el, key) {
     <section class="soon-feats" aria-label="Au programme">${t.feats.map(([h, p, d]) => `<article>
       <span class="soon-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${d}"/></svg></span>
       <h2>${h}</h2><p class="muted">${p}</p></article>`).join('')}</section>
+  </div>
+  <div class="soon-m">
+    <div class="soon-m-body">
+      <span class="soon-badge">Bientôt</span>
+      <h2>${t.title}</h2>
+      <p class="soon-lead">${m.pitch}</p>
+      <div class="soon-m-board">${miniBoard(m.fen.split(' ')[0], 240)}${arrowsSvg(m.arrows, 240)}</div>
+      <ul class="soon-m-feats">${m.feats.map(([h, d], i) => `<li><span class="n" aria-hidden="true">${i + 1}</span><span><strong>${h}</strong><span class="muted">${d}</span></span></li>`).join('')}</ul>
+    </div>
+    <footer class="soon-m-foot"><a class="btn" href="${m.cta[1]}">${m.cta[0]}</a></footer>
   </div>`;
+  const tt = document.getElementById('topbar-soon'); if (tt) tt.textContent = t.title;
 }
