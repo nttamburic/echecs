@@ -862,3 +862,43 @@ button.link { background: none; border: 0; padding: 0; font: inherit; color: var
 .hist-table #games td { padding: 0 16px; height: 48px; border-top: 1px solid var(--surface-2); border-bottom: 0; }
 .hist-table #more { margin: 12px auto; display: block; min-height: 44px; padding: 0 20px; }
 @media (max-width: 760px) { .hist-table { background: transparent; } .hist-table #games td { height: auto; border-top: 0; padding: 0; } }
+
+.hist-head .stack { flex-direction: row; align-items: center; }
+.rpill { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: var(--r-sm); font-weight: 700; font-size: 13px; }
+.rpill.win { background: #3b4a2a; color: #b5de88; } .rpill.draw { background: #45423e; color: #d6d3cd; } .rpill.loss { background: #4a2621; color: #ff8f80; }
+.c-me .cdot { vertical-align: middle; margin-right: 8px; }
+
+/* ---- Phase 9 : vue partie (bulle de coach, onglets, navigation) ---- */
+.badge { color: var(--cls-on); }
+.coach-wrap { display: block; padding: 12px; }
+.coach-wrap .avatar { display: none; }
+.bubble { background: var(--surface-1); color: var(--text); border-radius: var(--r-lg); padding: 0 0 14px; font-size: 15px; line-height: 22px; overflow: hidden; border: 1px solid var(--line); }
+.bubble::before { display: none; }
+.bubble .coach-title { background: var(--surface-2); padding: 14px 16px; margin: 0 0 14px; gap: 12px; font-size: 16px; line-height: 22px; }
+.bubble .coach-title .badge { width: 32px; height: 32px; min-width: 32px; border-radius: 50%; font-size: 13px; padding: 0; }
+.bubble .coach-title .score { background: #ebe9e4; color: #161512; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; padding: 3px 7px; border-radius: var(--r-sm); }
+.bubble .coach-title .score.neg { background: #1c1b19; color: var(--text); }
+.bubble p { margin: 0 16px 10px; font-size: 15px; line-height: 22px; }
+.bubble .muted { color: var(--text-muted); }
+.bubble .coach-more { color: var(--link); margin: 0 16px; }
+.bubble .line { margin: 8px 16px 0; padding: 8px 8px 8px 12px; border: 0; border-radius: var(--r); background: #29341f; font-size: 14px; font-variant-numeric: tabular-nums; }
+.bubble .line.bad { background: #3d2420; }
+.bubble .lhead { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #a9d67a; margin-bottom: 4px; }
+.bubble .line.bad .lhead { color: #ff8a7a; }
+.bubble .btn { background: #3d5228; color: #d9f0bf; border: 0; font-weight: 700; font-size: 13px; text-transform: none; letter-spacing: 0; }
+.bubble .line.bad .btn { background: #5a2c25; color: #ffd2cb; }
+@media (hover: hover) { .bubble .btn:hover { background: #4a6532; } .bubble .line.bad .btn:hover { background: #6d352d; } }
+.bubble .coach-foot { margin: 10px 16px 0; font-size: 12px; }
+.bubble .variation { margin: 0 16px 10px; background: #25384d; }
+.bubble .variation .vmove.cur { background: var(--link); color: #0b1d33; font-weight: 700; }
+.bubble .variation .btn { background: var(--link); color: #0b1d33; }
+#next-wrap .btn.big { min-height: 52px; font-size: 17px; font-weight: 800; box-shadow: 0 4px 0 var(--accent-press); }
+#gpanel #ptitle { justify-content: flex-start; text-align: left; font-size: 18px; font-weight: 700; padding-left: 4px; }
+#opening { color: #d2b18c; }
+.ptabs { padding: 0 8px; }
+.ptabs button { flex: none; padding: 0 14px; font-weight: 600; }
+.ptabs button[aria-selected="true"] { font-weight: 650; }
+.navbar { background: var(--sidebar); gap: 4px; padding: 8px; }
+.navbar .btn { background: transparent; box-shadow: none; color: var(--text); }
+.navbar #next { background: var(--surface-2); }
+@media (hover: hover) { .navbar .btn:hover { background: var(--surface-2); } }

@@ -41,9 +41,11 @@ export const getGames = () => S.games;
 function resultFor(game, user) {
   const me = game.white.name.toLowerCase() === user.toLowerCase() ? 'white' : 'black';
   const r = game[me].result;
-  if (r === 'win') return { txt: 'Victoire', cls: 'win' };
-  if (DRAWS.includes(r)) return { txt: 'Nulle', cls: 'draw' };
-  return { txt: 'Défaite', cls: 'loss' };
+  const HOW = { resigned: 'abandon', checkmated: 'mat', timeout: 'temps', abandoned: 'abandon', agreed: 'accord', repetition: 'répétition', stalemate: 'pat', insufficient: 'matériel', timevsinsufficient: 'matériel', '50move': '50 coups' };
+  const other = game[me === 'white' ? 'black' : 'white'].result;
+  if (r === 'win') return { txt: 'Victoire', sym: '+', how: HOW[other] || '', cls: 'win' };
+  if (DRAWS.includes(r)) return { txt: 'Nulle', sym: '=', how: HOW[r] || '', cls: 'draw' };
+  return { txt: 'Défaite', sym: '−', how: HOW[r] || '', cls: 'loss' };
 }
 
 async function setUser(user) {
@@ -147,9 +149,9 @@ function renderList() {
     return `<tr role="row" class="grow" data-id="${esc(g.id)}" tabindex="0" aria-label="${esc(label)}">
       <td role="cell" class="c-date">${when}</td>
       <td role="cell" class="c-tc">${tcl}</td>
-      <td role="cell" class="c-me"><span class="color-dot ${meWhite ? 'w' : 'b'}" title="${meWhite ? 'Blancs' : 'Noirs'}"></span>${esc(me.rating)}</td>
+      <td role="cell" class="c-me"><img class="cdot" src="pieces/${meWhite ? 'wK' : 'bK'}.svg" alt="${meWhite ? 'Blancs' : 'Noirs'}" width="20" height="20">${esc(me.rating)}</td>
       <td role="cell" class="c-opp opp">${esc(opp.name)} <span class="muted">(${esc(opp.rating)})</span></td>
-      <td role="cell" class="c-res ${res.cls}">${res.txt}</td>
+      <td role="cell" class="c-res"><span class="rpill ${res.cls}"><span aria-hidden="true">${res.sym}</span> ${res.txt}</span>${res.how ? ` <span class="muted small rhow">${res.how}</span>` : ''}</td>
       <td role="cell" class="c-acc">${acc}</td></tr>`;
   });
   let html = rows.join('');
@@ -1004,7 +1006,7 @@ function renderCoach(g, d, review) {
     return;
   }
   const ex = explainMove({ fenBefore: d.fenBefore, san: d.san, uci: d.uci, color: d.color, r: d.r, pos: d.pos, openingName: g.openingAt[g.ply], playerColor: g.playerColor });
-  html += `<div class="coach-title">${badge(d.r.cls)} <span>${esc(ex.title)}</span><span class="score">${fmtScore(d.pos.played.score)}</span></div>`;
+  html += `<div class="coach-title">${badge(d.r.cls)} <span>${esc(ex.title)}</span><span class="score${/^[−-]/.test(fmtScore(d.pos.played.score)) ? ' neg' : ''}">${fmtScore(d.pos.played.score)}</span></div>`;
   const open = S.coachOpen === g.ply + ':' + (g.var ? g.var.idx : '');
   html += ex.paras.map((p, i) => `<p${!open && i === 2 ? ' class="clamp"' : ''}${!open && i > 2 ? ' hidden' : ''}>${esc(p)}</p>`).join('');
   if (ex.paras.length > 3) html += `<button type="button" class="link coach-more" id="coach-more" aria-expanded="${open}">${open ? 'Réduire' : 'Lire la suite'}</button>`;
