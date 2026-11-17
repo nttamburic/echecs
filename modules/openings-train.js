@@ -235,8 +235,23 @@ async function sessionSummary() {
   if (!T.before) return '';
   await new Promise((r) => setTimeout(r, 400)); // laisse le temps d'enregistrer la dernière réponse
   const a = await masteryOf(T.reps), b = T.before;
-  const part = (k, label) => `<span class="mst"><i style="background:${STATUS[k].color}"></i>${label} ${b[k]} → <b>${a[k]}</b></span>`;
-  return `<div class="tsum mst-row" aria-label="Maîtrise avant et après la séance">${part('mastered', 'Maîtrisés')}${part('progress', 'En cours')}${part('weak', 'Non maîtrisés')}${part('new', 'Jamais revus')}</div>`;
+  const KEYS = [['mastered', 'maîtrisés'], ['progress', 'en cours'], ['weak', 'non maîtrisés'], ['new', 'jamais revus']];
+  const tot = (m) => KEYS.reduce((n, [k]) => n + m[k], 0);
+  const ta = tot(a), tb = tot(b);
+  if (!ta) return '';
+  const bar = (m, cls) => `<span class="tbar ${cls}" aria-hidden="true">${KEYS.map(([k]) => (m[k] ? `<span style="flex:${m[k]};background:${STATUS[k].color}"></span>` : '')).join('')}</span>`;
+  const label = (m, t) => KEYS.map(([k, l]) => `${Math.round((100 * m[k]) / t)} % ${l}`).join(', ');
+  const delta = Math.round((100 * a.mastered) / ta) - (tb ? Math.round((100 * b.mastered) / tb) : 0);
+  // prochaine révision : cartes échues ou à échéance demain (la journée change à 4 h)
+  const events = await listEvents().catch(() => []), now = Date.now(), limit = dayStart(now) + 2 * 86400000;
+  let dueNow = 0, dueTomorrow = 0;
+  for (const r of T.reps) for (const c of computeCards(r, events, T.reps).values()) { if (!c.card) continue; if (c.card.due <= now) dueNow++; else if (c.card.due < limit) dueTomorrow++; }
+  const next = dueNow ? `${plural(dueNow, 'position')} à revoir maintenant` : dueTomorrow ? `prochaine révision demain (${plural(dueTomorrow, 'position')})` : 'aucune révision prévue demain';
+  const dtxt = delta > 0 ? `+${delta} point${delta > 1 ? 's' : ''}` : delta < 0 ? `−${-delta} point${delta < -1 ? 's' : ''}` : 'maîtrise inchangée';
+  return `<div class="tsum tprog" role="group" aria-label="Maîtrise avant et après la séance">
+    <span class="lbl-up">Maîtrise · avant → après</span>
+    <span role="img" aria-label="Avant : ${tb ? label(b, tb) : 'aucune donnée'}. Après : ${label(a, ta)}." class="tbars">${tb ? bar(b, 'before') : ''}${bar(a, 'after')}</span>
+    <span class="tprog-t ${delta < 0 ? 'neg' : delta === 0 ? 'flat' : ''}">${dtxt} · ${next}</span></div>`;
 }
 
 function finishTargets() {
