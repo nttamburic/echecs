@@ -694,18 +694,22 @@ function selectTab(name) {
     const on = b.dataset.tab === name;
     b.setAttribute('aria-selected', String(on));
     b.tabIndex = on ? 0 : -1;
-    $('#tab-' + b.dataset.tab).classList.toggle('hidden', !on);
+    const pane = document.getElementById(b.getAttribute('aria-controls'));
+    if (pane && pane.classList.contains('tabpane')) pane.classList.toggle('hidden', !on);
   });
-  try { local.set('gtab', name); } catch { /* ignoré */ }
+  $('#gpanel').dataset.ptab = name;
+  try { if (name !== 'coach') local.set('gtab', name); } catch { /* ignoré */ }
   if (name === 'moves') { const c = document.querySelector('#moves .mv.cur'); if (c) c.scrollIntoView({ block: 'nearest' }); }
 }
 function initPanelTabs() {
-  const tabs = [...document.querySelectorAll('#gpanel .ptabs [role=tab]')];
-  tabs.forEach((b, i) => {
+  const all = [...document.querySelectorAll('#gpanel .ptabs [role=tab]')];
+  const vis = () => all.filter((b) => b.offsetParent !== null);
+  all.forEach((b) => {
     b.onclick = () => selectTab(b.dataset.tab);
     b.onkeydown = (e) => {
       const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
       if (!d && e.key !== 'Home' && e.key !== 'End') return;
+      const tabs = vis(), i = tabs.indexOf(b);
       const n = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : (i + d + tabs.length) % tabs.length;
       selectTab(tabs[n].dataset.tab); tabs[n].focus(); e.preventDefault(); e.stopPropagation();
     };
@@ -980,6 +984,8 @@ function renderCoach(g, d, review) {
   const el = $('#coach');
   const show = review || !!g.var;
   el.classList.toggle('hidden', !show);
+  $('#gpanel').classList.toggle('has-coach', show);
+  if (!show && $('#gpanel').dataset.ptab === 'coach') selectTab('moves');
   $('#next-wrap').classList.toggle('hidden', !review || !!g.free);
   $('#suivant').disabled = atEnd(g);
   $('#suivant').textContent = suivantLabel(g, review);
