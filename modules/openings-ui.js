@@ -20,6 +20,7 @@ import { Chess } from '../vendor/chess.js';
 import { coverageOf, cachedCoverage, covN, THRESHOLDS, pct } from './openings-coverage.js';
 import { classifyGame, CLASSES, fmtScore, winPct } from '../analysis.js';
 import { stashPlay } from './play.js';
+import { miniBoard } from './setup.js';
 
 const SVG_GEAR = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
 const RATINGS = [0, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500];
@@ -654,21 +655,34 @@ function moveMenu(n) {
     dlg.className = 'dlg';
     document.body.appendChild(dlg);
   }
-  dlg.innerHTML = `<form method="dialog">
-    <h2>${esc(label)}</h2>
-    <p class="muted small">${edge.disabled
-      ? 'Ce coup est désactivé : il reste dans le répertoire, mais n\'est ni entraîné ni compté dans la maîtrise, pas plus que la suite qui en dépend.'
-      : 'Désactiver garde le coup dans le répertoire sans l\'entraîner ni le compter dans la maîtrise (la suite qui en dépend aussi).'}</p>
-    <div class="row end"><button value="cancel" class="btn">Annuler</button>
-      <button value="toggle" class="btn">${edge.disabled ? 'Réactiver' : 'Désactiver'}</button>
-      <button value="delete" class="btn danger">Supprimer…</button></div></form>`;
+  const act = (v, ic, txt, cls = '') => `<button value="${v}" class="mv-act ${cls}" role="menuitem"><span aria-hidden="true">${ic}</span>${txt}</button>`;
+  dlg.innerHTML = `<form method="dialog" class="mv-menu">
+    <div class="mv-head">${miniBoard(edge.fenAfter.split(' ')[0], 64)}
+      <span class="mv-title"><b id="mv-t">${esc(label)}</b><span class="muted small">${esc(E.rep.name)}${edge.disabled ? ' · coup désactivé' : ''}</span></span></div>
+    <div role="menu" aria-labelledby="mv-t" class="mv-list">
+      ${act('note', '✎', edge.note ? 'Modifier la note' : 'Ajouter une note')}
+      ${act('toggle', edge.disabled ? '↻' : '⊘', edge.disabled ? 'Réactiver la ligne' : 'Désactiver la ligne')}
+      ${act('train', '▶', 'S’entraîner sur ce répertoire')}
+      ${act('delete', '✕', 'Supprimer à partir d’ici', 'danger')}
+    </div>
+    <p class="muted small mv-help">${edge.disabled
+      ? 'Désactivé : le coup reste dans le répertoire, mais n\'est ni entraîné ni compté dans la maîtrise, pas plus que sa suite.'
+      : 'Désactiver garde le coup sans l\'entraîner ni le compter dans la maîtrise (sa suite non plus).'}</p>
+    <div class="row end"><button value="cancel" class="btn">Fermer</button></div></form>`;
   dlg.onclose = async () => {
-    if (dlg.returnValue === 'toggle') await toggleMove(edge, label);
-    else if (dlg.returnValue === 'delete') await deleteNode(n);
+    const v = dlg.returnValue;
+    if (v === 'toggle') await toggleMove(edge, label);
+    else if (v === 'delete') await deleteNode(n);
+    else if (v === 'train') location.hash = '#/openings/train/rep/' + encodeURIComponent(E.rep.id);
+    else if (v === 'note') {
+      E.path = [...line]; E.k = line.length; render();
+      const tab = $('#rt-note'); if (tab) tab.click();
+      const ta = document.querySelector('#rep-note textarea'); if (ta) ta.focus();
+    }
   };
   dlg.returnValue = '';
   dlg.showModal();
-  dlg.querySelector('button[value="toggle"]').focus();
+  dlg.querySelector('.mv-act').focus();
 }
 
 async function toggleMove(edge, label) {
