@@ -514,8 +514,11 @@ function buildEditor(el) {
       <a href="#/openings" class="icon-btn" title="Retour aux répertoires" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
       <span class="ptitle" id="rep-title"></span>
     </div>
-    <div class="popening" id="rep-opening"></div>
-    <div class="rperf small muted" id="rep-perf"></div>
+    <div class="oblock">
+      <div class="popening" id="rep-opening"></div>
+      <div class="rperf small muted" id="rep-perf"></div>
+      <button id="exp-gear" class="icon-btn" title="Réglages de l'éditeur : filtres Lichess, interface, moteur" aria-label="Réglages de l'éditeur"><svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9M15 5v4M9 15v4"/></svg></button>
+    </div>
     <div id="rep-suggest" class="rsugg hidden" role="status"></div>
     <div id="rep-mastery"></div>
     <div class="tree-head"><h2>Arbre des coups</h2><button type="button" id="tree-fold" class="linkbtn">Tout replier</button></div>
@@ -529,8 +532,8 @@ function buildEditor(el) {
     <div id="rp-note" role="tabpanel" aria-labelledby="rt-note" class="tabpane hidden"><div id="rep-note"></div></div>
     <div id="rp-exp" role="tabpanel" aria-labelledby="rt-exp" class="tabpane exp">
       <div class="exp-head">
-        <div class="exp-tabs" role="tablist"><button type="button" role="tab" data-db="masters">Masters</button><button type="button" role="tab" data-db="lichess">Lichess</button><button type="button" role="tab" data-db="stockfish">Stockfish</button></div>
-        <button id="exp-gear" class="icon-btn" title="Paramètres : filtres Lichess, interface, moteur" aria-label="Paramètres">${SVG_GEAR}</button>
+        <div class="exp-tabs" role="radiogroup" aria-label="Source"><button type="button" role="radio" aria-checked="false" data-db="masters">Masters</button><button type="button" role="radio" aria-checked="false" data-db="lichess">Lichess</button><button type="button" role="radio" aria-checked="false" data-db="stockfish">Stockfish</button></div>
+        <span class="exp-sum" id="exp-sum"></span>
       </div>
       <div id="exp-body"></div>
     </div>
@@ -612,6 +615,12 @@ function buildEditor(el) {
     if (e.key === 'ArrowLeft') { e.preventDefault(); setW(cur + 20); } else if (e.key === 'ArrowRight') { e.preventDefault(); setW(cur - 20); }
   };
   el.querySelectorAll('.exp-tabs button').forEach((b) => { b.onclick = () => { E.db = b.dataset.db; local.set('expDb', E.db); updateEngine(); renderExplorer(); }; });
+  $('.exp-tabs', el).addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const arr = [...el.querySelectorAll('.exp-tabs button')], i = arr.findIndex((b) => b.dataset.db === E.db);
+    const n = arr[(i + (e.key === 'ArrowRight' ? 1 : arr.length - 1)) % arr.length];
+    n.click(); n.focus(); e.preventDefault();
+  });
 
   // Paramètres (roue dentée) : trois onglets. « Appliquer » enregistre tout ; le moteur est celui de l'analyse.
   const dlg = $('#exp-dlg', el);
@@ -1060,9 +1069,21 @@ function barHtml(w, d, b) {
   return `<span class="wdb" title="Blancs ${Math.round((100 * w) / t)} % · Nulle ${Math.round((100 * d) / t)} % · Noirs ${Math.round((100 * b) / t)} %">${seg(w, 'w')}${seg(d, 'd')}${seg(b, 'b')}</span>`;
 }
 
+// Résumé à droite des puces : filtres actifs de la source choisie.
+function expSummary() {
+  if (E.db === 'masters') return 'Titrés · 2200+';
+  if (E.db === 'stockfish') { const d = analysisSettings().depth; return d ? `profondeur ${d}` : ''; }
+  const rs = expRatings().slice().sort((a, b) => a - b), ss = expSpeeds();
+  const lab = (r) => (r === 0 ? 400 : r);
+  const lv = rs.length >= RATINGS.length ? 'tous niveaux' : rs.length === 1 ? String(lab(rs[0])) : `${lab(rs[0])}–${lab(rs[rs.length - 1])}`;
+  const sp = ss.length >= SPEEDS.length ? 'toutes cadences' : ss.length > 3 ? `${ss.length} cadences` : SPEEDS.filter(([k]) => ss.includes(k)).map(([, l]) => l.toLowerCase()).join(', ');
+  return [lv, sp].filter(Boolean).join(' · ');
+}
+
 async function renderExplorer() {
   const body = $('#exp-body');
-  document.querySelectorAll('.exp-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.db === E.db));
+  document.querySelectorAll('.exp-tabs button').forEach((b) => { const on = b.dataset.db === E.db; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+  $('#exp-sum').textContent = expSummary();
   const seq = ++E.expSeq;
   if (E.db === 'stockfish') { renderStockfish(body); return; }
   if (!lichessCfg.connected) {
