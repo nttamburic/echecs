@@ -1307,3 +1307,16 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 #exp-dlg fieldset { border: 0 !important; padding: 0 !important; }
 #exp-dlg fieldset legend { padding: 0; }
 #exp-dlg .pill { background: none !important; padding: 0 !important; margin: 0 !important; border-radius: 999px; }
+
+/* ---- Phase 9 : puces de source (Masters · Lichess · Stockfish) et bouton de réglages ---- */
+.oblock { position: relative; }
+#rep-panel .oblock .popening { padding-right: 56px; }
+#rep-panel .oblock #exp-gear { position: absolute; top: 8px; right: 10px; width: 40px; height: 40px; min-height: 40px; padding: 0; display: flex; align-items: center; justify-content: center; color: var(--text-muted); background: transparent; border: 0; border-radius: var(--r); cursor: pointer; }
+#rep-panel .oblock #exp-gear svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+@media (hover: hover) { #rep-panel .oblock #exp-gear:hover { color: var(--text); background: var(--hover); } }
+#rep-panel .exp-head { gap: 8px; padding: 10px 12px; border-bottom: 0; flex-wrap: wrap; }
+#rep-panel .exp-tabs { flex: 1 1 260px; min-width: 260px; background: var(--bg); border-radius: var(--r); padding: 3px; gap: 3px; }
+#rep-panel .exp-tabs button { flex: 1; height: 34px; min-height: 34px; padding: 0 8px; border: 0; border-radius: var(--r-sm); background: transparent; color: #c9c6c0; font-size: 13px; font-weight: 600; }
+#rep-panel .exp-tabs button.on { background: #45423e; color: #fff; font-weight: 700; }
+#rep-panel .exp-sum { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+@media (max-width: 760px) { #rep-panel .exp-tabs button { min-height: 44px; height: 44px; } #rep-panel .oblock #exp-gear { min-height: 44px; width: 44px; height: 44px; top: 6px; right: 6px; } }
