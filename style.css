@@ -1130,3 +1130,22 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 @media (max-width: 760px) {
   .pstatus .result { position: fixed; left: 0; right: 0; bottom: calc(68px + env(safe-area-inset-bottom)); z-index: 30; border-radius: 16px 16px 0 0; box-shadow: 0 -12px 32px rgba(0,0,0,.5); }
 }
+
+/* ---- Phase 9 : arbre des coups de l'éditeur (lignes repliables) ---- */
+.tree-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px 0; border-top: 1px solid var(--line); }
+.tree-head h2 { margin: 0; font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.tree-head .linkbtn { min-height: 32px; font-size: 13px; }
+#rep-moves.rtree { padding: 0 0 8px; line-height: 1.4; font-size: 14px; font-variant-numeric: tabular-nums; max-height: 300px; overflow: auto; }
+.trow { display: flex; align-items: center; gap: 6px; min-height: 34px; padding: 2px 12px 2px calc(12px + var(--d, 0) * 18px); }
+.trow.sel { background: var(--surface-3); box-shadow: inset 3px 0 0 var(--accent); }
+.trow.onpath { background: #2a3322; }
+.trow.off .tmoves { color: var(--text-muted); text-decoration: line-through; }
+.tchev { flex: none; width: 24px; height: 28px; padding: 0; border: 0; background: transparent; color: var(--text-muted); font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.tmk { flex: none; width: 10px; height: 10px; border-radius: 2px; background: var(--link); }
+.tmk.st-mastered { background: var(--accent); } .tmk.st-progress { background: var(--warn); } .tmk.st-weak { background: var(--danger); } .tmk.st-new { background: #6f6c67; } .tmk.st-shared { background: var(--link); }
+.tmoves { flex: 0 1 auto; min-width: 0; }
+.tmoves .rm.mine, .tmoves .rm.st-mastered, .tmoves .rm.st-weak, .tmoves .rm.st-progress, .tmoves .rm.st-new, .tmoves .rm.st-shared { border-bottom: 0; }
+.tmoves .rm { padding: 4px 3px; }
+.tmoves .rm.cur { background: var(--accent); color: #14200a; box-shadow: none; }
+.thole { font-size: 12px; color: var(--warn); font-weight: 600; white-space: nowrap; }
+@media (max-width: 760px) { #rep-moves.rtree { max-height: 240px; } .trow { min-height: 44px; } .tchev { width: 36px; height: 44px; } }

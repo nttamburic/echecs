@@ -429,6 +429,7 @@ function buildEditor(el) {
     <div class="rperf small muted" id="rep-perf"></div>
     <div id="rep-suggest" class="rsugg hidden"></div>
     <div id="rep-mastery"></div>
+    <div class="tree-head"><h2>Arbre des coups</h2><button type="button" id="tree-fold" class="linkbtn">Tout replier</button></div>
     <div class="pmoves rtree" id="rep-moves"></div>
     <div class="ptabs" role="tablist" aria-label="Détail du répertoire">
       <button type="button" role="tab" id="rt-exp" aria-controls="rp-exp" aria-selected="true" data-rt="exp">Explorateur</button>
@@ -557,6 +558,10 @@ function buildEditor(el) {
   onStatus(() => { if (E.rep) { updateEngine(); refreshEngine(); } });
 
   bindTree($('#rep-moves', el));
+  $('#tree-fold', el).onclick = () => {
+    if (E.treeKeys.some((k) => !E.folded.has(k))) E.treeKeys.forEach((k) => E.folded.add(k)); else E.folded.clear();
+    renderTree();
+  };
 
   document.addEventListener('keydown', (e) => {
     if (document.body.dataset.view !== 'rep' || !E.rep || document.querySelector('dialog[open]')) return;
@@ -574,7 +579,7 @@ export async function openRepertoire(el, id) {
   const rep = await getRepertoire(id);
   if (!rep) { toast('Répertoire introuvable.'); location.hash = '#/openings'; return; }
   if (!E.rep || E.rep.id !== rep.id) { E.path = []; E.k = 0; E.board.setOrientation(rep.color); }
-  E.rep = rep;
+  E.rep = rep; E.folded = new Set();
   // ouverture depuis une suggestion : on se place sur la position à enrichir
   if (E.focus && E.focus.repId === rep.id) {
     const p = pathTo(rep, rep.root, E.focus.epd);
@@ -806,28 +811,33 @@ function moveLabel(edge, ply) {
   return `${no}${edge.fenBefore.split(' ')[1] === 'w' ? '.' : '...'}`;
 }
 
+// Arbre en lignes repliables : une ligne = une suite de coups sans embranchement ; les variantes
+// (alternatives et suites) sont des lignes imbriquées. Chaque coup reste cliquable (.rm).
+const TREE_ST = { mastered: 'Maîtrisé', progress: 'En cours', weak: 'Non maîtrisé', new: 'Jamais revu', shared: 'Partagé' };
 function renderTree() {
   const el = $('#rep-moves');
   const rep = E.rep;
   E.nodes = [];
+  E.treeKeys = [];
+  if (!E.folded) E.folded = new Set();
   // Chaque position n'est développée qu'une fois (ligne principale d'abord) ; ailleurs, « transposition ».
   const owner = new Map([[epd(rep.root), null]]);
   (function own(p) { for (const e of childrenOf(rep, p)) if (!owner.has(e.fenAfter)) { owner.set(e.fenAfter, e); own(e.fenAfter); } })(epd(rep.root));
   const cur = E.k ? E.path[E.k - 1] : null;
+  const pathSet = new Set(E.path.slice(0, E.k));
   const perf = perfOf(rep);
   const active = new Set(reachableEdges(rep, true)); // coups entraînés (hors coups désactivés et leur suite)
-  // vrai si prefix est le début de la ligne suivie (pour ne surligner que celle-ci)
-  const onLine = (prefix) => prefix.length < E.k && prefix.every((e, i) => E.path[i] === e);
+  const mine = (e) => e.fenBefore.split(' ')[1] === rep.color;
   let count = 0;
   const mv = (e, ply, prefix, forceNum) => {
     const n = E.nodes.push([...prefix, e]) - 1;
     const white = e.fenBefore.split(' ')[1] === 'w';
     const num = white || forceNum ? `<span class="rnum">${moveLabel(e, ply)}</span>` : '';
-    const m = e.fenBefore.split(' ')[1] === rep.color ? E.mastery.get(e.fenBefore) : null;
+    const m = mine(e) ? E.mastery.get(e.fenBefore) : null;
     const off = !active.has(e);
-    let cls = m && !off ? ` mine st-${m.status}` : off && e.fenBefore.split(' ')[1] === rep.color ? ' mine' : '';
+    let cls = m && !off ? ` mine st-${m.status}` : off && mine(e) ? ' mine' : '';
     if (off) cls += ' off';
-    if (onLine(prefix) && E.path[prefix.length] === e) cls += e === cur && prefix.length === E.k - 1 ? ' cur' : ' onpath';
+    if (e === cur) cls += ' cur';
     const pf = perf.get(e.fenAfter);
     const tipTxt = [off ? `${e.disabled ? 'Coup désactivé' : 'Suite d’un coup désactivé'} : ni entraîné ni compté dans la maîtrise` : m ? masteryTip(m) : '',
       pf ? `Vos parties après ce coup : ${perfShort(pf)} (+${pf.w} =${pf.d} −${pf.l})` : ''].filter(Boolean).join('\n');
@@ -835,25 +845,54 @@ function renderTree() {
     const note = e.note ? `<span class="rnote" title="${esc(e.note)}" aria-label="Note">✎</span>` : '';
     return `${num}<span class="rm${cls}" role="button" tabindex="0" data-n="${n}"${tip}>${figSan(e.san, white ? 'w' : 'b')}${note}</span> `;
   };
-  const cont = (e, ply, prefix, forceNum) => {
-    if (owner.get(e.fenAfter) !== e) return '<span class="rtrans" title="Cette position est déjà dans le répertoire par un autre ordre de coups">↪ transposition</span> ';
-    return line(e.fenAfter, ply + 1, [...prefix, e], forceNum);
-  };
-  function line(p, ply, prefix, forceNum) {
-    const kids = childrenOf(rep, p);
-    if (!kids.length || ++count > 5000) return '';
-    const [main, ...alts] = kids;
-    let html = mv(main, ply, prefix, forceNum);
-    for (const a of alts) html += `<div class="rvar">${mv(a, ply, prefix, true)}${cont(a, ply, prefix, false)}</div>`;
-    return html + cont(main, ply, prefix, alts.length > 0);
+  function rows(p, ply, prefix, depth, forceNum) {
+    let html = '';
+    for (const first of childrenOf(rep, p)) {
+      if (++count > 4000) break;
+      const chain = [first];
+      let e = first, trans = false;
+      for (;;) {
+        if (owner.get(e.fenAfter) !== e) { trans = true; break; }
+        const kids = childrenOf(rep, e.fenAfter);
+        if (kids.length !== 1 || ++count > 4000) break;
+        e = kids[0]; chain.push(e);
+      }
+      const last = chain[chain.length - 1];
+      const hasKids = !trans && childrenOf(rep, last.fenAfter).length > 0;
+      const key = last.fenAfter;
+      E.treeKeys.push(key);
+      const forced = pathSet.has(last) && last !== cur;
+      const folded = hasKids && E.folded.has(key) && !forced;
+      let moves = '', pre = prefix, pl = ply;
+      chain.forEach((c, i) => { moves += mv(c, pl, pre, i === 0); pre = [...pre, c]; pl++; });
+      const sel = chain.includes(cur);
+      const onpath = !sel && chain.every((c) => pathSet.has(c));
+      const allOff = chain.every((c) => !active.has(c));
+      const userEdges = chain.filter((c) => mine(c) && active.has(c) && E.mastery.get(c.fenBefore));
+      const st = userEdges.length ? E.mastery.get(userEdges[userEdges.length - 1].fenBefore).status : null;
+      const mk = st ? `<span class="tmk st-${st}" role="img" aria-label="${TREE_ST[st]}" title="${TREE_ST[st]}"></span>` : '<span class="tmk none" aria-hidden="true"></span>';
+      const hole = E.gap && E.gap.epd === last.fenAfter && !hasKids && !trans ? '<span class="thole">● trou</span>' : '';
+      const tr = trans ? '<span class="rtrans" title="Cette position est déjà dans le répertoire par un autre ordre de coups">⇄ transposition</span>' : '';
+      const chev = hasKids ? `<button type="button" class="tchev" data-fold="${key}" aria-expanded="${!folded}" aria-label="${folded ? 'Déplier' : 'Replier'} la suite">${folded ? '▸' : '▾'}</button>` : '<span class="tchev"></span>';
+      html += `<div class="trow${sel ? ' sel' : ''}${onpath ? ' onpath' : ''}${allOff ? ' off' : ''}" style="--d:${depth}">${chev}${mk}<span class="tmoves">${moves}</span>${tr}${hole}</div>`;
+      if (hasKids && !folded) html += rows(last.fenAfter, pl, pre, depth + 1, true);
+    }
+    return html;
   }
-  const html = line(epd(rep.root), 0, [], rep.root.split(' ')[1] === 'b');
-  el.innerHTML = html ? `<div class="rline">${html}</div>`
+  const html = rows(epd(rep.root), 0, [], 0, rep.root.split(' ')[1] === 'b');
+  el.innerHTML = html ? `<div class="trows" role="list">${html}</div>`
     : '<p class="muted pad">Jouez un premier coup sur l\'échiquier, ou cliquez sur un coup de l\'explorateur ci-dessous.</p>';
-  const c = el.querySelector('.rm.cur');
+  const fb = $('#tree-fold');
+  if (fb) {
+    fb.classList.toggle('hidden', !E.treeKeys.length);
+    const anyOpen = E.treeKeys.some((k) => !E.folded.has(k));
+    fb.textContent = anyOpen ? 'Tout replier' : 'Tout déplier';
+  }
+  const c = el.querySelector('.trow.sel');
   if (c) {
-    const top = c.offsetTop - el.offsetTop;
-    if (top < el.scrollTop || top > el.scrollTop + el.clientHeight - 30) el.scrollTop = top - el.clientHeight / 2;
+    const r = c.getBoundingClientRect(), pr = el.getBoundingClientRect();
+    if (r.top < pr.top) el.scrollTop -= pr.top - r.top + 8;
+    else if (r.bottom > pr.bottom) el.scrollTop += r.bottom - pr.bottom + 8;
   }
 }
 
@@ -880,6 +919,8 @@ function bindTree(el) {
     else if (t && (e.key === 'Delete' || e.key === 'ContextMenu')) { e.preventDefault(); moveMenu(+t.dataset.n); }
   });
   el.addEventListener('click', (e) => {
+    const f = e.target.closest('[data-fold]');
+    if (f) { const k = f.dataset.fold; if (E.folded.has(k)) E.folded.delete(k); else E.folded.add(k); renderTree(); return; }
     const t = e.target.closest('.rm');
     if (!t) return;
     if (fired) { fired = false; return; }
