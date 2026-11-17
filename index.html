@@ -160,7 +160,7 @@
         <div class="frow"><label for="ui-arrows">Flèche du meilleur coup</label><select id="ui-arrows"><option value="best">Oui</option><option value="none">Non</option></select></div>
         <div class="frow"><label for="ui-keys">Marquer les coups clés</label><select id="ui-keys"><option value="1">Oui</option><option value="0">Non</option></select></div>
         <div class="frow"><label for="ui-class">Classification sur l'échiquier</label><select id="ui-class"><option value="1">Oui</option><option value="0">Non</option></select></div>
-        <button id="eng-gear" type="button" class="btn">Tous les réglages moteur</button>
+        <a id="eng-gear" class="btn" href="#/settings/engine">Tous les réglages moteur ›</a>
       </section>
     </div>
     <div class="navbar">
@@ -182,20 +182,6 @@
       <button value="cancel" class="btn">Plus tard</button>
       <button type="button" id="cf-apply" class="btn">Appliquer mes choix</button>
       <button type="button" id="cf-merge" class="btn primary">Tout fusionner</button>
-    </div>
-  </form>
-</dialog>
-
-<dialog id="eng-dlg" class="dlg">
-  <form method="dialog">
-    <h2>Réglages du moteur</h2>
-    <div id="eng-fields"></div>
-    <p class="muted small">Profondeur et temps maximum s'appliquent à chaque position : le moteur s'arrête au premier des deux atteint.
-      Le nombre de variantes est celui des lignes affichées quand « Analyse en direct » est activé.
-      Les nouveaux réglages valent pour les prochaines analyses (« Relancer l'analyse » pour une partie déjà analysée).</p>
-    <div class="row end">
-      <button value="cancel" class="btn">Annuler</button>
-      <button value="save" class="btn primary">Sauvegarder</button>
     </div>
   </form>
 </dialog>

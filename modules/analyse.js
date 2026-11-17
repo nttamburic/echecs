@@ -1227,20 +1227,6 @@ export function engineFields(root, p, onChange = () => {}) {
   };
 }
 
-function openEngineDialog() {
-  const dlg = $('#eng-dlg');
-  const f = engineFields($('#eng-fields'), 'eng');
-  dlg.returnValue = '';
-  dlg.showModal();
-  // « submit » (et non « close ») : déclenché tout de suite par le bouton Sauvegarder.
-  dlg.querySelector('form').onsubmit = async (e) => {
-    if (!e.submitter || e.submitter.value !== 'save') return;
-    await f.save();
-    $('#ar-lines').value = String(nLines());
-    if (S.g) renderGame();
-  };
-}
-
 // ------------------------------------------------------------------ navigation
 export function leave() {
   stopAuto();
@@ -1288,7 +1274,6 @@ export async function init() {
   $('#flip').onclick = () => { board.flip(); renderGame(); };
   $('#analyze').onclick = startAnalysis;
   $('#stop').onclick = () => { if (S.g && S.g.analyzing) S.g.abort = true; };
-  $('#eng-gear').onclick = openEngineDialog;
   initPanelTabs();
   initAnalysisSettings();
   initSheet($('#gpanel'), $('#grab'));
