@@ -24,6 +24,7 @@ import { miniBoard } from './setup.js';
 
 const SVG_GEAR = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
 const RATINGS = [0, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500];
+const covPct = (n) => `${(100 / n).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} %`;
 const SPEEDS = [['ultraBullet', 'UltraBullet'], ['bullet', 'Bullet'], ['blitz', 'Blitz'], ['rapid', 'Rapide'], ['classical', 'Classique'], ['correspondence', 'Correspondance']];
 const LONG_PRESS = 2000;
 
@@ -541,21 +542,22 @@ function buildEditor(el) {
     </div>
   </aside>
   <dialog id="exp-dlg" class="dlg"><form method="dialog">
-    <h2>Paramètres</h2>
-    <div class="dtabs" role="tablist">
-      <button type="button" role="tab" data-pane="lichess" class="on">Filtres Lichess</button>
-      <button type="button" role="tab" data-pane="ui">Interface</button>
-      <button type="button" role="tab" data-pane="eng">Moteur</button>
+    <div class="dlg-head"><button value="cancel" class="hb hb-x" aria-label="Fermer sans enregistrer">✕</button><h2>Réglages de l’éditeur</h2><button value="ok" class="hb hb-ok">OK</button></div>
+    <div class="dtabs" role="tablist" aria-label="Réglages">
+      <button type="button" role="tab" data-pane="lichess" class="on" aria-selected="true">Lichess</button>
+      <button type="button" role="tab" data-pane="ui" aria-selected="false" tabindex="-1">Interface</button>
+      <button type="button" role="tab" data-pane="eng" aria-selected="false" tabindex="-1">Moteur</button>
     </div>
     <div data-epane="lichess">
-      <fieldset id="exp-ratings"><legend>Elo moyen des joueurs</legend><div class="chk-grid">${RATINGS.map((r, i) => `<label><input type="checkbox" value="${r}"> ${r === 0 ? 'moins de 1000' : r === 2500 ? '2500 et plus' : `${r} – ${RATINGS[i + 1] - 1}`}</label>`).join('')}</div></fieldset>
-      <fieldset id="exp-speeds"><legend>Cadences</legend><div class="chk-grid">${SPEEDS.map(([k, l]) => `<label><input type="checkbox" value="${k}"> ${l}</label>`).join('')}</div></fieldset>
+      <fieldset id="exp-ratings"><legend>Niveau des joueurs</legend><div class="pills">${RATINGS.map((r) => `<label class="pill"><input type="checkbox" value="${r}"><span title="${r === 0 ? 'moins de 1000' : r === 2500 ? '2500 et plus' : `${r} à ${RATINGS[RATINGS.indexOf(r) + 1] - 1}`}">${r === 0 ? 400 : r}</span></label>`).join('')}</div></fieldset>
+      <fieldset id="exp-speeds"><legend>Cadences</legend><div class="pills">${SPEEDS.map(([k, l]) => `<label class="pill"><input type="checkbox" value="${k}"><span>${l}</span></label>`).join('')}</div></fieldset>
+      <label class="setrow"><span class="st"><span class="t">Seuil d’un « trou »</span><span class="d" id="rep-cov-d"></span></span><span class="chev" aria-hidden="true">›</span>
+        <select id="rep-cov" aria-label="Seuil d’un trou : positions vues dans au moins">${THRESHOLDS.map((n) => `<option value="${n}">${covPct(n)} des parties (1 sur ${n})</option>`).join('')}</select></label>
       <p class="muted small">Ces filtres ne concernent que l'onglet « Lichess ». La base Masters regroupe les parties de joueurs titrés et de plus de 2200 Elo.</p>
     </div>
     <div data-epane="ui" class="hidden">
       <div class="frow"><label for="rep-arrow">Meilleur coup (flèche verte)</label><select id="rep-arrow"><option value="1">Activé</option><option value="0">Désactivé</option></select></div>
       <div class="frow"><label for="rep-bar">Barre d'évaluation</label><select id="rep-bar"><option value="1">Activée</option><option value="0">Désactivée</option></select></div>
-      <div class="frow"><label for="rep-cov">Couverture : préparer les positions vues dans</label><select id="rep-cov">${THRESHOLDS.map((n) => `<option value="${n}">1 partie sur ${n}</option>`).join('')}</select></div>
       <p class="muted small">La flèche montre le meilleur coup de la position affichée. La barre, à gauche de l'échiquier, donne l'évaluation de Stockfish (du point de vue des Blancs).</p>
     </div>
     <div data-epane="eng" class="hidden">
@@ -617,10 +619,16 @@ function buildEditor(el) {
   let pane = 'lichess', engF = null;
   const showPane = (t) => {
     pane = t;
-    dlg.querySelectorAll('.dtabs button').forEach((b) => b.classList.toggle('on', b.dataset.pane === t));
+    dlg.querySelectorAll('.dtabs button').forEach((b) => { const on = b.dataset.pane === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
     dlg.querySelectorAll('[data-epane]').forEach((p) => p.classList.toggle('hidden', p.dataset.epane !== t));
   };
   dlg.querySelectorAll('.dtabs button').forEach((b) => { b.onclick = () => showPane(b.dataset.pane); });
+  dlg.querySelector('.dtabs').addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const arr = [...dlg.querySelectorAll('.dtabs button')], i = arr.findIndex((b) => b.dataset.pane === pane);
+    const n = arr[(i + (e.key === 'ArrowRight' ? 1 : arr.length - 1)) % arr.length];
+    showPane(n.dataset.pane); n.focus(); e.preventDefault();
+  });
   $('#exp-gear', el).onclick = () => {
     const rs = expRatings(), ss = expSpeeds();
     dlg.querySelectorAll('#exp-ratings input').forEach((i) => { i.checked = rs.includes(+i.value); });
@@ -628,6 +636,8 @@ function buildEditor(el) {
     $('#rep-arrow', el).value = repOn('repArrow') ? '1' : '0';
     $('#rep-bar', el).value = repOn('repBar') ? '1' : '0';
     $('#rep-cov', el).value = String(covN());
+    $('#rep-cov', el).onchange = () => { $('#rep-cov-d', el).textContent = `Coups joués dans au moins ${covPct(+$('#rep-cov', el).value)} des parties`; };
+    $('#rep-cov', el).onchange();
     engF = engineFields($('#rep-eng-fields', el), 'oeng');
     showPane('lichess');
     dlg.returnValue = '';
