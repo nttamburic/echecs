@@ -141,6 +141,7 @@ export async function start(el, mode, id) {
   const seq = T.seq;
   T.mode = MODES[mode] ? mode : 'all';
   T.stats = { lines: 0, ok: 0, ko: 0 };
+  T.t0 = Date.now();
   T.answered = new Set();
   T.requeued = new Set();
   T.target = null;
@@ -225,9 +226,15 @@ async function sessionSummary() {
 function finishTargets() {
   T.done = true;
   T.board.interactive = false;
-  setMsg('end', T.mode === 'due'
-    ? `Séance terminée : ${plural(T.targets.length, 'position')} revue${T.targets.length > 1 ? 's' : ''}. Les prochaines révisions sont planifiées.`
-    : `Toutes les cibles ont été revues (${plural(T.targets.length, 'position')}). La maîtrise est mise à jour : relancez l'entraînement ciblé pour la suite.`);
+  const n = T.targets.length, s = T.stats, tot = s.ok + s.ko;
+  const secs = Math.max(1, Math.round((Date.now() - (T.t0 || Date.now())) / 1000));
+  const dur = secs >= 60 ? `${Math.floor(secs / 60)} min ${String(secs % 60).padStart(2, '0')} s` : `${secs} s`;
+  const pct = tot ? Math.round((100 * s.ok) / tot) + ' %' : '–';
+  setMsg('end', `<div class="tend"><span class="tend-ic" aria-hidden="true">✓</span>
+    <b class="tend-t">${T.mode === 'due' ? 'Révision terminée' : 'Cibles revues'}</b>
+    <span class="muted">${plural(n, 'position')} · ${dur}</span>
+    <div class="tend-stats"><span><b class="g">${s.ok}</b>bonnes</span><span><b class="r">${s.ko}</b>erreurs</span><span><b>${pct}</b>réussite</span></div>
+    <span class="muted small">${T.mode === 'due' ? 'Les prochaines révisions sont planifiées.' : 'La maîtrise est mise à jour : relancez l\'entraînement ciblé pour la suite.'}</span></div>`);
   $('#train-next').disabled = true;
   render();
   const seq = T.seq;
