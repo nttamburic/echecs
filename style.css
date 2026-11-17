@@ -1346,3 +1346,13 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 @media (max-width: 760px) {
   .tend-foot { align-self: stretch; position: sticky; bottom: 0; z-index: 5; margin: 8px -14px -14px; padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); width: auto; background: #29341f; border-radius: 0 0 var(--r-lg) var(--r-lg); box-shadow: 0 -10px 12px -6px #29341f; }
 }
+
+/* ---- Phase 9 : maîtrise avant → après (fin de séance) ---- */
+.tprog { width: 100%; background: var(--surface-1); border-radius: var(--r-lg); padding: 14px; display: flex; flex-direction: column; gap: 8px; text-align: left; margin: 4px 0; }
+.tprog .tbars { display: flex; flex-direction: column; gap: 6px; }
+.tprog .tbar { display: flex; gap: 2px; border-radius: 999px; overflow: hidden; }
+.tprog .tbar.before { height: 8px; opacity: .5; }
+.tprog .tbar.after { height: 10px; }
+.tprog .tbar > span { min-width: 3px; }
+.tprog-t { font-size: 14px; font-weight: 600; color: #a9d67a; line-height: 20px; }
+.tprog-t.flat { color: var(--text-soft); } .tprog-t.neg { color: #ff8f80; }
