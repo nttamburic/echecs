@@ -8,6 +8,7 @@ import { analyzePosition, analysisSettings, maxTime } from '../core/engine.js';
 import { maiaMove, loadMaia, maiaModel, setMaiaProgress, MAIA_MODELS } from '../core/maia.js';
 import { fmtClock } from '../core/format.js';
 import { BOOK, figSan, material, capturedHtml, stashFree } from './analyse.js';
+import { frOpening } from './opening-names.js';
 
 const P = {
   phase: 'setup', // setup | play | over
@@ -358,7 +359,7 @@ function render() {
   // ouverture
   let op = null;
   for (let k = 0; k <= P.ply; k++) { const o = BOOK[epd(fenAt(k))]; if (o && o.length) op = o[1]; }
-  $('#play-opening').textContent = P.ply === 0 ? 'Position de départ' : op || 'Ouverture inconnue';
+  $('#play-opening').textContent = P.ply === 0 ? 'Position de départ' : frOpening(op) || 'Ouverture inconnue';
 
   // coups
   const el = $('#play-moves');
