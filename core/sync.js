@@ -33,7 +33,8 @@ function b64decode(b64) {
 }
 
 async function gh(path, { method = 'GET', body } = {}) {
-  const r = await fetch(API + path, {
+  let r;
+  try { r = await fetch(API + path, {
     method,
     headers: {
       Authorization: 'Bearer ' + cfg.token,
@@ -43,7 +44,7 @@ async function gh(path, { method = 'GET', body } = {}) {
     },
     body: body ? JSON.stringify(body) : undefined,
     cache: 'no-store',
-  });
+  }); } catch (e) { e.network = true; throw e; }
   const j = await r.json().catch(() => null);
   return { status: r.status, ok: r.ok, body: j };
 }
@@ -190,11 +191,12 @@ async function doSync() {
     for (const r of await store.allRecords()) if (!remote[r.file]) dirty.add(r.file);
 
     // 2) Envoi des fichiers modifiés localement (un à la fois : chaque envoi est un commit).
-    const held = new Set(Object.values((await store.metaGet('conflicts')) || {}).map((c) => c.file));
+    const heldFiles = async () => new Set(Object.values((await store.metaGet('conflicts')) || {}).map((c) => c.file));
     state.conflicts = Object.values((await store.metaGet('conflicts')) || {});
     for (const file of [...dirty]) {
-      if (held.has(file)) continue; // en attente de la décision de l'utilisateur : on n'écrase pas l'autre appareil
+      let skip = false;
       for (let attempt = 0; attempt < 3; attempt++) {
+        if ((await heldFiles()).has(file)) { skip = true; break; } // en attente de la décision de l'utilisateur : on n'écrase pas l'autre appareil
         const content = await buildFile(file);
         const body = { message: `Sync ${file}`, content: b64encode(content) };
         if (shas[file]) body.sha = shas[file];
@@ -211,6 +213,7 @@ async function doSync() {
         }
         throw new Error(explain(r.status, r.body));
       }
+      if (skip) { state.conflicts = Object.values((await store.metaGet('conflicts')) || {}); continue; }
       dirty.delete(file);
       await store.metaSet('shas', shas);
       await store.metaSet('dirty', [...dirty]);
@@ -219,7 +222,7 @@ async function doSync() {
     local.set('lastSync', String(state.lastSync));
     return true;
   } catch (e) {
-    state.error = navigator.onLine === false || e instanceof TypeError ? 'Pas de connexion Internet.' : (e.message || String(e));
+    state.error = navigator.onLine === false || e.network ? 'Pas de connexion Internet.' : (e.message || String(e));
     state.offline = state.error === 'Pas de connexion Internet.';
     return false;
   } finally {

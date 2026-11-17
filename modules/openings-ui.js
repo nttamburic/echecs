@@ -650,7 +650,8 @@ async function deleteNode(n) {
   const label = moveLabel(edge, line.length - 1) + frSan(edge.san);
   const more = gone.length - 1;
   if (more && !confirm(`Supprimer ${label} et ${plural(more, 'coup')} qui en ${more > 1 ? 'dépendent' : 'dépend'} ?`)) return;
-  const before = { edges: [...E.rep.edges], path: [...E.path], k: E.k };
+  const rep = E.rep;
+  const before = { edges: [...rep.edges], path: [...E.path], k: E.k };
   deleteMove(E.rep, edge.fenBefore, edge.uci);
   const left = new Set(E.rep.edges);
   const cut = E.path.findIndex((e) => !left.has(e));
@@ -658,10 +659,13 @@ async function deleteNode(n) {
   await saveRepertoire(E.rep);
   render();
   rescanSoon();
+  const after = [...rep.edges];
   toast(more ? `${label} et ${plural(more, 'coup')} supprimés.` : `${label} supprimé.`, {
     type: 'info',
     action: { label: 'Annuler', fn: async () => {
-      if (!E.rep) return;
+      if (E.rep !== rep) { toast('Annulation impossible : ce répertoire n’est plus ouvert.', { type: 'err' }); return; }
+      const added = rep.edges.filter((e) => !after.includes(e));
+      if (added.length) { toast('Annulation impossible : le répertoire a changé depuis.', { type: 'err' }); return; }
       E.rep.edges = before.edges; E.path = before.path; E.k = before.k;
       await saveRepertoire(E.rep); render(); rescanSoon();
       toast('Suppression annulée.', { type: 'ok' });

@@ -708,7 +708,7 @@ function initAnalysisSettings() {
   $('#ui-arrows').value = uiArrows();
   $('#ui-keys').value = uiOn('keyMoves') ? '1' : '0';
   $('#ui-class').value = uiOn('boardClass') ? '1' : '0';
-  $('#ar-lines').onchange = (e) => { local.set('multipv', e.target.value); S.liveRes = null; S.livePending = null; if (S.g) renderGame(); };
+  $('#ar-lines').onchange = (e) => { local.set('multipv', e.target.value); S.liveRes = null; S.livePending = null; S.bestRes = null; S.bestPending = null; if (S.g) renderGame(); };
   $('#ui-arrows').onchange = (e) => { local.set('arrows', e.target.value); if (S.g) renderGame(); };
   $('#ui-keys').onchange = (e) => { local.set('keyMoves', e.target.value); if (S.g) renderGame(); };
   $('#ui-class').onchange = (e) => { local.set('boardClass', e.target.value); if (S.g) renderGame(); };

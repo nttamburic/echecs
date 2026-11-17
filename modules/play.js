@@ -49,11 +49,13 @@ function renderSetup() {
   $('#play-elo-val').textContent = elo;
   $('#play-elo').setAttribute('aria-valuetext', `${elo} Elo, ${eloName(elo)}`);
   $('#play-elo-name').textContent = '· ' + eloName(elo);
+  const keep = document.activeElement && document.activeElement.closest('#play-presets, #play-tc') ? { box: document.activeElement.parentElement.id, k: document.activeElement.dataset.elo ? 'elo' : 'tc', v: document.activeElement.dataset.elo || document.activeElement.dataset.tc } : null;
   $('#play-presets').innerHTML = PRESETS.map(([v, l]) => `<button type="button" class="chip" data-elo="${v}" aria-pressed="${v === elo}" title="${l}, ${v} Elo">${v}<span class="muted small"> ${l}</span></button>`).join('');
   const side = local.get('playSide', 'w');
   document.querySelectorAll('#play-side button').forEach((b) => { b.classList.toggle('on', b.dataset.side === side); b.setAttribute('aria-checked', String(b.dataset.side === side)); b.tabIndex = b.dataset.side === side ? 0 : -1; });
   const tc = Number(local.get('playTc')) || 0;
   $('#play-tc').innerHTML = TCS.map(([v, l]) => `<button type="button" role="radio" class="chip" data-tc="${v}" aria-checked="${v === tc}" tabindex="${v === tc ? 0 : -1}">${l}</button>`).join('');
+  if (keep) { const b = document.querySelector(`#${keep.box} button[data-${keep.k}="${keep.v}"]`); if (b) b.focus(); } // le focus survit à la reconstruction
 }
 
 // Départ demandé par un autre module (ex. l'éditeur de répertoire) : { fen, ucis, user, label }.
@@ -97,6 +99,7 @@ async function startGame(from = null) {
 // ------------------------------------------------------------------ coups
 function push(uci) {
   tickClock();
+  if (P.phase !== 'play') throw new Error('over');
   const m = P.chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
   P.moves.push(m);
   P.ply = P.moves.length;
@@ -190,11 +193,12 @@ function undo() {
     P.chess.undo();
     P.moves.pop();
   } while (P.moves.length > P.base && P.chess.turn() !== P.user);
-  if (P.chess.turn() !== P.user) { P.token++; P.ply = P.moves.length; P.phase = 'play'; P.result = null; render(); botMove(); return; }
+  if (P.chess.turn() !== P.user) { P.token++; P.ply = P.moves.length; P.phase = 'play'; P.result = null; P.last = Date.now(); render(); botMove(); return; }
   P.ply = P.moves.length;
   P.phase = 'play';
   P.result = null;
   P.hint = null;
+  P.last = Date.now();
   render();
 }
 const canUndo = () => P.phase !== 'setup' && !(P.result && (P.result.resigned || P.result.flag)) && P.moves.slice(P.base).some((m) => m.color === P.user);
@@ -388,6 +392,7 @@ function openGear() {
 
 // ------------------------------------------------------------------ navigation
 export function show() {
+  P.last = Date.now(); // le temps passé hors de la vue ne compte pas
   const from = playStash;
   playStash = null;
   if (from) {
