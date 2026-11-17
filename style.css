@@ -1179,3 +1179,10 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .rsugg .sg-txt { flex: 1; min-width: 0; }
 .rsugg .sg-go { flex: none; min-height: 32px; padding: 0 10px; border: 0; border-radius: var(--r-sm); background: var(--warn); color: #241a02; font-weight: 700; font-size: 13px; cursor: pointer; }
 @media (max-width: 760px) { .rsugg .sg-go { min-height: 44px; padding: 0 14px; } }
+
+/* ---- Phase 9 : onglet Coach (mobile) ---- */
+#t-coach { display: none; }
+@media (max-width: 760px), (max-width: 1279px) and (orientation: portrait) {
+  #gpanel.has-coach #t-coach { display: block; }
+  #gpanel[data-detent="max"]:not([data-ptab="coach"]) #coach, #gpanel[data-detent="max"]:not([data-ptab="coach"]) #next-wrap { display: none; }
+}
