@@ -1356,3 +1356,6 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .tprog .tbar > span { min-width: 3px; }
 .tprog-t { font-size: 14px; font-weight: 600; color: #a9d67a; line-height: 20px; }
 .tprog-t.flat { color: var(--text-soft); } .tprog-t.neg { color: #ff8f80; }
+
+/* ---- Phase 9 : menu de coup — séparateur avant « Supprimer » ---- */
+.mv-sep { display: block; height: 1px; background: var(--line-soft); margin: 4px 8px; }
