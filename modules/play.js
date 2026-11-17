@@ -221,10 +221,10 @@ function render() {
   if (P.hint && P.hint.fen !== fen) P.hint = null;
 
   const arrows = [];
-  if (P.hint && P.hint.uci) arrows.push({ from: P.hint.uci.slice(0, 2), to: P.hint.uci.slice(2, 4), color: '#4caf50' });
+  if (P.hint && P.hint.uci) arrows.push({ from: P.hint.uci.slice(0, 2), to: P.hint.uci.slice(2, 4), color: 'var(--arrow-best)' });
   else if (showArrows && myTurn && res && res.lines[0]) {
     const b = res.lines[0].pv[0];
-    arrows.push({ from: b.slice(0, 2), to: b.slice(2, 4), color: '#3b82f6', opacity: 0.75 });
+    arrows.push({ from: b.slice(0, 2), to: b.slice(2, 4), color: 'var(--arrow-alt)', opacity: 0.75 });
   }
   board.setPosition(fen, { lastMove: last ? [last.from, last.to] : null, arrows });
 

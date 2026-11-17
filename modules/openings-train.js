@@ -225,7 +225,7 @@ function step() {
     const isTarget = T.target && T.target.epd === T.cur;
     if (isTarget && T.target.status === 'fresh') {
       // nouveau coup (mode « à revoir ») : on le montre d'abord ; le jouer planifie la première révision
-      T.board.setArrows(exp.map((e) => ({ from: e.uci.slice(0, 2), to: e.uci.slice(2, 4), color: '#4caf50' })));
+      T.board.setArrows(exp.map((e) => ({ from: e.uci.slice(0, 2), to: e.uci.slice(2, 4), color: 'var(--arrow-best)' })));
       const idea = ideaOf(exp);
       setMsg('turn', `🆕 Nouveau coup à apprendre : <b>${exp.map((e) => moveName(e)).join(' ou ')}</b>.${idea ? ` ${esc(idea.txt)}` : ''} Jouez-le sur l'échiquier ; il reviendra demain.`);
       render();
@@ -293,7 +293,7 @@ function userMove(uci) {
   const fenBefore = fenOf(T.cur);
   let after = fenBefore;
   try { const c = new Chess(fenBefore); c.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] }); after = c.fen(); } catch { /* */ }
-  T.board.setPosition(after, { lastMove: [uci.slice(0, 2), uci.slice(2, 4)], mark: { sq: uci.slice(2, 4), color: '#fa412d', sym: '✗', label: 'Hors répertoire' } });
+  T.board.setPosition(after, { lastMove: [uci.slice(0, 2), uci.slice(2, 4)], mark: { sq: uci.slice(2, 4), color: 'var(--cls-manquee)', sym: '✗', label: 'Hors répertoire' } });
   setMsg('wrong', '✗ Ce n\'est pas le coup du répertoire. Réessayez, ou demandez un indice.');
   render();
   T.timer = setTimeout(() => {
@@ -336,7 +336,7 @@ function hint() {
     return;
   }
   T.hintStep = 2;
-  T.board.setArrows(exp.map((e) => ({ from: e.uci.slice(0, 2), to: e.uci.slice(2, 4), color: '#4caf50' })));
+  T.board.setArrows(exp.map((e) => ({ from: e.uci.slice(0, 2), to: e.uci.slice(2, 4), color: 'var(--arrow-best)' })));
   const names = exp.map((e) => moveName(e)).join(' ou ');
   setMsg('hint', `💡 Coup${exp.length > 1 ? 's' : ''} du répertoire : <b>${names}</b>. Jouez-le sur l'échiquier.`);
   render();

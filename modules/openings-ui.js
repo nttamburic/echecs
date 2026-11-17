@@ -971,10 +971,10 @@ function drawBoard() {
   const p = curEpd();
   const fen = fenOf(p);
   const atFocus = E.focus && p === E.focus.epd;
-  const arrows = atFocus && E.focus.best ? [{ from: E.focus.best.slice(0, 2), to: E.focus.best.slice(2, 4), color: '#4caf50' }] : [];
+  const arrows = atFocus && E.focus.best ? [{ from: E.focus.best.slice(0, 2), to: E.focus.best.slice(2, 4), color: 'var(--arrow-best)' }] : [];
   const eng = engHere();
   const best = repOn('repArrow') && eng && eng.res && eng.res.lines && eng.res.lines[0] ? eng.res.lines[0].pv[0] : null;
-  if (best && !(atFocus && E.focus.best === best)) arrows.push({ from: best.slice(0, 2), to: best.slice(2, 4), color: '#4caf50' });
+  if (best && !(atFocus && E.focus.best === best)) arrows.push({ from: best.slice(0, 2), to: best.slice(2, 4), color: 'var(--arrow-best)' });
   E.board.setPosition(fen, { lastMove: cur ? [cur.uci.slice(0, 2), cur.uci.slice(2, 4)] : null, arrows });
   drawBar(fen, eng);
 }

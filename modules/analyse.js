@@ -732,7 +732,7 @@ function renderGame() {
   // de la position affichée (avant que le coup suivant ne soit joué)
   const arrows = [];
   const best = uiArrows() === 'best' && (review || g.var) ? bestHere(g, fen) : null;
-  if (best) arrows.push({ from: best.slice(0, 2), to: best.slice(2, 4), color: '#4caf50' });
+  if (best) arrows.push({ from: best.slice(0, 2), to: best.slice(2, 4), color: 'var(--arrow-best)' });
   const mark = annotate && uiOn('boardClass') ? { sq: d.uci.slice(2, 4), color: CLASSES[d.r.cls].color, sym: CLASSES[d.r.cls].sym, label: CLASSES[d.r.cls].label } : null;
   board.setPosition(fen, { lastMove: d ? [d.uci.slice(0, 2), d.uci.slice(2, 4)] : null, arrows, mark });
 
@@ -1043,17 +1043,17 @@ function renderGraph(g, review) {
     pts.push([k / n * W, H - w / 100 * H]);
   }
   let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`;
-  svg += `<rect width="${W}" height="${H}" fill="#403d39"/>`;
+  svg += `<rect width="${W}" height="${H}" style="fill:var(--eval-black)"/>`;
   if (pts.length > 1) {
     svg += `<path d="M0,${H} ${pts.map((p) => `L${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ')} L${pts[pts.length - 1][0].toFixed(1)},${H} Z" fill="#fff"/>`;
   }
   svg += `<line x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}" stroke="#888" stroke-width="0.6"/>`;
   g.results.forEach((r, i) => {
     if (!r || !['inaccuracy', 'mistake', 'miss', 'blunder', 'brilliant', 'great'].includes(r.cls) || !pts[i + 1]) return;
-    svg += `<circle cx="${pts[i + 1][0]}" cy="${pts[i + 1][1]}" r="4" fill="${CLASSES[r.cls].color}" stroke="#fff" stroke-width="1"/>`;
+    svg += `<circle cx="${pts[i + 1][0]}" cy="${pts[i + 1][1]}" r="4" style="fill:${CLASSES[r.cls].color}" stroke="#fff" stroke-width="1"/>`;
   });
   const cx = (g.var ? g.var.basePly : g.ply) / n * W;
-  svg += `<line x1="${cx}" y1="0" x2="${cx}" y2="${H}" stroke="#81b64c" stroke-width="2"/></svg>`;
+  svg += `<line x1="${cx}" y1="0" x2="${cx}" y2="${H}" style="stroke:var(--accent)" stroke-width="2"/></svg>`;
   el.innerHTML = svg;
   el.onclick = (e) => {
     const rect = el.getBoundingClientRect();
