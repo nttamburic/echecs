@@ -1359,3 +1359,13 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* ---- Phase 9 : menu de coup — séparateur avant « Supprimer » ---- */
 .mv-sep { display: block; height: 1px; background: var(--line-soft); margin: 4px 8px; }
+
+/* Phase 9 — Puzzles (bureau) : texte + compteur à gauche, échiquier 360 px à droite */
+.soon-hero.with-board { max-width: none; flex-direction: row; flex-wrap: wrap; gap: 40px; align-items: center; }
+.soon-hero-text { flex: 1 1 380px; display: flex; flex-direction: column; gap: 16px; align-items: flex-start; min-width: 0; }
+.soon-count { display: flex; align-items: center; gap: 12px; background: var(--surface-1); border-radius: var(--r); padding: 14px 16px; }
+.soon-count[hidden] { display: none; }
+.soon-count-n { font-size: 32px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+.soon-count-txt { font-size: 14px; line-height: 20px; color: var(--text-soft); }
+.soon-d-board { position: relative; width: 360px; height: 360px; flex: none; }
+.soon-d-board .soon-arrows { position: absolute; inset: 0; width: 360px; height: 360px; pointer-events: none; }
