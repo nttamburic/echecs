@@ -122,9 +122,17 @@ const plural = (n, s) => `${n} ${s}${n > 1 ? 's' : ''}`;
 // ------------------------------------------------------------------ liste des répertoires
 export async function renderHome(el) {
   const [reps, events] = await Promise.all([listRepertoires(), listEvents()]);
+  let nEdges = 0, nDue = 0;
+  for (const r of reps) { nEdges += reachableEdges(r).length; nDue += cardsSummary(computeCards(r, events, reps)).due; }
+  const TRASH = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4.5h6V7M6 7l1 13h10l1-13"/></svg>';
   el.innerHTML = `
-  <h1 class="page-title">Ouvertures</h1>
-  <div class="row"><button id="rep-new" class="btn primary">+ Nouveau répertoire</button><button id="rep-import" class="btn">Importer un PGN</button></div>
+  <header class="op-head">
+    <div><h1 class="page-title">Ouvertures</h1>
+      <p class="op-sub muted">${plural(reps.length, 'répertoire')} · ${plural(nEdges, 'coup')}${nDue ? ` · <strong class="due">${plural(nDue, 'coup')} à revoir aujourd’hui</strong>` : ''}</p></div>
+    <div class="row"><button id="rep-import" class="btn">Importer un PGN</button><button id="rep-new" class="btn primary">+ Nouveau répertoire</button></div>
+  </header>
+  ${reps.length ? trainBox(reps, events) : ''}
+  ${reps.length ? '<h2 class="op-h2">Mes répertoires</h2>' : ''}
   <div class="rep-list">${reps.length ? reps.map((r) => `
     <div class="card rep-card">
       <a class="rep-open" href="#/openings/${esc(r.id)}" aria-label="${esc(r.name)}, ${colorFr(r.color)}">
@@ -132,11 +140,10 @@ export async function renderHome(el) {
         <span class="rep-info"><b title="${esc(r.name)}">${esc(r.name)}</b><span class="muted small">${colorFr(r.color)} · ${plural(reachableEdges(r).length, 'coup')}${dueLabel(r, events, reps)}${homePerf(r)}<span class="cov-mini" data-cov="${esc(r.id)}"></span></span>
           ${masteryBar(masterySummary(computeMastery(r, events, reps)))}</span>
       </a>
-      <button class="btn small danger" data-del="${esc(r.id)}" title="Supprimer ce répertoire" aria-label="Supprimer le répertoire ${esc(r.name)}">Supprimer</button>
+      <button class="rep-del" data-del="${esc(r.id)}" title="Supprimer ce répertoire" aria-label="Supprimer le répertoire ${esc(r.name)}">${TRASH}</button>
     </div>`).join('') : '<p class="muted">Aucun répertoire pour le moment. Créez-en un, puis jouez vos coups sur l\'échiquier.</p>'}</div>
   ${reps.length && lichessStatus() ? `<p class="muted small li-status">${lichessStatus()}</p>` : ''}
   ${reps.length ? '<section class="card sugg-box" id="sugg-box"><h2>Suggestions</h2><p class="muted small">Recherche des erreurs répétées dans vos parties analysées…</p></section>' : ''}
-  ${reps.length ? trainBox(reps, events) : ''}
   <dialog id="rep-dlg" class="dlg"><form method="dialog">
     <h2>Nouveau répertoire</h2>
     <div class="form"><label>Nom <input id="rep-name" placeholder="ex. Italienne avec les Blancs" autocomplete="off"></label></div>
@@ -379,15 +386,15 @@ function trainBox(reps, events) {
   const newLeft = Math.min(fresh, Math.max(0, NEW_PER_DAY() - newToday));
   const style = local.get('trainStyle', 'isolated') === 'lines' ? 'lines' : 'isolated';
   return `
-  <section class="card train-box">
-    <h2>S'entraîner</h2>
+  <section class="train-box">
+    <h2 class="op-h2">S'entraîner</h2>
     <div class="train-modes">
       <div class="train-mode due-mode"><h3>À revoir</h3>
         <p class="muted small">Répétition espacée : chaque coup revient juste avant que vous l'oubliiez. <b>${plural(due, 'coup')} à revoir</b>${newLeft ? ` et ${newLeft} nouveau${newLeft > 1 ? 'x' : ''} aujourd'hui` : ''}.</p>
         <div class="row"><select id="train-style" aria-label="Façon de revoir les coups">
             <option value="isolated"${style === 'isolated' ? ' selected' : ''}>Coups isolés</option>
             <option value="lines"${style === 'lines' ? ' selected' : ''}>Lignes complètes</option></select>
-          <a class="btn primary${due + newLeft ? '' : ' disabled'}" href="${due + newLeft ? '#/openings/train/due' : '#/openings'}">Commencer</a></div></div>
+          <a class="btn primary${due + newLeft ? '' : ' disabled'}" href="${due + newLeft ? '#/openings/train/due' : '#/openings'}">Commencer la révision</a></div></div>
       <div class="train-mode"><h3>Tout le répertoire</h3>
         <p class="muted small">Des lignes tirées au hasard dans tous vos répertoires. Vous jouez votre couleur, l'adversaire répond par un coup de votre répertoire.</p>
         <div class="row"><a class="btn primary" href="#/openings/train/all">Commencer</a></div></div>
@@ -408,7 +415,7 @@ function buildEditor(el) {
   <div class="left">
     <div class="board-wrap"><div id="rep-evalbar" class="evalbar hidden"><div class="white"></div><span class="label"></span></div><div id="rep-board"></div></div>
     <div class="board-opts"><button id="rep-flip" class="btn small" title="Retourner l'échiquier (F)">⇅ Retourner</button>
-      <a id="rep-train" class="btn small primary" title="S'entraîner sur ce répertoire">▶ S'entraîner</a>
+      <a id="rep-train" class="btn small primary" title="S'entraîner sur ce répertoire">▶ S'entraîner sur cette ligne</a>
       <button id="rep-play" class="btn small" title="Jouer une partie contre Maia à partir de la position affichée, avec la couleur du répertoire">♟ Jouer contre Maia d'ici</button>
       <span class="muted small">Clic droit sur un coup (appui long de 2 s sur téléphone) pour le désactiver ou le supprimer. Votre note sur le coup affiché : sous la liste des coups.</span></div>
   </div>

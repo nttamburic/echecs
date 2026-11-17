@@ -902,3 +902,54 @@ button.link { background: none; border: 0; padding: 0; font: inherit; color: var
 .navbar .btn { background: transparent; box-shadow: none; color: var(--text); }
 .navbar #next { background: var(--surface-2); }
 @media (hover: hover) { .navbar .btn:hover { background: var(--surface-2); } }
+
+/* ---- Phase 9 : Ouvertures, accueil ---- */
+#openings-view { max-width: 1040px; }
+.op-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 24px; }
+.op-head .page-title { margin: 0; line-height: var(--lh-title); }
+.op-sub { margin: 4px 0 0; font-size: 14px; }
+.op-sub .due { color: var(--warning); }
+.op-head .btn { min-height: 44px; padding: 0 16px; }
+.op-head .btn.primary { box-shadow: 0 3px 0 var(--accent-press); }
+.op-h2 { margin: 0 0 12px; font-size: 18px; font-weight: 650; }
+.train-box { margin: 0 0 28px; }
+.train-modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.train-mode { background: var(--surface-1); border-radius: var(--r-lg); padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+.train-mode.due-mode { grid-column: span 2; box-shadow: inset 0 0 0 2px var(--accent); border-left: 0; }
+.train-mode h3 { margin: 0; font-size: 16px; font-weight: 700; }
+.train-mode.due-mode h3 { font-size: 17px; }
+.train-mode p { flex: 1; margin: 0; }
+.train-mode .row { display: flex; gap: 8px; }
+.train-mode .row .btn, .train-mode .row select { min-height: 44px; }
+.train-mode .row .btn { flex: 1; justify-content: center; text-align: center; }
+.train-mode:not(.due-mode) .btn.primary { background: var(--surface-2); color: var(--text); border: 1px solid #55524d; box-shadow: none; }
+.train-mode.due-mode .btn.primary { min-height: 48px; font-weight: 800; box-shadow: 0 3px 0 var(--accent-press); }
+.rep-list { margin-top: 0; gap: 12px; margin-bottom: 28px; }
+.rep-card { padding: 0; align-items: stretch; gap: 0; background: var(--surface-1); box-shadow: 0 1px 0 rgba(0,0,0,.35); }
+.rep-card .rep-open { padding: 16px 18px; gap: 20px; }
+.rep-card .avatar-sm { width: 56px; height: 56px; border-radius: var(--r-lg); border: 1px solid #55524d; }
+.rep-card .avatar-sm img { width: 44px; height: 44px; }
+.rep-info b { font-size: 17px; }
+.rep-del { width: 52px; border: 0; border-left: 1px solid var(--surface-2); background: transparent; color: var(--text-muted); display: flex; align-items: center; justify-content: center; border-radius: 0 var(--r-lg) var(--r-lg) 0; cursor: pointer; }
+@media (hover: hover) { .rep-del:hover { color: var(--danger-text); background: var(--danger-bg); } }
+.rep-del:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.sugg-box { margin-bottom: 0; }
+@media (max-width: 760px) { .train-mode.due-mode { grid-column: auto; } .op-head { margin-bottom: 16px; } }
+.train-modes { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.train-mode:last-child { grid-column: 1 / -1; flex-direction: row; align-items: center; flex-wrap: wrap; padding: 14px 18px; }
+.train-mode:last-child p { flex: 1 1 200px; }
+.train-mode:last-child .row { flex: 0 0 auto; }
+@media (max-width: 1100px) { .train-modes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .train-modes { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .train-mode:last-child { flex-direction: column; align-items: stretch; } }
+
+/* ---- Phase 9 : éditeur de répertoire ---- */
+#rep-view .board-opts { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; margin-top: 12px; }
+#rep-view .board-opts #rep-train, #rep-view .board-opts #rep-play { display: flex; align-items: center; order: 1; flex: 1 1 200px; min-height: 48px; justify-content: center; font-size: 15px; font-weight: 700; }
+#rep-view .board-opts #rep-train { box-shadow: 0 3px 0 var(--accent-press); font-weight: 800; }
+#rep-view .board-opts #rep-flip { order: 2; min-height: 44px; }
+#rep-view .board-opts > .muted { order: 3; flex: 1 0 100%; font-size: 13px; }
+#rep-view .phead .ptitle { justify-content: flex-start; text-align: left; font-size: 18px; font-weight: 700; flex: 1; }
+#rep-panel .ptabs { padding: 0 8px; }
+#rep-panel .ptabs button { flex: none; padding: 0 14px; font-weight: 600; }
+#rep-panel .ptabs button[aria-selected="true"] { font-weight: 650; }
