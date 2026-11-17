@@ -1327,3 +1327,22 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 #batch-progress #batch-stop { background: transparent; border: 0; color: var(--danger-text); font-weight: 600; padding: 0 8px; }
 #batch-progress[data-paused="1"] { box-shadow: inset 3px 0 0 var(--warning); }
 @media (max-width: 760px) { #batch-progress { flex-wrap: wrap; } #batch-progress .bs-main { flex: 1 1 100%; } #batch-progress #batch-pause { flex: 1; } #batch-progress #batch-stop { flex: 0 0 auto; } }
+
+/* ---- Phase 9 : « À retravailler » en fin de séance ---- */
+.tend-list { width: 100%; display: flex; flex-direction: column; gap: 6px; margin-top: 8px; text-align: left; }
+.tend-list .lbl-up { margin-bottom: 2px; }
+.tend-row { display: flex; align-items: center; min-height: 48px; padding: 0 14px; border-radius: var(--r-lg); background: var(--surface-1); color: var(--text); text-decoration: none; font-size: 15px; font-variant-numeric: tabular-nums; }
+.tend-row > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tend-row .chev { color: var(--text-muted); }
+@media (hover: hover) { .tend-row:hover { background: var(--surface-2); } }
+.tend-foot { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.tend-foot.one { grid-template-columns: 1fr; }
+.tend-foot .btn.big { min-height: 52px; font-size: 16px; display: flex; align-items: center; justify-content: center; text-decoration: none; }
+.tend-foot .btn.primary.big { font-weight: 800; box-shadow: 0 3px 0 var(--accent-press); }
+.tend-foot .btn:not(.primary) { background: #3a3835; border: 1px solid #55524d; color: var(--text); font-weight: 600; }
+#train-panel .tmsg { flex: none; }
+@media (min-width: 761px) { #train-panel:has(.tend) { overflow-y: auto; } }
+#train-panel:has(.tend) .tactions, #train-panel:has(.tend) #train-line { display: none; }
+@media (max-width: 760px) {
+  .tend-foot { align-self: stretch; position: sticky; bottom: 0; z-index: 5; margin: 8px -14px -14px; padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); width: auto; background: #29341f; border-radius: 0 0 var(--r-lg) var(--r-lg); box-shadow: 0 -10px 12px -6px #29341f; }
+}
