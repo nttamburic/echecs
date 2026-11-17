@@ -19,7 +19,9 @@
   <button id="menu-btn" class="icon-btn" aria-label="Menu" aria-controls="sidebar" aria-expanded="false">
     <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
   </button>
+  <button id="tb-back" class="icon-btn" type="button" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
   <a href="#/games" class="brand"><img src="pieces/wN.svg" alt=""><span>Chess Journey</span></a>
+  <h1 id="topbar-title"></h1>
 </div>
 <div id="scrim"></div>
 
@@ -53,31 +55,35 @@
   <span>Vous êtes hors ligne. Vos modifications restent sur cet appareil et seront synchronisées au retour de la connexion.</span>
 </div>
 <main id="home-view" class="view page">
-  <section class="card">
-    <div class="row between">
-      <h1>Historique des parties <span id="hist-user" class="muted"></span></h1>
-      <div class="stack">
-        <button id="load" class="btn">Actualiser</button>
-        <button id="clear-hist" class="btn danger">Effacer l'historique</button>
-      </div>
+  <header class="hist-head">
+    <div>
+      <h1>Historique des parties</h1>
+      <p class="hist-sub muted">chess.com<span id="hist-user"></span></p>
     </div>
-    <p id="hist-nouser" class="hidden">Indiquez d'abord votre pseudo chess.com dans <a href="#/settings/profile">Paramètres → Profil chess.com</a>.</p>
-    <p id="load-progress" class="muted small">Seules les parties terminées sont récupérées (jamais une partie en cours).</p>
+    <div class="stack">
+      <button id="multi" class="btn primary" disabled>Analyse multiple</button>
+      <button id="load" class="btn">Actualiser</button>
+      <button id="clear-hist" class="btn danger">Effacer l'historique</button>
+    </div>
+  </header>
+  <p id="hist-nouser" class="hidden">Indiquez d'abord votre pseudo chess.com dans <a href="#/settings/profile">Paramètres → Profil chess.com</a>.</p>
+  <p id="load-progress" class="muted small">Seules les parties terminées sont récupérées (jamais une partie en cours).</p>
+  <section class="card hist-filters" aria-label="Filtres">
+    <div class="fcol grow"><label for="filter" class="lbl-up">Adversaire</label>
+      <input id="filter" type="search" placeholder="Rechercher un pseudo" autocomplete="off"></div>
+    <div class="fcol grow2"><span class="lbl-up" id="lbl-cad">Cadence</span>
+      <div id="tc" class="segctl" role="group" aria-labelledby="lbl-cad">
+        <button class="chip" data-tc="" aria-pressed="true">Toutes</button>
+        <button class="chip" data-tc="bullet" aria-pressed="false">Bullet</button>
+        <button class="chip" data-tc="blitz" aria-pressed="false">Blitz</button>
+        <button class="chip" data-tc="rapid" aria-pressed="false">Rapide</button>
+        <button class="chip" data-tc="daily" aria-pressed="false">Par jour</button>
+      </div></div>
+    <div class="fcol grow"><label for="op" class="lbl-up">Ouverture</label>
+      <select id="op" title="Ouverture jouée (parties analysées)"><option value="">Toutes les ouvertures</option></select></div>
+    <span id="count" class="muted fcount" role="status" aria-live="polite"></span>
   </section>
-  <section class="card">
-    <div class="row filters">
-      <input id="filter" type="search" placeholder="Filtrer par adversaire" aria-label="Filtrer par adversaire" autocomplete="off">
-      <select id="op" title="Ouverture jouée (parties analysées)" aria-label="Ouverture jouée"><option value="">Toutes ouvertures</option></select>
-      <span id="count" class="muted" role="status" aria-live="polite"></span>
-      <button id="multi" class="btn push-right" disabled>Analyse multiple</button>
-    </div>
-    <div id="tc" class="chips" role="group" aria-label="Cadence">
-      <button class="chip" data-tc="" aria-pressed="true">Toutes</button>
-      <button class="chip" data-tc="bullet" aria-pressed="false">Bullet</button>
-      <button class="chip" data-tc="blitz" aria-pressed="false">Blitz</button>
-      <button class="chip" data-tc="rapid" aria-pressed="false">Rapide</button>
-      <button class="chip" data-tc="daily" aria-pressed="false">Par jour</button>
-    </div>
+  <section class="card hist-table">
     <p id="batch-progress" class="small hidden" role="status"></p>
     <div class="table-wrap">
     <table id="games" role="table" aria-label="Historique des parties">
@@ -205,21 +211,23 @@
     </div>
     <div id="play-setup" class="psetup">
       <div class="bot-card"><span class="avatar"><img src="pieces/bN.svg" alt=""></span>
-        <div><b>Maia</b> <span class="muted">· bot au jeu humain</span><div class="bot-elo" aria-live="polite"><span id="play-elo-val">1500</span> Elo <span id="play-elo-name" class="elo-name"></span></div></div></div>
-      <label for="play-elo" class="muted small">Niveau du bot</label>
+        <div><h1 class="bot-name">Maia <span class="bot-elo" aria-live="polite"><span id="play-elo-val">1500</span></span></h1><div id="play-elo-name" class="elo-name"></div></div></div>
+      <p class="bot-intro">Maia a appris à jouer comme des humains de ce niveau : elle commet des erreurs réalistes plutôt que de jouer « moins bien » au hasard.</p>
+      <label for="play-elo" class="lbl-up">Niveau</label>
       <input type="range" id="play-elo" min="600" max="2800" step="100" value="1500" aria-valuetext="1500 Elo">
-      <div class="elo-scale muted small" aria-hidden="true"><span>600</span><span>1700</span><span>2800</span></div>
+      <div class="elo-scale muted small" aria-hidden="true"><span>600</span><span>1200</span><span>1700</span><span>2200</span><span>2800</span></div>
       <div id="play-presets" class="chips" role="group" aria-label="Niveaux prédéfinis"></div>
-      <div class="muted small" id="lbl-side">Je joue</div>
+      <div class="lbl-up" id="lbl-side">Je joue</div>
       <div id="play-side" class="side-pick" role="radiogroup" aria-labelledby="lbl-side">
         <button type="button" role="radio" data-side="w" title="Blancs"><img src="pieces/wK.svg" alt=""><span>Blancs</span></button>
         <button type="button" role="radio" data-side="r" title="Aléatoire"><span class="rnd" aria-hidden="true">?</span><span>Aléatoire</span></button>
         <button type="button" role="radio" data-side="b" title="Noirs"><img src="pieces/bK.svg" alt=""><span>Noirs</span></button>
       </div>
-      <div class="muted small" id="lbl-tc">Pendule</div>
+      <div class="lbl-up" id="lbl-tc">Pendule</div>
       <div id="play-tc" class="chips" role="radiogroup" aria-labelledby="lbl-tc"></div>
-      <p id="play-load" class="muted small">Maia3 imite le jeu d'un humain du niveau choisi. Les parties ne sont pas enregistrées dans l'historique.</p>
+      <p id="play-load" class="muted small">Les parties contre Maia ne sont pas enregistrées dans l'historique.</p>
       <button id="play-start" class="btn big primary">Jouer</button>
+      <button id="play-gear2" type="button" class="linkbtn">Réglages de la partie</button>
     </div>
     <div id="play-game" class="pgame hidden">
       <div class="pactions">

@@ -43,14 +43,15 @@ const atLatest = () => P.ply === P.moves.length;
 function renderSetup() {
   $('#play-setup').classList.toggle('hidden', P.phase !== 'setup');
   $('#play-game').classList.toggle('hidden', P.phase === 'setup');
+  $('#play-view').classList.toggle('is-setup', P.phase === 'setup');
   if (P.phase !== 'setup') return;
   const elo = Number(local.get('playElo')) || 1500;
   $('#play-elo').value = elo;
   $('#play-elo-val').textContent = elo;
   $('#play-elo').setAttribute('aria-valuetext', `${elo} Elo, ${eloName(elo)}`);
-  $('#play-elo-name').textContent = '· ' + eloName(elo);
+  $('#play-elo-name').textContent = eloName(elo);
   const keep = document.activeElement && document.activeElement.closest('#play-presets, #play-tc') ? { box: document.activeElement.parentElement.id, k: document.activeElement.dataset.elo ? 'elo' : 'tc', v: document.activeElement.dataset.elo || document.activeElement.dataset.tc } : null;
-  $('#play-presets').innerHTML = PRESETS.map(([v, l]) => `<button type="button" class="chip" data-elo="${v}" aria-pressed="${v === elo}" title="${l}, ${v} Elo">${v}<span class="muted small"> ${l}</span></button>`).join('');
+  $('#play-presets').innerHTML = PRESETS.map(([v, l]) => `<button type="button" class="chip" data-elo="${v}" aria-pressed="${v === elo}" title="${l}, ${v} Elo">${l} · ${v}</button>`).join('');
   const side = local.get('playSide', 'w');
   document.querySelectorAll('#play-side button').forEach((b) => { b.classList.toggle('on', b.dataset.side === side); b.setAttribute('aria-checked', String(b.dataset.side === side)); b.tabIndex = b.dataset.side === side ? 0 : -1; });
   const tc = Number(local.get('playTc')) || 0;
@@ -329,8 +330,13 @@ function render() {
   const st = $('#play-status');
   let html = '';
   if (P.result) {
-    html = `<div class="result" role="group" aria-label="Fin de partie"><div class="rtitle">${esc(P.result.text)} <span class="rscore">${P.result.score}</span></div>
-      <div class="row"><button id="play-analyse" class="btn primary">Analyser la partie</button><button id="play-again" class="btn">Rejouer la partie</button></div></div>`;
+    const sc = P.result.score, mine = P.user === 'w' ? '1-0' : '0-1';
+    const out = sc === '½-½' ? 'draw' : sc === mine ? 'win' : 'loss';
+    const head = { win: 'Victoire !', loss: 'Défaite', draw: 'Match nul' }[out];
+    html = `<div class="result ${out}" role="group" aria-label="Fin de partie"><div class="rband"><h2 class="rhead">${head}</h2><div class="rtitle">${esc(P.result.text)} <span class="rscore">${sc}</span></div></div>
+      <div class="rbody"><button id="play-analyse" class="btn primary big">Analyser la partie</button>
+      <div class="row"><button id="play-again" class="btn">Rejouer</button><button id="play-level" class="btn">Changer de niveau</button></div>
+      <button id="play-final" class="linkbtn" type="button">Revoir la position finale</button></div></div>`;
   } else if (P.hint) {
     html = P.hint.uci
       ? `<div class="hint">Conseil de Stockfish : <b>${figSan(P.hint.san, P.user)}</b> <span class="muted">(${fmtScore(P.hint.score)})</span></div>`
@@ -344,6 +350,8 @@ function render() {
   st.innerHTML = html;
   const again = $('#play-again');
   if (again) again.onclick = newGame;
+  const lvl = $('#play-level'); if (lvl) lvl.onclick = newGame;
+  const fin = $('#play-final'); if (fin) fin.onclick = () => setPly(P.moves.length);
   const an = $('#play-analyse');
   if (an) an.onclick = analyseGame;
 
@@ -446,6 +454,7 @@ export function init() {
   $('#play-resign').onclick = resign;
   $('#play-new').onclick = newGame;
   $('#play-gear').onclick = openGear;
+  $('#play-gear2').onclick = openGear;
   $('#play-flip').onclick = () => { board.flip(); render(); };
   $('#pl-first').onclick = () => setPly(0);
   $('#pl-prev').onclick = () => setPly(P.ply - 1);
