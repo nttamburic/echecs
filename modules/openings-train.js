@@ -30,7 +30,7 @@ const T = {
   mode: null, reps: [], rep: null, targets: [], target: null, tIdx: 0,
   cur: null, line: [], done: true, wrong: false, hinted: false, busy: false,
   stats: { lines: 0, ok: 0, ko: 0 }, answered: new Set(), msg: null, board: null, timer: null, seq: 0,
-  freq: new Map(), requeued: new Set(),
+  freq: new Map(), requeued: new Set(), missed: new Map(),
 };
 
 const tKey = (t) => `${t.rep.id}|${t.epd}`;
@@ -125,6 +125,7 @@ function build(el) {
   </aside>`;
   T.board = new Board($('#train-board', el), { onMove: (from, to, promo) => userMove(from + to + (promo || '')) });
   $('#train-hint', el).onclick = hint;
+  $('#train-msg', el).addEventListener('click', (e) => { if (e.target.closest('#tend-retry')) retryMissed(); });
   $('#train-next', el).onclick = () => nextLine();
   document.addEventListener('keydown', (e) => {
     if (document.body.dataset.view !== 'train' || document.querySelector('dialog[open]')) return;
@@ -144,6 +145,7 @@ export async function start(el, mode, id) {
   T.t0 = Date.now();
   T.answered = new Set();
   T.requeued = new Set();
+  T.missed = new Map();
   T.target = null;
   T.before = null;
   const all = await listRepertoires();
@@ -184,6 +186,20 @@ export async function start(el, mode, id) {
 }
 
 export function leave() { clearTimeout(T.timer); T.seq++; T.busy = false; }
+
+// « Retravailler » : nouvelle série limitée aux positions ratées pendant la séance.
+async function retryMissed() {
+  const list = [...T.missed.values()];
+  if (!list.length || !T.done) return;
+  const seq = T.seq;
+  T.targets = list.map((m) => ({ rep: m.rep, epd: m.epd, status: 'weak' }));
+  T.tIdx = 0; T.answered = new Set(); T.requeued = new Set(); T.missed = new Map();
+  T.stats = { lines: 0, ok: 0, ko: 0 }; T.t0 = Date.now();
+  T.before = await masteryOf(T.reps);
+  if (seq !== T.seq) return;
+  $('#train-next').disabled = false;
+  nextLine();
+}
 
 function nextLine() {
   clearTimeout(T.timer);
@@ -230,15 +246,19 @@ function finishTargets() {
   const secs = Math.max(1, Math.round((Date.now() - (T.t0 || Date.now())) / 1000));
   const dur = secs >= 60 ? `${Math.floor(secs / 60)} min ${String(secs % 60).padStart(2, '0')} s` : `${secs} s`;
   const pct = tot ? Math.round((100 * s.ok) / tot) + ' %' : '–';
+  const miss = [...T.missed.values()].map((m) => ({ m, label: retryLabel(m) })).filter((x) => x.label);
+  const list = miss.length ? `<div class="tend-list"><span class="lbl-up">À retravailler</span>${miss.map((x) => `<a class="tend-row" href="#/openings/${encodeURIComponent(x.m.rep.id)}" title="${esc(x.m.rep.name)}"><span>${x.label}</span><span class="chev" aria-hidden="true">›</span></a>`).join('')}</div>` : '';
   setMsg('end', `<div class="tend"><span class="tend-ic" aria-hidden="true">✓</span>
     <b class="tend-t">${T.mode === 'due' ? 'Révision terminée' : 'Cibles revues'}</b>
     <span class="muted">${plural(n, 'position')} · ${dur}</span>
     <div class="tend-stats"><span><b class="g">${s.ok}</b>bonnes</span><span><b class="r">${s.ko}</b>erreurs</span><span><b>${pct}</b>réussite</span></div>
-    <span class="muted small">${T.mode === 'due' ? 'Les prochaines révisions sont planifiées.' : 'La maîtrise est mise à jour : relancez l\'entraînement ciblé pour la suite.'}</span></div>`);
+    <span class="muted small">${T.mode === 'due' ? 'Les prochaines révisions sont planifiées.' : 'La maîtrise est mise à jour : relancez l\'entraînement ciblé pour la suite.'}</span>
+    <span id="tsum-slot"></span>${list}
+    <div class="tend-foot${miss.length ? '' : ' one'}">${miss.length ? `<button type="button" class="btn big" id="tend-retry">Retravailler (${miss.length})</button>` : ''}<a class="btn primary big" href="#/openings">Terminer</a></div></div>`);
   $('#train-next').disabled = true;
   render();
   const seq = T.seq;
-  sessionSummary().then((h) => { if (h && seq === T.seq && T.done) { T.msg.html += h; render(); } });
+  sessionSummary().then((h) => { if (h && seq === T.seq && T.done) { T.msg.html = T.msg.html.replace('<span id="tsum-slot"></span>', h); render(); } });
 }
 
 // Avance jusqu'au prochain coup de l'utilisateur (l'adversaire répond seul), ou termine la ligne.
@@ -313,7 +333,7 @@ function userMove(uci) {
     return;
   }
   // mauvais coup : affiché un instant en rouge, puis la position revient
-  if (!T.wrong && !T.hinted) { record(uci, false); requeue(); }
+  if (!T.wrong && !T.hinted) { record(uci, false); requeue(); miss(); }
   T.wrong = true;
   T.busy = true; T.board.interactive = false;
   const seq = T.seq;
@@ -329,6 +349,24 @@ function userMove(uci) {
     T.board.setPosition(fenBefore, { lastMove: T.line.length ? [T.line.at(-1).uci.slice(0, 2), T.line.at(-1).uci.slice(2, 4)] : null });
   }, 700);
 }
+
+// Positions ratées pendant la séance (liste « À retravailler » de l'écran de fin).
+function miss() {
+  const k = `${T.rep.id}|${T.cur}`;
+  if (!T.missed.has(k)) T.missed.set(k, { rep: T.rep, epd: T.cur });
+}
+// « 6… a6 7. a4 » : le dernier coup de l'adversaire puis le coup attendu à cette position.
+function retryLabel({ rep, epd }) {
+  const exp = (userPositions(rep).get(epd) || [])[0];
+  if (!exp) return '';
+  const path = pathTo(rep, epd0(rep), epd, true) || [];
+  const no0 = Number(rep.root.split(' ')[5]) || 1, off = rep.root.split(' ')[1] === 'b' ? 1 : 0;
+  const part = (e, i, bare) => { const white = turnOf(e.fenBefore) === 'w', no = no0 + Math.floor((i + off) / 2); return `${bare ? '' : white ? `${no}. ` : `${no}… `}${moveName(e)}`; };
+  const prev = path.length ? path.at(-1) : null;
+  const expWhite = turnOf(exp.fenBefore) === 'w';
+  return [prev ? part(prev, path.length - 1, false) : '', part(exp, path.length, !!prev && !expWhite)].filter(Boolean).join(' ');
+}
+const epd0 = (rep) => epd(rep.root);
 
 // Mode « à revoir » : une cible ratée revient en fin de séance (une seule fois).
 function requeue() {
@@ -353,7 +391,7 @@ function hint() {
   if (T.done || T.busy || turnOf(T.cur) !== T.rep.color) return;
   const exp = userPositions(T.rep).get(T.cur) || [];
   if (!exp.length) return;
-  if (!T.wrong && !T.hinted) { record('', false); requeue(); }
+  if (!T.wrong && !T.hinted) { record('', false); requeue(); miss(); }
   T.hinted = true;
   const idea = T.hintStep ? null : ideaOf(exp);
   if (idea) {
