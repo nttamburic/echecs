@@ -19,6 +19,7 @@ import {
 import { Chess } from '../vendor/chess.js';
 import { coverageOf, cachedCoverage, covN, THRESHOLDS, pct } from './openings-coverage.js';
 import { classifyGame, CLASSES, fmtScore, winPct } from '../analysis.js';
+import { stashPlay } from './play.js';
 
 const SVG_GEAR = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
 const RATINGS = [0, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500];
@@ -342,6 +343,7 @@ function buildEditor(el) {
     <div class="board-wrap"><div id="rep-evalbar" class="evalbar hidden"><div class="white"></div><span class="label"></span></div><div id="rep-board"></div></div>
     <div class="board-opts"><button id="rep-flip" class="btn small" title="Retourner l'échiquier (F)">⇅ Retourner</button>
       <a id="rep-train" class="btn small primary" title="S'entraîner sur ce répertoire">▶ S'entraîner</a>
+      <button id="rep-play" class="btn small" title="Jouer une partie contre Maia à partir de la position affichée, avec la couleur du répertoire">♟ Jouer contre Maia d'ici</button>
       <span class="muted small">Clic droit sur un coup (appui long de 2 s sur téléphone) pour le désactiver ou le supprimer. Votre note sur le coup affiché : sous la liste des coups.</span></div>
   </div>
   <aside class="panel" id="rep-panel">
@@ -396,6 +398,11 @@ function buildEditor(el) {
 
   E.board = new Board($('#rep-board', el), { onMove: (from, to, promo) => playMove(from + to + (promo || '')) });
   $('#rep-flip', el).onclick = () => { E.board.flip(); render(); };
+  $('#rep-play', el).onclick = () => {
+    if (!E.rep) return;
+    stashPlay({ fen: E.rep.root, ucis: E.path.slice(0, E.k).map((e) => e.uci), user: E.rep.color, label: E.rep.name });
+    location.hash = '#/play';
+  };
   $('#rep-first', el).onclick = () => go(0);
   $('#rep-prev', el).onclick = () => go(E.k - 1);
   $('#rep-next', el).onclick = () => forward();

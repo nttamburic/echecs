@@ -13,6 +13,8 @@ const P = {
   chess: null, // partie en cours (chess.js, pour la répétition et les fins de partie)
   moves: [], // coups verbose chess.js (before, after, san, from, to, color…)
   startFen: null,
+  base: 0, // coups imposés au départ (partie lancée depuis un répertoire)
+  label: null, // nom du répertoire d'origine
   ply: 0, // position affichée
   user: 'w',
   elo: 1500,
@@ -42,22 +44,37 @@ function renderSetup() {
   document.querySelectorAll('#play-side button').forEach((b) => b.classList.toggle('on', b.dataset.side === side));
 }
 
-async function startGame() {
-  const side = local.get('playSide', 'w');
-  P.user = side === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : side;
-  P.elo = Number($('#play-elo').value) || 1500;
+// Départ demandé par un autre module (ex. l'éditeur de répertoire) : { fen, ucis, user, label }.
+let playStash = null;
+export function stashPlay(x) { playStash = x; }
+
+async function startGame(from = null) {
+  if (from) P.user = from.user === 'b' ? 'b' : 'w';
+  else {
+    const side = local.get('playSide', 'w');
+    P.user = side === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : side;
+  }
+  P.elo = Number($('#play-elo').value) || Number(local.get('playElo')) || 1500;
   local.set('playElo', String(P.elo));
-  P.chess = new Chess();
+  P.chess = new Chess(from && from.fen ? from.fen : undefined);
   P.startFen = P.chess.fen();
   P.moves = [];
-  P.ply = 0;
+  // les coups déjà joués sont rejoués pour garder l'historique (et la détection des répétitions)
+  for (const u of (from && from.ucis) || []) {
+    try { P.moves.push(P.chess.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] })); } catch { break; }
+  }
+  P.ply = P.moves.length;
+  P.base = P.moves.length; // « Rejouer le coup » ne remonte pas avant la position de départ choisie
   P.result = null;
   P.hint = null;
   P.token++;
   P.phase = 'play';
+  P.label = from && from.label ? from.label : null;
   board.setOrientation(P.user);
+  checkEnd();
   render();
-  if (P.user === 'b') botMove();
+  if (P.phase !== 'play') return;
+  if (P.chess.turn() !== P.user) botMove();
   else loadMaia().catch(() => {}); // téléchargement du modèle pendant que l'on réfléchit au premier coup
 }
 
@@ -121,7 +138,7 @@ function undo() {
   do {
     P.chess.undo();
     P.moves.pop();
-  } while (P.moves.length && P.chess.turn() !== P.user);
+  } while (P.moves.length > P.base && P.chess.turn() !== P.user);
   if (P.chess.turn() !== P.user) { P.token++; P.ply = P.moves.length; P.phase = 'play'; P.result = null; render(); botMove(); return; }
   P.ply = P.moves.length;
   P.phase = 'play';
@@ -129,7 +146,7 @@ function undo() {
   P.hint = null;
   render();
 }
-const canUndo = () => P.phase !== 'setup' && !(P.result && P.result.resigned) && P.moves.some((m) => m.color === P.user);
+const canUndo = () => P.phase !== 'setup' && !(P.result && P.result.resigned) && P.moves.slice(P.base).some((m) => m.color === P.user);
 
 function resign() {
   if (P.phase !== 'play' || !confirm('Abandonner la partie ?')) return;
@@ -261,6 +278,7 @@ function render() {
     html = `<div class="hint muted" id="play-think">Maia réfléchit…</div>`;
   } else if (P.phase === 'play') {
     html = `<div class="hint muted">${atLatest() ? (P.chess.turn() === P.user ? 'À vous de jouer.' : '') : 'Revenez à la dernière position pour jouer (→ ou ⏭).'}</div>`;
+    if (P.label) html =`<div class="hint muted small">Partie depuis votre répertoire « ${esc(P.label)} ».</div>` + html;
   }
   st.innerHTML = html;
   const again = $('#play-again');
@@ -312,7 +330,17 @@ function openGear() {
 }
 
 // ------------------------------------------------------------------ navigation
-export function show() { render(); }
+export function show() {
+  const from = playStash;
+  playStash = null;
+  if (from) {
+    if (P.phase === 'play' && P.moves.length && !confirm('Abandonner la partie en cours pour jouer depuis le répertoire ?')) { render(); return; }
+    P.thinking = false;
+    startGame(from);
+    return;
+  }
+  render();
+}
 
 export function init() {
   board = new Board($('#play-board'), { onMove: onBoardMove });
@@ -326,7 +354,7 @@ export function init() {
     local.set('playSide', b.dataset.side);
     renderSetup();
   };
-  $('#play-start').onclick = startGame;
+  $('#play-start').onclick = () => startGame();
   $('#play-undo').onclick = undo;
   $('#play-hint').onclick = hint;
   $('#play-resign').onclick = resign;
