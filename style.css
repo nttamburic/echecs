@@ -1186,3 +1186,19 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   #gpanel.has-coach #t-coach { display: block; }
   #gpanel[data-detent="max"]:not([data-ptab="coach"]) #coach, #gpanel[data-detent="max"]:not([data-ptab="coach"]) #next-wrap { display: none; }
 }
+
+/* ---- Phase 9 : bandeaux d'analyse en cours ---- */
+#batch-progress { display: flex; align-items: center; gap: 12px; margin: 12px 0 0; padding: 10px 12px; background: var(--surface-1); border-radius: var(--r-lg); box-shadow: inset 3px 0 0 var(--accent); font-size: 13px; }
+#batch-progress.hidden { display: none; }
+#batch-progress .bs-main, .astrip .as-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+#batch-progress .bs-bar, .astrip .as-bar { display: block; height: 4px; border-radius: 999px; background: var(--border); overflow: hidden; }
+#batch-progress .bs-bar > span, .astrip .as-fill { display: block; height: 100%; background: var(--accent); border-radius: 999px; transition: width .3s; }
+#batch-progress .bs-detail { font-size: 12px; }
+#batch-progress .btn, .astrip .btn { min-height: 44px; padding: 0 12px; }
+.astrip { display: none; }
+@media (max-width: 760px), (max-width: 1279px) and (orientation: portrait) {
+  .astrip:not(.hidden) { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--surface-1); font-size: 13px; }
+}
+@media (max-width: 760px), (max-width: 1279px) and (orientation: portrait) {
+  #game-view:has(#astrip:not(.hidden)) #gpanel[data-detent="mid"] { height: max(150px, calc(100dvh - var(--topbar) - env(safe-area-inset-top) - var(--nav-h) - min(var(--board), 100vw) - 2 * 40px - 50px - 58px)); }
+}
