@@ -1320,3 +1320,10 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 #rep-panel .exp-tabs button.on { background: #45423e; color: #fff; font-weight: 700; }
 #rep-panel .exp-sum { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
 @media (max-width: 760px) { #rep-panel .exp-tabs button { min-height: 44px; height: 44px; } #rep-panel .oblock #exp-gear { min-height: 44px; width: 44px; height: 44px; top: 6px; right: 6px; } }
+
+/* ---- Phase 9 : Pause de l'analyse multiple ---- */
+#batch-progress #batch-pause { background: #3a3835; border: 1px solid #55524d; color: var(--text); font-weight: 600; }
+#batch-progress #batch-pause[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #14200a; font-weight: 800; }
+#batch-progress #batch-stop { background: transparent; border: 0; color: var(--danger-text); font-weight: 600; padding: 0 8px; }
+#batch-progress[data-paused="1"] { box-shadow: inset 3px 0 0 var(--warning); }
+@media (max-width: 760px) { #batch-progress { flex-wrap: wrap; } #batch-progress .bs-main { flex: 1 1 100%; } #batch-progress #batch-pause { flex: 1; } #batch-progress #batch-stop { flex: 0 0 auto; } }

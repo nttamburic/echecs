@@ -253,14 +253,22 @@ function renderBatch() {
   const el = $('#batch-progress');
   el.classList.toggle('hidden', !b);
   if (!b) return;
+  el.dataset.paused = b.paused ? '1' : '';
   const c = b.cur;
-  const paused = S.g && S.g !== c;
+  const paused = b.paused || (S.g && S.g !== c);
   const eta = b.done >= 1 ? Math.max(1, Math.round(((Date.now() - b.t0) / b.done) * (b.total - b.done) / 60000)) : 0;
-  const detail = paused ? 'en pause pendant que vous consultez une partie'
+  const detail = b.paused ? 'en pause — touchez « Reprendre » pour continuer'
+    : paused ? 'en pause pendant que vous consultez une partie'
     : `${b.label}, profondeur ${b.depth}${b.movetime ? `, ${b.movetime / 1000} s max` : ''}${c ? ` · en cours : ${c.game.white.name} – ${c.game.black.name} (${c.positions.filter(Boolean).length}/${c.moves.length} coups)` : ''}`;
   el.innerHTML = `<span class="bs-main"><strong>Analyse ${b.done} / ${b.total}</strong>${eta && !paused ? ` <span class="muted">· ≈ ${eta} min</span>` : ''}
     <span class="bs-bar" aria-hidden="true"><span style="width:${(100 * b.done / Math.max(1, b.total)).toFixed(1)}%"></span></span>
-    <span class="muted bs-detail">${esc(detail)}</span></span><button type="button" id="batch-stop" class="btn small">Arrêter</button>`;
+    <span class="muted bs-detail">${esc(detail)}</span></span><button type="button" id="batch-pause" class="btn small" aria-pressed="${!!b.paused}">${b.paused ? 'Reprendre' : 'Pause'}</button><button type="button" id="batch-stop" class="btn small">Arrêter</button>`;
+  $('#batch-pause').onclick = () => {
+    b.paused = !b.paused;
+    // en pause, la partie en cours s'arrête là (ce qui est analysé est conservé) ; à la reprise elle repart de ces coups
+    if (b.paused && b.cur) b.cur.abort = true;
+    renderBatch();
+  };
   $('#batch-stop').onclick = openMultiDialog;
 }
 
@@ -309,13 +317,14 @@ async function analyzeMany(period, depth, movetime, label, shownDepth) {
   renderBatch();
   try {
     while (!b.stop) {
-      while (S.g && !b.stop) await new Promise((r) => setTimeout(r, 1000)); // pause pendant la consultation d'une partie
+      while ((S.g || b.paused) && !b.stop) await new Promise((r) => setTimeout(r, b.paused ? 300 : 1000)); // pause demandée, ou consultation d'une partie
       if (b.stop) break;
       const game = S.games.find((x) => queue.has(x.id) && needsAnalysis(x) && !b.failed.has(x.id));
       if (!game) break;
       const saved = await store.get('analysis', game.id).catch(() => null);
       let g;
       try { g = prepareGame(game.id, game, saved); } catch { b.failed.add(game.id); continue; }
+      if (b.paused || b.stop) continue; // pause ou arrêt demandés pendant la lecture de la partie
       g.depth = depth;
       g.movetime = movetime;
       b.cur = g;
