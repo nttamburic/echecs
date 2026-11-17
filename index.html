@@ -53,31 +53,35 @@
   <span>Vous êtes hors ligne. Vos modifications restent sur cet appareil et seront synchronisées au retour de la connexion.</span>
 </div>
 <main id="home-view" class="view page">
-  <section class="card">
-    <div class="row between">
-      <h1>Historique des parties <span id="hist-user" class="muted"></span></h1>
-      <div class="stack">
-        <button id="load" class="btn">Actualiser</button>
-        <button id="clear-hist" class="btn danger">Effacer l'historique</button>
-      </div>
+  <header class="hist-head">
+    <div>
+      <h1>Historique des parties</h1>
+      <p class="hist-sub muted">chess.com<span id="hist-user"></span></p>
     </div>
-    <p id="hist-nouser" class="hidden">Indiquez d'abord votre pseudo chess.com dans <a href="#/settings/profile">Paramètres → Profil chess.com</a>.</p>
-    <p id="load-progress" class="muted small">Seules les parties terminées sont récupérées (jamais une partie en cours).</p>
+    <div class="stack">
+      <button id="multi" class="btn primary" disabled>Analyse multiple</button>
+      <button id="load" class="btn">Actualiser</button>
+      <button id="clear-hist" class="btn danger">Effacer l'historique</button>
+    </div>
+  </header>
+  <p id="hist-nouser" class="hidden">Indiquez d'abord votre pseudo chess.com dans <a href="#/settings/profile">Paramètres → Profil chess.com</a>.</p>
+  <p id="load-progress" class="muted small">Seules les parties terminées sont récupérées (jamais une partie en cours).</p>
+  <section class="card hist-filters" aria-label="Filtres">
+    <div class="fcol grow"><label for="filter" class="lbl-up">Adversaire</label>
+      <input id="filter" type="search" placeholder="Rechercher un pseudo" autocomplete="off"></div>
+    <div class="fcol grow2"><span class="lbl-up" id="lbl-cad">Cadence</span>
+      <div id="tc" class="segctl" role="group" aria-labelledby="lbl-cad">
+        <button class="chip" data-tc="" aria-pressed="true">Toutes</button>
+        <button class="chip" data-tc="bullet" aria-pressed="false">Bullet</button>
+        <button class="chip" data-tc="blitz" aria-pressed="false">Blitz</button>
+        <button class="chip" data-tc="rapid" aria-pressed="false">Rapide</button>
+        <button class="chip" data-tc="daily" aria-pressed="false">Par jour</button>
+      </div></div>
+    <div class="fcol grow"><label for="op" class="lbl-up">Ouverture</label>
+      <select id="op" title="Ouverture jouée (parties analysées)"><option value="">Toutes les ouvertures</option></select></div>
+    <span id="count" class="muted fcount" role="status" aria-live="polite"></span>
   </section>
-  <section class="card">
-    <div class="row filters">
-      <input id="filter" type="search" placeholder="Filtrer par adversaire" aria-label="Filtrer par adversaire" autocomplete="off">
-      <select id="op" title="Ouverture jouée (parties analysées)" aria-label="Ouverture jouée"><option value="">Toutes ouvertures</option></select>
-      <span id="count" class="muted" role="status" aria-live="polite"></span>
-      <button id="multi" class="btn push-right" disabled>Analyse multiple</button>
-    </div>
-    <div id="tc" class="chips" role="group" aria-label="Cadence">
-      <button class="chip" data-tc="" aria-pressed="true">Toutes</button>
-      <button class="chip" data-tc="bullet" aria-pressed="false">Bullet</button>
-      <button class="chip" data-tc="blitz" aria-pressed="false">Blitz</button>
-      <button class="chip" data-tc="rapid" aria-pressed="false">Rapide</button>
-      <button class="chip" data-tc="daily" aria-pressed="false">Par jour</button>
-    </div>
+  <section class="card hist-table">
     <p id="batch-progress" class="small hidden" role="status"></p>
     <div class="table-wrap">
     <table id="games" role="table" aria-label="Historique des parties">

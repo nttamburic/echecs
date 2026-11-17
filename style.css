@@ -837,3 +837,28 @@ button.link { background: none; border: 0; padding: 0; font: inherit; color: var
 .linkbtn { background: none; border: 0; color: var(--link); font: inherit; font-size: 14px; font-weight: 600; text-decoration: underline; cursor: pointer; min-height: var(--tap); }
 @media (hover: hover) { .linkbtn:hover { color: var(--link-hover); } }
 @media (max-width: 760px) { #play-view.is-setup #play-panel { flex: none; max-width: none; } }
+
+/* ---- Phase 9 : Historique ---- */
+#home-view { max-width: 1040px; }
+.hist-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 0 0 16px; }
+.hist-head h1 { margin: 0; font-size: var(--fs-title); line-height: var(--lh-title); }
+.hist-sub { margin: 4px 0 0; font-size: 14px; }
+.hist-head .stack { display: flex; flex-wrap: wrap; gap: 8px; }
+.hist-head .btn { min-height: 44px; padding: 0 16px; }
+.hist-head .btn.primary { box-shadow: 0 3px 0 var(--accent-press); }
+.hist-head .btn.danger { background: transparent; border: 1px solid #6b2a22; color: var(--danger-text); }
+.hist-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; padding: 14px 16px; }
+.hist-filters .fcol { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hist-filters .grow { flex: 1 1 220px; } .hist-filters .grow2 { flex: 1 1 300px; }
+.hist-filters input, .hist-filters select { height: 44px; box-sizing: border-box; background: var(--bg); border: 1px solid #55524d; border-radius: var(--r); color: var(--text); padding: 0 12px; font-size: 15px; width: 100%; }
+.hist-filters .fcount { display: flex; align-items: center; height: 44px; font-size: 14px; }
+.segctl { display: flex; background: var(--bg); border-radius: var(--r); padding: 3px; gap: 3px; }
+.segctl .chip { flex: 1; min-height: 38px; border: 0; border-radius: 4px; background: transparent; color: #c9c6c0; font-size: 14px; font-weight: 600; padding: 0 6px; white-space: nowrap; }
+.segctl .chip[aria-pressed="true"] { background: #45423e; color: var(--text-strong); font-weight: 700; }
+@media (hover: hover) { .segctl .chip:hover { background: var(--surface-2); } .segctl .chip[aria-pressed="true"]:hover { background: #45423e; } }
+.hist-table { padding: 0; overflow: hidden; }
+.hist-table #games { margin-top: 0; }
+.hist-table #games th { padding: 12px 16px; font-size: var(--fs-label); text-transform: uppercase; letter-spacing: .04em; border-bottom: 0; }
+.hist-table #games td { padding: 0 16px; height: 48px; border-top: 1px solid var(--surface-2); border-bottom: 0; }
+.hist-table #more { margin: 12px auto; display: block; min-height: 44px; padding: 0 20px; }
+@media (max-width: 760px) { .hist-table { background: transparent; } .hist-table #games td { height: auto; border-top: 0; padding: 0; } }

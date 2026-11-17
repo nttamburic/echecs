@@ -64,7 +64,7 @@ export async function changeUser(user) {
 
 function showUser() {
   const has = !!S.user;
-  $('#hist-user').textContent = has ? S.user : '';
+  $('#hist-user').textContent = has ? ' · ' + S.user : '';
   $('#hist-nouser').classList.toggle('hidden', has);
   $('#load').classList.toggle('hidden', !has);
   $('#clear-hist').classList.toggle('hidden', !has);
