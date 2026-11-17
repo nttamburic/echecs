@@ -1,14 +1,14 @@
 // Service worker : permet d'installer l'appli et de l'ouvrir hors connexion.
 // - code de l'appli : réseau d'abord (toujours la dernière version), cache si hors ligne ;
 // - gros fichiers qui ne changent pas (moteur, pièces, ouvertures) : cache d'abord.
-const VERSION = 'v20';
+const VERSION = 'v21';
 const CACHE = 'echecs-' + VERSION;
 const SHELL = [
   './', 'index.html', 'style.css', 'main.js', 'manifest.webmanifest',
   'analysis.js', 'explain.js', 'board.js',
   'core/ui.js', 'core/engine.js', 'core/store.js', 'core/sync.js', 'core/chesscom.js', 'core/srs.js', 'core/lichess.js',
   'modules/analyse.js', 'modules/settings.js', 'modules/soon.js', 'modules/play.js', 'modules/setup.js',
-  'modules/openings.js', 'modules/openings-ui.js', 'modules/openings-train.js',
+  'modules/openings.js', 'modules/openings-ui.js', 'modules/openings-train.js', 'modules/openings-coverage.js',
   'core/maia.js', 'core/maia-worker.js',
   'vendor/chess.js', 'vendor/stockfish/stockfish-19-lite-single.js', 'vendor/stockfish/stockfish-19-lite-single.wasm',
   'openings.json', 'icons/icon-192.png', 'icons/icon-512.png',

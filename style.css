@@ -489,3 +489,16 @@ a.btn { text-decoration: none; }
 }
 .rep-info .due { color: var(--warn); font-weight: 700; }
 .train-mode.due-mode { box-shadow: inset 3px 0 0 var(--accent); }
+#rep-coverage { padding: 8px 14px; border-bottom: 1px solid var(--line); font-size: 14px; }
+#rep-coverage:empty { display: none; }
+.cov-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.cov-row .btn { margin-left: auto; }
+.cov-bar { display: inline-block; width: 70px; height: 7px; background: var(--panel2); border-radius: var(--r-sm); overflow: hidden; vertical-align: middle; }
+.cov-bar i { display: block; height: 100%; background: var(--accent); }
+.cov-gaps { margin-top: 6px; }
+.cov-gaps summary { color: var(--link); }
+.cov-gaps ol { margin: 6px 0 0; padding-left: 22px; }
+.cov-gaps li { margin: 3px 0; }
+button.link { background: none; border: 0; padding: 0; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+@media (hover: hover) { button.link:hover { text-decoration: underline; } }
+.cov-mini .cov-bar { width: 48px; height: 6px; }

@@ -17,6 +17,7 @@ import {
   findSuggestions, applySuggestion, pathTo, SUGGEST_MIN, importPgn,
 } from './openings.js';
 import { Chess } from '../vendor/chess.js';
+import { coverageOf, cachedCoverage, covN, THRESHOLDS, pct } from './openings-coverage.js';
 import { classifyGame, CLASSES, fmtScore, winPct } from '../analysis.js';
 
 const SVG_GEAR = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
@@ -80,7 +81,7 @@ export async function renderHome(el) {
   <div class="rep-list">${reps.length ? reps.map((r) => `
     <a class="card rep-card" href="#/openings/${esc(r.id)}">
       <span class="avatar-sm ${r.color}"><img src="pieces/${r.color}K.svg" alt=""></span>
-      <span class="rep-info"><b>${esc(r.name)}</b><span class="muted small">${colorFr(r.color)} · ${plural(reachableEdges(r).length, 'coup')}${dueLabel(r, events, reps)}</span>
+      <span class="rep-info"><b>${esc(r.name)}</b><span class="muted small">${colorFr(r.color)} · ${plural(reachableEdges(r).length, 'coup')}${dueLabel(r, events, reps)}<span class="cov-mini" data-cov="${esc(r.id)}"></span></span>
         <span class="mst-row small">${summaryHtml(masterySummary(computeMastery(r, events, reps)))}</span></span>
       <button class="btn small danger" data-del="${esc(r.id)}" title="Supprimer ce répertoire">Supprimer</button>
     </a>`).join('') : '<p class="muted">Aucun répertoire pour le moment. Créez-en un, puis jouez vos coups sur l\'échiquier.</p>'}</div>
@@ -117,6 +118,7 @@ export async function renderHome(el) {
   </form></dialog>`;
   bindImport(el);
   if (reps.length) renderSuggestions($('#sugg-box', el), reps);
+  homeCoverage(el, reps);
   const pickRep = $('#train-pick', el);
   if (pickRep) $('#train-rep', el).onclick = () => { location.hash = '#/openings/train/rep/' + encodeURIComponent(pickRep.value); };
   const styleSel = $('#train-style', el);
@@ -275,6 +277,25 @@ async function renderSuggestions(box, reps) {
   });
 }
 
+// Couverture sur chaque fiche de répertoire : affichée tout de suite si elle est déjà calculée,
+// sinon calculée en tâche de fond, un répertoire après l'autre (sans jeton Lichess : rien).
+async function homeCoverage(el, reps) {
+  if (!lichessCfg.connected) return;
+  const show = (r, res) => {
+    const span = el.querySelector(`[data-cov="${CSS.escape(r.id)}"]`);
+    if (span && res && !res.unavailable) span.innerHTML = ` · <span class="cov-bar"><i style="width:${Math.round(res.coverage * 100)}%"></i></span> ${pct(res.coverage)} couvert${res.gaps.length ? `, ${plural(res.gaps.length, 'trou')}` : ''}`;
+  };
+  for (const r of reps) show(r, cachedCoverage(r));
+  for (const r of reps) {
+    if (cachedCoverage(r)) continue;
+    const span = el.querySelector(`[data-cov="${CSS.escape(r.id)}"]`);
+    if (span) span.textContent = ' · couverture : calcul…';
+    const res = await coverageOf(r);
+    if (!el.isConnected || document.body.dataset.view !== 'openings') return;
+    show(r, res);
+  }
+}
+
 // « · 3 à revoir » sur la fiche d'un répertoire (rien si aucune carte n'est due).
 function dueLabel(r, events, reps) {
   const s = cardsSummary(computeCards(r, events, reps));
@@ -329,6 +350,7 @@ function buildEditor(el) {
     </div>
     <div class="popening" id="rep-opening"></div>
     <div id="rep-suggest" class="rsugg hidden"></div>
+    <div id="rep-coverage"></div>
     <div id="rep-mastery"></div>
     <div class="pmoves rtree" id="rep-moves"></div>
     <div class="exp">
@@ -360,6 +382,7 @@ function buildEditor(el) {
     <div data-epane="ui" class="hidden">
       <div class="frow"><label for="rep-arrow">Meilleur coup (flèche verte)</label><select id="rep-arrow"><option value="1">Activé</option><option value="0">Désactivé</option></select></div>
       <div class="frow"><label for="rep-bar">Barre d'évaluation</label><select id="rep-bar"><option value="1">Activée</option><option value="0">Désactivée</option></select></div>
+      <div class="frow"><label for="rep-cov">Couverture : préparer les positions vues dans</label><select id="rep-cov">${THRESHOLDS.map((n) => `<option value="${n}">1 partie sur ${n}</option>`).join('')}</select></div>
       <p class="muted small">La flèche montre le meilleur coup de la position affichée. La barre, à gauche de l'échiquier, donne l'évaluation de Stockfish (du point de vue des Blancs).</p>
     </div>
     <div data-epane="eng" class="hidden">
@@ -393,6 +416,7 @@ function buildEditor(el) {
     dlg.querySelectorAll('#exp-speeds input').forEach((i) => { i.checked = ss.includes(i.value); });
     $('#rep-arrow', el).value = repOn('repArrow') ? '1' : '0';
     $('#rep-bar', el).value = repOn('repBar') ? '1' : '0';
+    $('#rep-cov', el).value = String(covN());
     engF = engineFields($('#rep-eng-fields', el), 'oeng');
     showPane('lichess');
     dlg.returnValue = '';
@@ -406,6 +430,7 @@ function buildEditor(el) {
     local.set('expSpeeds', JSON.stringify(ss.length ? ss : SPEEDS.map(([k]) => k)));
     local.set('repArrow', $('#rep-arrow', el).value);
     local.set('repBar', $('#rep-bar', el).value);
+    local.set('covThreshold', $('#rep-cov', el).value);
     if (pane === 'lichess') { E.db = 'lichess'; local.set('expDb', E.db); }
     if (engF) { await engF.save(); E.eng = null; E.engPending = null; }
     render();
@@ -521,6 +546,63 @@ async function deleteNode(n) {
   render();
   rescanSoon();
   toast(more ? `${label} et ${plural(more, 'coup')} supprimés.` : `${label} supprimé.`);
+}
+
+// ------------------------------------------------------------------ couverture et trous
+// Calculée en tâche de fond (explorateur Lichess, cache de 30 jours), recalculée quand le
+// répertoire, le seuil ou les filtres changent. Voir openings-coverage.js.
+function renderCoverage() {
+  const box = $('#rep-coverage');
+  if (!box || !E.rep) return;
+  if (!lichessCfg.connected) {
+    box.innerHTML = '<div class="muted small">Couverture et trous : enregistrez un jeton Lichess (Paramètres → Connexion) pour les calculer.</div>';
+    return;
+  }
+  const res = cachedCoverage(E.rep);
+  if (!res) {
+    box.innerHTML = `<div class="muted small">Couverture : calcul en cours${E.covProgress ? ` (${E.covProgress} positions)` : ''}…</div>`;
+    // coverageOf ne relance pas un calcul déjà en cours pour le même répertoire, et abandonne celui
+    // d'une version précédente : on peut l'appeler à chaque rendu.
+    const rep = E.rep;
+    coverageOf(rep, { onProgress: (done) => { E.covProgress = done; if (E.rep === rep && !cachedCoverage(rep)) { const t = box.querySelector('.muted'); if (t) t.textContent = `Couverture : calcul en cours (${done} positions)…`; } } })
+      .then((r) => { E.covProgress = 0; if (r && E.rep === rep && cachedCoverage(rep)) renderCoverage(); });
+    return;
+  }
+  if (res.unavailable) { box.innerHTML = ''; return; }
+  const gaps = res.gaps.slice(0, 5);
+  const gapLine = (g) => {
+    const moves = sanLine(g.path.map((e) => e.san));
+    const opp = g.opp ? `${g.path.length % 2 === 0 ? (Math.floor(g.path.length / 2) + 1) + '.' : (Math.floor(g.path.length / 2) + 1) + '…'}${frSan(g.opp.san)}` : '';
+    return `${esc([moves, opp].filter(Boolean).join(' ')) || 'Position de départ'} <span class="muted">· ${pct(g.p)}${g.opp ? '' : ', ligne qui s’arrête'}</span>`;
+  };
+  box.innerHTML = `<div class="cov-row"><span class="cov-bar"><i style="width:${Math.round(res.coverage * 100)}%"></i></span>
+      <b>${pct(res.coverage)}</b> <span class="muted small">couvert (positions vues dans 1 partie sur ${res.n})</span>
+      ${gaps.length ? '<button type="button" class="btn small" id="cov-go">Aller au plus gros trou</button>' : ''}</div>
+    ${gaps.length ? `<details class="cov-gaps"><summary class="small">${plural(res.gaps.length, 'trou')}, les plus fréquents</summary><ol>${gaps.map((g, i) => `<li><button type="button" class="link" data-gap="${i}">${gapLine(g)}</button></li>`).join('')}</ol></details>` : '<div class="muted small">Aucun trou au-dessus du seuil.</div>'}`;
+  const goBtn = $('#cov-go', box);
+  if (goBtn) goBtn.onclick = () => goToGap(gaps[0]);
+  box.querySelectorAll('[data-gap]').forEach((b) => { b.onclick = () => goToGap(gaps[+b.dataset.gap]); });
+}
+
+// Se place sur un trou : on suit le chemin du répertoire, puis on joue le coup adverse manquant
+// (il est ajouté au répertoire, comme un coup joué sur l'échiquier) ; reste à jouer la réponse.
+async function goToGap(g) {
+  if (!g || !E.rep) return;
+  const edges = new Set(E.rep.edges);
+  if (!g.path.every((e) => edges.has(e))) {
+    // le répertoire a changé depuis le calcul : on retrouve le chemin par les positions
+    const p = pathTo(E.rep, E.rep.root, g.epd, true);
+    if (!p) { toast('Ce trou n’existe plus : la couverture va être recalculée.'); render(); return; }
+    g = { ...g, path: p };
+  }
+  E.path = [...g.path];
+  E.k = E.path.length;
+  if (g.opp) {
+    await playMove(g.opp.uci);
+    E.gap = { epd: curEpd(), p: g.p };
+  } else E.gap = { epd: g.epd, p: g.p };
+  render();
+  $('#rep-board').scrollIntoView({ block: 'nearest' });
 }
 
 // ------------------------------------------------------------------ maîtrise (affichage)
@@ -710,14 +792,19 @@ function render() {
     sg.innerHTML = `💡 <b>Position à enrichir.</b> Vous y avez fait ${plural(E.focus.errors.length, 'faute')} (vous avez joué ${esc(played)}).`
       + `${E.focus.best ? ` La flèche verte montre le meilleur coup selon l'analyse : <b>${esc(frSan(uciToSan(curEpd(), E.focus.best)))}</b>.` : ''} Jouez sur l'échiquier le coup à ajouter, ou choisissez-le dans l'explorateur.`;
     sg.classList.remove('hidden');
+  } else if (E.gap && curEpd() === E.gap.epd && !childrenOf(E.rep, curEpd()).length) {
+    sg.innerHTML = `🕳️ <b>Trou dans le répertoire</b> : cette position arrive dans ${pct(E.gap.p)} de vos parties (à votre niveau) et vous n'y avez pas de coup. Jouez votre réponse sur l'échiquier, ou choisissez-la dans l'explorateur.`;
+    sg.classList.remove('hidden');
   } else {
     if (E.focus && !atFocus && E.k > 0 && childrenOf(E.rep, E.focus.epd).length) E.focus = null; // coup ajouté : suggestion traitée
+    if (E.gap && childrenOf(E.rep, E.gap.epd).length) E.gap = null; // trou bouché
     sg.classList.add('hidden');
   }
   $('#rep-train').href = '#/openings/train/rep/' + encodeURIComponent(E.rep.id);
   $('#rep-title').innerHTML =`<span class="avatar-sm ${E.rep.color}"><img src="pieces/${E.rep.color}K.svg" alt=""></span>${esc(E.rep.name)}`;
   $('#rep-opening').textContent = E.k === 0 ? 'Position de départ' : openingName() || 'Ouverture inconnue';
   refreshMastery();
+  renderCoverage();
   renderMastery();
   renderTree();
   updateEngine();
