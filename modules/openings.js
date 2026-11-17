@@ -479,3 +479,46 @@ async function doScan(games, user, now) {
   }
   return added;
 }
+
+// ------------------------------------------------------------------ performance par position
+// Pour chaque position du répertoire : nombre de parties récentes (WINDOW_DAYS jours, chess.com et
+// Lichess) passées par là avec la couleur du répertoire, et leur résultat. sets : [{ games, user }].
+// Renvoie Map EPD → { n, w, d, l, score } (score de 0 à 1 du point de vue de l'utilisateur).
+export function gameScore(g, color) {
+  const m = /\[Result "([^"]+)"\]/.exec(g.pgn || '');
+  const r = m ? m[1] : g.result;
+  if (r === '1-0') return color === 'w' ? 1 : 0;
+  if (r === '0-1') return color === 'b' ? 1 : 0;
+  if (r === '1/2-1/2') return 0.5;
+  return null;
+}
+export function computePerformance(rep, sets, now = Date.now()) {
+  const root = epd(rep.root);
+  const pos = new Set([root, ...reachableEdges(rep).map((e) => e.fenAfter)]);
+  const out = new Map();
+  const from = now - WINDOW_DAYS * 86400000;
+  const done = new Set();
+  for (const { games, user } of sets) {
+    if (!user || !games) continue;
+    const me = user.toLowerCase();
+    for (const g of games) {
+      if (done.has(g.id) || !g.end || g.end * 1000 < from || !g.pgn) continue;
+      const color = (g.white && g.white.name || '').toLowerCase() === me ? 'w' : (g.black && g.black.name || '').toLowerCase() === me ? 'b' : null;
+      if (color !== rep.color) continue;
+      const s = gameScore(g, color);
+      if (s == null) continue;
+      const moves = movesOf(g);
+      if (!moves.length || moves[0].before !== root) continue;
+      done.add(g.id);
+      const seen = new Set(moves.map((m) => m.before).filter((p) => pos.has(p)));
+      for (const p of seen) {
+        let st = out.get(p);
+        if (!st) { st = { n: 0, w: 0, d: 0, l: 0, score: 0 }; out.set(p, st); }
+        st.n++;
+        if (s === 1) st.w++; else if (s === 0) st.l++; else st.d++;
+        st.score = (st.w + st.d / 2) / st.n;
+      }
+    }
+  }
+  return out;
+}

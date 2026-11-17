@@ -7,14 +7,14 @@ import { epd } from '../analysis.js';
 import { figSan, BOOK, getGames, getUser, engineFields } from './analyse.js';
 import * as store from '../core/store.js';
 import { frSan, explainOpeningMove } from '../explain.js';
-import { lichessCfg, explore, expRatings, expSpeeds } from '../core/lichess.js';
+import { lichessCfg, explore, expRatings, expSpeeds, lichessGames, studyPgn } from '../core/lichess.js';
 import { analyzePosition, analysisSettings, maxTime, nLines, SOURCE_LABEL, onStatus } from '../core/engine.js';
 import {
   newRepertoire, addMove, childrenOf, reachableEdges, deleteMove, fenOf,
   listRepertoires, getRepertoire, saveRepertoire, deleteRepertoire,
   listEvents, computeMastery, masterySummary, scanGames, STATUS, EVT, REP, WINDOW_DAYS, MIN_SITUATIONS, THRESHOLD,
   computeCards, cardsSummary, NEW_PER_DAY,
-  findSuggestions, applySuggestion, pathTo, SUGGEST_MIN, importPgn,
+  findSuggestions, applySuggestion, pathTo, SUGGEST_MIN, importPgn, computePerformance,
 } from './openings.js';
 import { Chess } from '../vendor/chess.js';
 import { coverageOf, cachedCoverage, covN, THRESHOLDS, pct } from './openings-coverage.js';
@@ -40,13 +40,59 @@ function refreshMastery() {
   if (!reps.some((r) => r.id === E.rep.id)) reps.push(E.rep);
   E.mastery = computeMastery(E.rep, E.events, reps);
 }
+// Parties Lichess (compte lié au jeton) : chargées une fois par séance, puis parcourues comme
+// les parties chess.com (maîtrise) et comptées dans la performance.
+const LI = { games: [], promise: null, err: null, loaded: false };
+function loadLichess() {
+  if (!lichessCfg.user) return Promise.resolve([]);
+  if (LI.promise) return LI.promise;
+  LI.promise = lichessGames(lichessCfg.user, { days: WINDOW_DAYS })
+    .then(async (g) => {
+      const changed = g.length !== LI.games.length;
+      LI.games = g; LI.err = null; LI.loaded = true;
+      await scanGames(g, lichessCfg.user);
+      if (changed) refreshAfterLichess();
+      return g;
+    })
+    .catch((e) => { LI.err = e.message; LI.loaded = true; return LI.games; })
+    .finally(() => setTimeout(() => { LI.promise = null; }, 10 * 60000)); // nouvelle demande possible après 10 min
+  return LI.promise;
+}
+function refreshAfterLichess() {
+  if (document.body.dataset.view === 'openings') renderHome($('#openings-view'));
+  else if (E.rep && document.body.dataset.view === 'rep') render();
+}
+const perfSets = () => [{ games: getGames(), user: getUser() }, { games: LI.games, user: lichessCfg.user }];
+const perfMemo = new Map(); // id du répertoire → { key, map }
+function perfOf(rep) {
+  const key = `${rep.edges.length}|${rep.edges.map((e) => e.uci).join()}|${getGames().length}|${LI.games.length}`;
+  const m = perfMemo.get(rep.id);
+  if (m && m.key === key) return m.map;
+  const map = computePerformance(rep, perfSets());
+  perfMemo.set(rep.id, { key, map });
+  return map;
+}
+const perfShort = (st) => `${plural(st.n, 'partie')} · ${pct(st.score)}`;
+function perfLine(st) {
+  if (!getUser() && !lichessCfg.user) return '';
+  if (!st) return `Aucune de vos parties des ${WINDOW_DAYS} derniers jours n’est passée par cette position.`;
+  return `Vos parties ici (${WINDOW_DAYS} j) : <b>${plural(st.n, 'partie')}</b> · <span class="pf-w">+${st.w}</span> <span class="pf-d">=${st.d}</span> <span class="pf-l">−${st.l}</span> · score <b>${pct(st.score)}</b>`;
+}
+function lichessStatus() {
+  if (!lichessCfg.connected) return 'Connectez Lichess (Paramètres → Connexion) pour compter aussi vos parties Lichess.';
+  if (!lichessCfg.user) return '';
+  if (LI.err) return `Parties Lichess (${esc(lichessCfg.user)}) : ${esc(LI.err)}.`;
+  if (!LI.loaded) return `Parties Lichess (${esc(lichessCfg.user)}) : chargement…`;
+  return `Parties Lichess (${esc(lichessCfg.user)}) : ${plural(LI.games.length, 'partie')} sur ${WINDOW_DAYS} jours, comptées avec celles de chess.com.`;
+}
+
 // Après une modification du répertoire, les parties récentes sont reparcourues (une position
 // ajoutée peut avoir déjà été jouée), puis la maîtrise est recalculée.
 let rescanTimer = null;
 function rescanSoon() {
   clearTimeout(rescanTimer);
   rescanTimer = setTimeout(async () => {
-    const n = await scanGames(getGames(), getUser());
+    const n = (await scanGames(getGames(), getUser())) + (LI.games.length ? await scanGames(LI.games, lichessCfg.user) : 0);
     if (!E.rep) return;
     await loadMastery();
     if (n) render();
@@ -82,10 +128,11 @@ export async function renderHome(el) {
   <div class="rep-list">${reps.length ? reps.map((r) => `
     <a class="card rep-card" href="#/openings/${esc(r.id)}">
       <span class="avatar-sm ${r.color}"><img src="pieces/${r.color}K.svg" alt=""></span>
-      <span class="rep-info"><b>${esc(r.name)}</b><span class="muted small">${colorFr(r.color)} · ${plural(reachableEdges(r).length, 'coup')}${dueLabel(r, events, reps)}<span class="cov-mini" data-cov="${esc(r.id)}"></span></span>
+      <span class="rep-info"><b>${esc(r.name)}</b><span class="muted small">${colorFr(r.color)} · ${plural(reachableEdges(r).length, 'coup')}${dueLabel(r, events, reps)}${homePerf(r)}<span class="cov-mini" data-cov="${esc(r.id)}"></span></span>
         <span class="mst-row small">${summaryHtml(masterySummary(computeMastery(r, events, reps)))}</span></span>
       <button class="btn small danger" data-del="${esc(r.id)}" title="Supprimer ce répertoire">Supprimer</button>
     </a>`).join('') : '<p class="muted">Aucun répertoire pour le moment. Créez-en un, puis jouez vos coups sur l\'échiquier.</p>'}</div>
+  ${reps.length && lichessStatus() ? `<p class="muted small li-status">${lichessStatus()}</p>` : ''}
   ${reps.length ? '<section class="card sugg-box" id="sugg-box"><h2>Suggestions</h2><p class="muted small">Recherche des erreurs répétées dans vos parties analysées…</p></section>' : ''}
   ${reps.length ? trainBox(reps, events) : ''}
   <dialog id="rep-dlg" class="dlg"><form method="dialog">
@@ -103,6 +150,7 @@ export async function renderHome(el) {
     <p class="muted small">Toutes les variantes et sous-variantes sont importées. Plusieurs parties dans le même fichier sont réunies.</p>
     <div class="form">
       <label>Fichier PGN <input id="pgn-file" type="file" accept=".pgn,.txt,application/x-chess-pgn,text/plain"></label>
+      <label>ou lien d'étude Lichess <input id="pgn-study" placeholder="https://lichess.org/study/…" autocomplete="off" spellcheck="false"></label>
       <label>ou collez le texte <textarea id="pgn-text" rows="6" spellcheck="false" placeholder="1. e4 e5 2. Nf3 (2. Bc4) 2... Nc6 3. Bb5 *"></textarea></label>
       <label>Ajouter dans <select id="pgn-target"><option value="">Un nouveau répertoire</option>${reps.map((r) => `<option value="${esc(r.id)}">${esc(r.name)} (${colorFr(r.color)})</option>`).join('')}</select></label>
     </div>
@@ -118,6 +166,7 @@ export async function renderHome(el) {
     <div class="row end"><button value="cancel" class="btn">Annuler</button><button id="pgn-go" value="ok" class="btn primary">Importer</button></div>
   </form></dialog>`;
   bindImport(el);
+  if (reps.length && !LI.loaded) loadLichess();
   if (reps.length) renderSuggestions($('#sugg-box', el), reps);
   homeCoverage(el, reps);
   const pickRep = $('#train-pick', el);
@@ -169,7 +218,7 @@ function bindImport(el) {
   const target = $('#pgn-target', el);
   target.onchange = () => $('#pgn-new', el).classList.toggle('hidden', !!target.value);
   $('#rep-import', el).onclick = () => {
-    $('#pgn-file', el).value = ''; $('#pgn-text', el).value = ''; $('#pgn-err', el).textContent = '';
+    $('#pgn-file', el).value = ''; $('#pgn-text', el).value = ''; $('#pgn-study', el).value = ''; $('#pgn-err', el).textContent = '';
     dlg.showModal();
   };
   $('#pgn-go', el).onclick = async (e) => {
@@ -181,10 +230,21 @@ function bindImport(el) {
       if (file.size > 5 * 1048576) { err.textContent = 'Fichier trop gros (5 Mo au maximum).'; return; }
       text = await file.text();
     }
-    if (!text.trim()) { err.textContent = 'Choisissez un fichier PGN ou collez le texte.'; return; }
+    const link = $('#pgn-study', el).value.trim();
+    let studyName = '';
+    if (!file && !text.trim() && link) {
+      const go = $('#pgn-go', el);
+      err.textContent = 'Téléchargement de l’étude…';
+      go.disabled = true;
+      try { text = await studyPgn(link); } catch (x) { err.textContent = x.message + '.'; return; } finally { go.disabled = false; }
+      err.textContent = '';
+      const sn = /\[StudyName "([^"]*)"\]/.exec(text);
+      studyName = sn ? sn[1] : '';
+    }
+    if (!text.trim()) { err.textContent = 'Choisissez un fichier PGN, collez un lien d’étude ou le texte.'; return; }
     let rep = target.value ? await getRepertoire(target.value) : null;
     const isNew = !rep;
-    if (isNew) rep = newRepertoire({ name: $('#pgn-name', el).value.trim() || (file ? file.name.replace(/\.[^.]+$/, '') : `Répertoire ${colorFr(color)}`), color });
+    if (isNew) rep = newRepertoire({ name: $('#pgn-name', el).value.trim() || (file ? file.name.replace(/\.[^.]+$/, '') : studyName || `Répertoire ${colorFr(color)}`), color });
     const r = importPgn(rep, text);
     if (!r.added && isNew) {
       err.textContent = r.errors.length ? `Aucun coup d'échecs reconnu dans ce texte (premier coup refusé : « ${r.errors[0]} »).` : 'Aucun coup trouvé dans ce PGN.';
@@ -281,6 +341,10 @@ async function renderSuggestions(box, reps) {
 
 // Couverture sur chaque fiche de répertoire : affichée tout de suite si elle est déjà calculée,
 // sinon calculée en tâche de fond, un répertoire après l'autre (sans jeton Lichess : rien).
+function homePerf(r) {
+  const st = perfOf(r).get(epd(r.root));
+  return st ? ` · <span title="Vos parties des ${WINDOW_DAYS} derniers jours avec ce répertoire : +${st.w} =${st.d} −${st.l}">${perfShort(st)}</span>` : '';
+}
 async function homeCoverage(el, reps) {
   if (!lichessCfg.connected) return;
   const show = (r, res) => {
@@ -352,6 +416,7 @@ function buildEditor(el) {
       <span class="ptitle" id="rep-title"></span>
     </div>
     <div class="popening" id="rep-opening"></div>
+    <div class="rperf small muted" id="rep-perf"></div>
     <div id="rep-suggest" class="rsugg hidden"></div>
     <div id="rep-coverage"></div>
     <div id="rep-mastery"></div>
@@ -473,6 +538,7 @@ export async function openRepertoire(el, id) {
   } else E.focus = null;
   await loadMastery();
   render();
+  if (!LI.loaded) loadLichess();
 }
 export function leaveRepertoire() { E.rep = null; E.expSeq++; }
 
@@ -683,6 +749,7 @@ function renderTree() {
   const owner = new Map([[epd(rep.root), null]]);
   (function own(p) { for (const e of childrenOf(rep, p)) if (!owner.has(e.fenAfter)) { owner.set(e.fenAfter, e); own(e.fenAfter); } })(epd(rep.root));
   const cur = E.k ? E.path[E.k - 1] : null;
+  const perf = perfOf(rep);
   const active = new Set(reachableEdges(rep, true)); // coups entraînés (hors coups désactivés et leur suite)
   // vrai si prefix est le début de la ligne suivie (pour ne surligner que celle-ci)
   const onLine = (prefix) => prefix.length < E.k && prefix.every((e, i) => E.path[i] === e);
@@ -696,8 +763,10 @@ function renderTree() {
     let cls = m && !off ? ` mine st-${m.status}` : off && e.fenBefore.split(' ')[1] === rep.color ? ' mine' : '';
     if (off) cls += ' off';
     if (onLine(prefix) && E.path[prefix.length] === e) cls += e === cur && prefix.length === E.k - 1 ? ' cur' : ' onpath';
-    const tip = off ? ` title="${e.disabled ? 'Coup désactivé' : 'Suite d\'un coup désactivé'} : ni entraîné ni compté dans la maîtrise"`
-      : m ? ` title="${esc(masteryTip(m))}"` : '';
+    const pf = perf.get(e.fenAfter);
+    const tipTxt = [off ? `${e.disabled ? 'Coup désactivé' : 'Suite d’un coup désactivé'} : ni entraîné ni compté dans la maîtrise` : m ? masteryTip(m) : '',
+      pf ? `Vos parties après ce coup : ${perfShort(pf)} (+${pf.w} =${pf.d} −${pf.l})` : ''].filter(Boolean).join('\n');
+    const tip = tipTxt ? ` title="${esc(tipTxt)}"` : '';
     const note = e.note ? `<span class="rnote" title="${esc(e.note)}" aria-label="Note">✎</span>` : '';
     return `${num}<span class="rm${cls}" role="button" tabindex="0" data-n="${n}"${tip}>${figSan(e.san, white ? 'w' : 'b')}${note}</span> `;
   };
@@ -841,6 +910,7 @@ function render() {
   $('#rep-train').href = '#/openings/train/rep/' + encodeURIComponent(E.rep.id);
   $('#rep-title').innerHTML =`<span class="avatar-sm ${E.rep.color}"><img src="pieces/${E.rep.color}K.svg" alt=""></span>${esc(E.rep.name)}`;
   $('#rep-opening').textContent = E.k === 0 ? 'Position de départ' : openingName() || 'Ouverture inconnue';
+  $('#rep-perf').innerHTML = perfLine(perfOf(E.rep).get(curEpd()));
   refreshMastery();
   renderCoverage();
   renderMastery();

@@ -194,6 +194,9 @@ a.btn { text-decoration: none; }
 .lfoot { padding: 2px 14px 6px; }
 
 #opening, .popening { padding: 8px 14px; font-size: 14px; color: #d0cdc8; background: #262522; border-bottom: 1px solid var(--line); }
+.rperf { padding: 4px 14px 6px; background: #262522; border-bottom: 1px solid var(--line); }
+.rperf:empty { display: none; }
+.pf-w { color: var(--accent); } .pf-l { color: #e57373; } .pf-d { color: var(--muted); }
 #moves, .pmoves { flex: 1 1 240px; min-height: 240px; overflow-y: auto; font-size: 15px; }
 .pad { padding: 10px 14px; margin: 0; }
 .mrow { display: grid; grid-template-columns: 46px 1fr 1fr; align-items: center; }

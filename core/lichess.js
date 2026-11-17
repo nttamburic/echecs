@@ -126,3 +126,63 @@ export async function moveFrequencies(fen, { background = false } = {}) {
     return shape(await explore('masters', fen, { background }), 'masters');
   } catch { return null; }
 }
+
+// ------------------------------------------------------------------ parties de l'utilisateur
+// Parties Lichess terminées des `days` derniers jours, au format des parties chess.com
+// ({ id: 'li-…', end (s), pgn, white/black: { name, rating, result } }). Gardées sur l'appareil ;
+// seules les parties plus récentes que la dernière connue sont redemandées (au plus toutes les 10 min).
+const LG_REFRESH = 10 * 60000;
+function slimLichess(g) {
+  if (!g || g.variant !== 'standard' || !g.pgn || !g.lastMoveAt || !g.players) return null;
+  const res = /\[Result "([^"]+)"\]/.exec(g.pgn);
+  if (!res || res[1] === '*') return null;
+  const pl = (c) => {
+    const p = g.players[c] || {};
+    return { name: (p.user && p.user.name) || 'Anonyme', rating: p.rating, result: g.winner ? (g.winner === c ? 'win' : 'lose') : 'agreed' };
+  };
+  return { id: 'li-' + g.id, url: `${LICHESS}/${g.id}`, end: Math.floor(g.lastMoveAt / 1000), timeClass: g.speed, rated: g.rated,
+    white: pl('white'), black: pl('black'), result: res[1], pgn: g.pgn, source: 'lichess' };
+}
+export async function lichessGames(user = lichessCfg.user, { days = 90, force = false } = {}) {
+  if (!user) return [];
+  const key = 'ligames|' + user.toLowerCase();
+  let saved = null;
+  try { saved = await store.cacheGet(key); } catch { /* base indisponible */ }
+  saved = saved || { games: [], last: 0, fetchedAt: 0 };
+  const from = Date.now() - days * 86400000;
+  const keep = (list) => list.filter((g) => g.end * 1000 >= from);
+  if (!force && Date.now() - saved.fetchedAt < LG_REFRESH) return keep(saved.games);
+  const since = Math.max(from, saved.last ? saved.last * 1000 + 1 : 0);
+  const q = new URLSearchParams({ since: String(since), pgnInJson: 'true', finished: 'true', max: '1000',
+    perfType: 'ultraBullet,bullet,blitz,rapid,classical,correspondence' });
+  const headers = { Accept: 'application/x-ndjson' };
+  if (lichessCfg.token) headers.Authorization = 'Bearer ' + lichessCfg.token;
+  const r = await fetch(`${LICHESS}/api/games/user/${encodeURIComponent(user)}?${q}`, { headers });
+  if (r.status === 404) throw new Error(`Compte Lichess « ${user} » introuvable`);
+  if (r.status === 429) throw new Error('Lichess limite les requêtes : réessayez dans une minute');
+  if (!r.ok) throw new Error('Lichess : erreur ' + r.status);
+  const fresh = (await r.text()).split('\n').filter((l) => l.trim()).map((l) => { try { return slimLichess(JSON.parse(l)); } catch { return null; } }).filter(Boolean);
+  const byId = new Map(saved.games.map((g) => [g.id, g]));
+  for (const g of fresh) byId.set(g.id, g);
+  const games = keep([...byId.values()]).sort((a, b) => b.end - a.end);
+  const out = { games, last: games.reduce((m, g) => Math.max(m, g.end), saved.last || 0), fetchedAt: Date.now() };
+  try { await store.cacheSet(key, out); } catch { /* tant pis : on redemandera */ }
+  return games;
+}
+
+// ------------------------------------------------------------------ études
+// Lien d'étude (ou d'un chapitre) → PGN de tous ses chapitres (ou du seul chapitre).
+export function studyIds(link) {
+  const m = /(?:lichess\.org\/study\/|^)([A-Za-z0-9]{8})(?:\/([A-Za-z0-9]{8}))?(?:[/?#]|$)/.exec((link || '').trim());
+  return m ? { study: m[1], chapter: m[2] || null } : null;
+}
+export async function studyPgn(link) {
+  const ids = studyIds(link);
+  if (!ids) throw new Error('Lien d\'étude Lichess non reconnu (ex. https://lichess.org/study/AbCdEfGh)');
+  const url = ids.chapter ? `${LICHESS}/api/study/${ids.study}/${ids.chapter}.pgn` : `${LICHESS}/api/study/${ids.study}.pgn`;
+  const headers = lichessCfg.token ? { Authorization: 'Bearer ' + lichessCfg.token } : {};
+  const r = await fetch(url + '?comments=true&variations=true', { headers });
+  if (r.status === 404 || r.status === 403 || r.status === 401) throw new Error('Étude introuvable ou privée (seules les études publiques ou non répertoriées sont lisibles)');
+  if (!r.ok) throw new Error('Lichess : erreur ' + r.status);
+  return r.text();
+}
