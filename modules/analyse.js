@@ -1,4 +1,6 @@
 // Module « Analyse » : liste des parties chess.com et analyse détaillée d'une partie.
+import { initSheet } from '../core/sheet.js';
+import { fmtGameDate, fmtPct } from '../core/format.js';
 import { Chess } from '../vendor/chess.js';
 import { Board } from '../board.js';
 import { classifyMove, classifyGame, summarize, CLASSES, SUMMARY_ORDER, fmtScore, winPct, epd } from '../analysis.js';
@@ -24,6 +26,9 @@ const S = {
   games: [],
   index: {},
   shown: 100,
+  tc: '', // puce de cadence active
+  err: '', // dernière erreur de chargement
+  busy: false, // chargement des parties en cours
   g: null, // partie ouverte
   cycle: {},
   batch: null, // l'analyse multiple en cours : { stop, done, total, cur, failed }
@@ -71,6 +76,9 @@ export async function loadGames() {
   if (!user) return;
   S.games = [];
   S.shown = 100;
+  S.err = '';
+  S.busy = true;
+  renderList();
   const token = (S.loadToken = {}); // un nouveau chargement annule le précédent
   const prog = $('#load-progress');
   try {
@@ -90,18 +98,24 @@ export async function loadGames() {
     S.games.sort((a, b) => b.end - a.end);
     prog.textContent = `${S.games.length} parties terminées récupérées (${months.length} mois depuis la création du compte).`;
   } catch (e) {
-    if (token === S.loadToken) prog.textContent = 'Erreur : ' + e.message;
+    if (token === S.loadToken) { S.err = e.message || 'Erreur inconnue'; prog.textContent = ''; }
   } finally {
     if (token === S.loadToken) {
+      S.busy = false;
       await backfillOpenings(); renderList(); renderBatch();
       scanGames(S.games, user); // situations du module Ouvertures tirées des parties récentes
     }
   }
 }
 
+function setTc(v) {
+  S.tc = v;
+  document.querySelectorAll('#tc .chip').forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.tc === v)));
+}
+
 function renderList() {
   const q = $('#filter').value.trim().toLowerCase();
-  const tc = $('#tc').value;
+  const tc = S.tc;
   const op = $('#op').value;
   renderOpeningFilter();
   const list = S.games.filter((g) => {
@@ -125,20 +139,39 @@ function renderList() {
     let acc = '';
     if (a) {
       const myAcc = meWhite ? a.accW : a.accB;
-      acc = a.complete ? `<span class="acc">${fr1(myAcc)} %</span>` : '<span class="acc partial">en partie</span>';
+      acc = a.complete ? `<span class="acc">${fmtPct(myAcc, 1)}</span>` : '<span class="acc partial">en cours</span>';
     }
-    const d = new Date(g.end * 1000);
-    return `<tr data-id="${esc(g.id)}">
-      <td>${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
-      <td class="opt">${TIME_FR[g.timeClass] || esc(g.timeClass)}</td>
-      <td><span class="color-dot ${meWhite ? 'w' : 'b'}"></span>${esc(me.rating)}</td>
-      <td class="opp">${esc(opp.name)} <span class="muted">(${esc(opp.rating)})</span></td>
-      <td class="${res.cls}">${res.txt}</td>
-      <td>${acc}</td></tr>`;
-  }).join('');
-  $('#games tbody').innerHTML = rows || `<tr><td colspan="6" class="muted">${S.games.length ? 'Aucune partie ne correspond.' : 'Aucune partie pour le moment.'}</td></tr>`;
+    const when = fmtGameDate(g.end * 1000);
+    const tcl = TIME_FR[g.timeClass] || esc(g.timeClass);
+    const label = `${when}, ${tcl}, contre ${opp.name} (${opp.rating}), ${res.txt}${a && a.complete ? `, précision ${fmtPct(meWhite ? a.accW : a.accB, 1)}` : ''}. Ouvrir la partie.`;
+    return `<tr role="row" class="grow" data-id="${esc(g.id)}" tabindex="0" aria-label="${esc(label)}">
+      <td role="cell" class="c-date">${when}</td>
+      <td role="cell" class="c-tc">${tcl}</td>
+      <td role="cell" class="c-me"><span class="color-dot ${meWhite ? 'w' : 'b'}" title="${meWhite ? 'Blancs' : 'Noirs'}"></span>${esc(me.rating)}</td>
+      <td role="cell" class="c-opp opp">${esc(opp.name)} <span class="muted">(${esc(opp.rating)})</span></td>
+      <td role="cell" class="c-res ${res.cls}">${res.txt}</td>
+      <td role="cell" class="c-acc">${acc}</td></tr>`;
+  });
+  let html = rows.join('');
+  const st = $('#hist-state');
+  let state = '';
+  if (!S.games.length) {
+    if (S.err) state = `<div role="alert" class="hs err"><strong>Impossible de récupérer les parties.</strong><span class="muted">${esc(S.err)}</span><button class="btn" id="hs-retry">Réessayer</button></div>`;
+    else if (S.busy) html = Array.from({ length: 6 }, () => '<tr role="row" class="skel" aria-hidden="true"><td role="cell" colspan="6"><span></span></td></tr>').join('');
+    else if (S.user) state = '<div class="hs"><strong>Aucune partie pour le moment.</strong><span class="muted">Récupérez vos parties terminées depuis chess.com.</span><button class="btn primary" id="hs-load">Actualiser</button></div>';
+  } else if (!list.length) {
+    state = '<div class="hs"><strong>Aucune partie ne correspond.</strong><span class="muted">Essayez d\'élargir les filtres.</span><button class="btn" id="hs-reset">Réinitialiser les filtres</button></div>';
+  }
+  $('#games tbody').innerHTML = html;
+  $('#games').setAttribute('aria-busy', S.busy ? 'true' : 'false');
+  st.innerHTML = state;
+  st.classList.toggle('hidden', !state);
+  const bind = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
+  bind('#hs-retry', () => { S.loading = loadGames(); });
+  bind('#hs-load', () => { S.loading = loadGames(); });
+  bind('#hs-reset', () => { $('#filter').value = ''; $('#op').value = ''; setTc(''); S.shown = 100; renderList(); });
   $('#more').classList.toggle('hidden', list.length <= S.shown);
-  $('#count').textContent = S.games.length ? `${list.length} partie(s)` : '';
+  $('#count').textContent = S.games.length ? `${list.length} partie${list.length > 1 ? 's' : ''}` : '';
   renderBatch();
 }
 
@@ -632,6 +665,55 @@ function step(d) {
   setPly(g.ply + d);
 }
 
+// « Suivant » : saute au coup clé suivant (Bilan), sinon à la fin ; en variante ou analyse libre, un coup.
+function nextKey() {
+  const g = S.g;
+  if (!g) return;
+  if (g.var || g.free || !isComplete(g)) return step(1);
+  for (let j = g.ply; j < g.moves.length; j++) {
+    const r = g.results[j];
+    if (r && NOTABLE.includes(r.cls)) return setPly(j + 1);
+  }
+  setPly(g.moves.length);
+}
+
+// ----- onglets du panneau (Coups · Bilan · Moteur)
+function selectTab(name) {
+  document.querySelectorAll('#gpanel .ptabs [role=tab]').forEach((b) => {
+    const on = b.dataset.tab === name;
+    b.setAttribute('aria-selected', String(on));
+    b.tabIndex = on ? 0 : -1;
+    $('#tab-' + b.dataset.tab).classList.toggle('hidden', !on);
+  });
+  try { local.set('gtab', name); } catch { /* ignoré */ }
+  if (name === 'moves') { const c = document.querySelector('#moves .mv.cur'); if (c) c.scrollIntoView({ block: 'nearest' }); }
+}
+function initPanelTabs() {
+  const tabs = [...document.querySelectorAll('#gpanel .ptabs [role=tab]')];
+  tabs.forEach((b, i) => {
+    b.onclick = () => selectTab(b.dataset.tab);
+    b.onkeydown = (e) => {
+      const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+      if (!d && e.key !== 'Home' && e.key !== 'End') return;
+      const n = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : (i + d + tabs.length) % tabs.length;
+      selectTab(tabs[n].dataset.tab); tabs[n].focus(); e.preventDefault(); e.stopPropagation();
+    };
+  });
+  const saved = local.get('gtab', 'moves');
+  selectTab(['moves', 'review', 'engine'].includes(saved) ? saved : 'moves');
+}
+// Réglages locaux de l'analyse (onglet Moteur) : appliqués tout de suite.
+function initAnalysisSettings() {
+  $('#ar-lines').value = String(nLines());
+  $('#ui-arrows').value = uiArrows();
+  $('#ui-keys').value = uiOn('keyMoves') ? '1' : '0';
+  $('#ui-class').value = uiOn('boardClass') ? '1' : '0';
+  $('#ar-lines').onchange = (e) => { local.set('multipv', e.target.value); S.liveRes = null; S.livePending = null; S.bestRes = null; S.bestPending = null; if (S.g) renderGame(); };
+  $('#ui-arrows').onchange = (e) => { local.set('arrows', e.target.value); if (S.g) renderGame(); };
+  $('#ui-keys').onchange = (e) => { local.set('keyMoves', e.target.value); if (S.g) renderGame(); };
+  $('#ui-class').onchange = (e) => { local.set('boardClass', e.target.value); if (S.g) renderGame(); };
+}
+
 // Lecture automatique (bouton ▶ du panneau).
 function atEnd(g) { return g.var ? g.var.idx >= g.var.items.length : g.ply >= g.moves.length; }
 function stopAuto() { if (S.auto) { clearInterval(S.auto); S.auto = null; renderNav(); } }
@@ -732,7 +814,7 @@ function renderGame() {
   // de la position affichée (avant que le coup suivant ne soit joué)
   const arrows = [];
   const best = uiArrows() === 'best' && (review || g.var) ? bestHere(g, fen) : null;
-  if (best) arrows.push({ from: best.slice(0, 2), to: best.slice(2, 4), color: '#4caf50' });
+  if (best) arrows.push({ from: best.slice(0, 2), to: best.slice(2, 4), color: 'var(--arrow-best)' });
   const mark = annotate && uiOn('boardClass') ? { sq: d.uci.slice(2, 4), color: CLASSES[d.r.cls].color, sym: CLASSES[d.r.cls].sym, label: CLASSES[d.r.cls].label } : null;
   board.setPosition(fen, { lastMove: d ? [d.uci.slice(0, 2), d.uci.slice(2, 4)] : null, arrows, mark });
 
@@ -749,7 +831,7 @@ function renderGame() {
   }
   const flipped = board.orientation === 'b';
   $('#evalbar').classList.toggle('flipped', flipped);
-  $('#evalbar .white').style.height = wp + '%';
+  $('#evalbar').style.setProperty('--wp', wp + '%');
   $('#evalbar .label').textContent = label;
   $('#evalbar .label').className = 'label ' + (wp >= 50 ? 'on-white' : 'on-black');
 
@@ -767,6 +849,7 @@ function renderGame() {
 
   // panneau
   $('#gpanel').classList.toggle('review', review);
+  $('#review-empty').classList.toggle('hidden', review);
   $('#ptitle').innerHTML = g.free ? 'Analyse libre' : review ? `<span class="badge" style="background:${CLASSES.best.color}">★</span> Bilan` : 'Analyse';
   $('#cc-link').href = g.game.url || '#';
   $('#cc-link').classList.toggle('hidden', !!g.free);
@@ -774,7 +857,7 @@ function renderGame() {
   $('#reanalyze').parentElement.classList.toggle('hidden', !!g.free);
   const k = g.var ? g.var.basePly : g.ply;
   $('#opening').textContent = k === 0 && !g.var ? (g.custom ? 'Position définie' : 'Position de départ') : (g.openingAt[k] || g.openingAt[g.openingAt.length - 1] || 'Ouverture inconnue');
-  const date = new Date(g.game.end * 1000).toLocaleDateString('fr-FR');
+  const date = fmtGameDate(g.game.end * 1000);
   $('#game-meta').textContent = g.free ? '' : `${TIME_FR[g.game.timeClass] || ''} · ${date} · ${g.game.result || ''}`;
 
   renderEngine();
@@ -922,7 +1005,9 @@ function renderCoach(g, d, review) {
   }
   const ex = explainMove({ fenBefore: d.fenBefore, san: d.san, uci: d.uci, color: d.color, r: d.r, pos: d.pos, openingName: g.openingAt[g.ply], playerColor: g.playerColor });
   html += `<div class="coach-title">${badge(d.r.cls)} <span>${esc(ex.title)}</span><span class="score">${fmtScore(d.pos.played.score)}</span></div>`;
-  html += ex.paras.map((p) => `<p>${esc(p)}</p>`).join('');
+  const open = S.coachOpen === g.ply + ':' + (g.var ? g.var.idx : '');
+  html += ex.paras.map((p, i) => `<p${!open && i === 2 ? ' class="clamp"' : ''}${!open && i > 2 ? ' hidden' : ''}>${esc(p)}</p>`).join('');
+  if (ex.paras.length > 3) html += `<button type="button" class="link coach-more" id="coach-more" aria-expanded="${open}">${open ? 'Réduire' : 'Lire la suite'}</button>`;
   if (ex.refutation && ex.refutation.items.length > 1) {
     html += `<div class="line bad"><div class="lhead">Après ce coup <button class="btn small" data-line="played">▶ Voir</button></div>${esc(ex.refutation.text)}</div>`;
   }
@@ -939,6 +1024,8 @@ const coachWrap = (html) => `<div class="coach-wrap"><div class="avatar"><img sr
 function bindCoach(g, d) {
   const ev = $('#exit-var');
   if (ev) ev.onclick = exitVar;
+  const cm = $('#coach-more');
+  if (cm) cm.onclick = () => { const k = g.ply + ':' + (g.var ? g.var.idx : ''); S.coachOpen = S.coachOpen === k ? null : k; renderGame(); };
   document.querySelectorAll('.vmove').forEach((s) => { s.onclick = () => { stopAuto(); g.var.idx = +s.dataset.vi; renderGame(); }; keyActivate(s); });
   if (!d) return;
   document.querySelectorAll('[data-line]').forEach((b) => {
@@ -1043,17 +1130,17 @@ function renderGraph(g, review) {
     pts.push([k / n * W, H - w / 100 * H]);
   }
   let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`;
-  svg += `<rect width="${W}" height="${H}" fill="#403d39"/>`;
+  svg += `<rect width="${W}" height="${H}" style="fill:var(--eval-black)"/>`;
   if (pts.length > 1) {
     svg += `<path d="M0,${H} ${pts.map((p) => `L${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ')} L${pts[pts.length - 1][0].toFixed(1)},${H} Z" fill="#fff"/>`;
   }
   svg += `<line x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}" stroke="#888" stroke-width="0.6"/>`;
   g.results.forEach((r, i) => {
     if (!r || !['inaccuracy', 'mistake', 'miss', 'blunder', 'brilliant', 'great'].includes(r.cls) || !pts[i + 1]) return;
-    svg += `<circle cx="${pts[i + 1][0]}" cy="${pts[i + 1][1]}" r="4" fill="${CLASSES[r.cls].color}" stroke="#fff" stroke-width="1"/>`;
+    svg += `<circle cx="${pts[i + 1][0]}" cy="${pts[i + 1][1]}" r="4" style="fill:${CLASSES[r.cls].color}" stroke="#fff" stroke-width="1"/>`;
   });
   const cx = (g.var ? g.var.basePly : g.ply) / n * W;
-  svg += `<line x1="${cx}" y1="0" x2="${cx}" y2="${H}" stroke="#81b64c" stroke-width="2"/></svg>`;
+  svg += `<line x1="${cx}" y1="0" x2="${cx}" y2="${H}" style="stroke:var(--accent)" stroke-width="2"/></svg>`;
   el.innerHTML = svg;
   el.onclick = (e) => {
     const rect = el.getBoundingClientRect();
@@ -1140,32 +1227,6 @@ export function engineFields(root, p, onChange = () => {}) {
   };
 }
 
-function openEngineDialog() {
-  const dlg = $('#eng-dlg');
-  const f = engineFields($('#eng-fields'), 'eng');
-  const tabs = [...dlg.querySelectorAll('.dtabs button')];
-  const show = (t) => {
-    tabs.forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
-    dlg.querySelectorAll('[data-pane]').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== t));
-  };
-  tabs.forEach((b) => { b.onclick = () => show(b.dataset.tab); });
-  show('eng');
-  $('#ui-arrows').value = uiArrows();
-  $('#ui-keys').value = uiOn('keyMoves') ? '1' : '0';
-  $('#ui-class').value = uiOn('boardClass') ? '1' : '0';
-  dlg.returnValue = '';
-  dlg.showModal();
-  // « submit » (et non « close ») : déclenché tout de suite par le bouton Sauvegarder.
-  dlg.querySelector('form').onsubmit = async (e) => {
-    if (!e.submitter || e.submitter.value !== 'save') return;
-    local.set('arrows', $('#ui-arrows').value);
-    local.set('keyMoves', $('#ui-keys').value);
-    local.set('boardClass', $('#ui-class').value);
-    await f.save();
-    if (S.g) renderGame();
-  };
-}
-
 // ------------------------------------------------------------------ navigation
 export function leave() {
   stopAuto();
@@ -1185,7 +1246,7 @@ export async function init() {
   showUser();
   $('#load').onclick = () => { S.loading = loadGames(); };
   $('#filter').oninput = () => { S.shown = 100; renderList(); };
-  $('#tc').onchange = renderList;
+  document.querySelectorAll('#tc .chip').forEach((c) => { c.onclick = () => { setTc(c.dataset.tc); S.shown = 100; renderList(); }; });
   $('#op').onchange = () => { S.shown = 100; renderList(); };
   $('#multi').onclick = openMultiDialog;
   $('#clear-hist').onclick = clearHistory;
@@ -1194,17 +1255,28 @@ export async function init() {
     const tr = e.target.closest('tr[data-id]');
     if (tr) location.hash = '#/game/' + encodeURIComponent(tr.dataset.id);
   };
+  $('#games tbody').onkeydown = (e) => {
+    const tr = e.target.closest('tr[data-id]');
+    if (!tr) return;
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tr.click(); }
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const n = e.key === 'ArrowDown' ? tr.nextElementSibling : tr.previousElementSibling;
+      if (n && n.dataset.id) { e.preventDefault(); n.focus(); }
+    }
+  };
   $('#back').onclick = () => { location.hash = S.g && S.g.free ? '#/free' : '#/games'; };
   $('#first').onclick = nav(() => setPly(0));
   $('#prev').onclick = nav(() => step(-1));
   $('#next').onclick = nav(() => step(1));
   $('#last').onclick = nav(() => { if (S.g) setPly(S.g.moves.length); });
   $('#play').onclick = toggleAuto;
-  $('#suivant').onclick = nav(() => step(1));
+  $('#suivant').onclick = nav(nextKey);
   $('#flip').onclick = () => { board.flip(); renderGame(); };
   $('#analyze').onclick = startAnalysis;
   $('#stop').onclick = () => { if (S.g && S.g.analyzing) S.g.abort = true; };
-  $('#eng-gear').onclick = openEngineDialog;
+  initPanelTabs();
+  initAnalysisSettings();
+  initSheet($('#gpanel'), $('#grab'));
   $('#live').checked = S.live;
   $('#live').onchange = (e) => { S.live = e.target.checked; local.set('liveEval', S.live ? '1' : '0'); if (S.g) renderGame(); };
   $('#reanalyze').onclick = () => {

@@ -126,12 +126,14 @@ export async function renderHome(el) {
   <h1 class="page-title">Ouvertures</h1>
   <div class="row"><button id="rep-new" class="btn primary">+ Nouveau répertoire</button><button id="rep-import" class="btn">Importer un PGN</button></div>
   <div class="rep-list">${reps.length ? reps.map((r) => `
-    <a class="card rep-card" href="#/openings/${esc(r.id)}">
-      <span class="avatar-sm ${r.color}"><img src="pieces/${r.color}K.svg" alt=""></span>
-      <span class="rep-info"><b>${esc(r.name)}</b><span class="muted small">${colorFr(r.color)} · ${plural(reachableEdges(r).length, 'coup')}${dueLabel(r, events, reps)}${homePerf(r)}<span class="cov-mini" data-cov="${esc(r.id)}"></span></span>
-        <span class="mst-row small">${summaryHtml(masterySummary(computeMastery(r, events, reps)))}</span></span>
-      <button class="btn small danger" data-del="${esc(r.id)}" title="Supprimer ce répertoire">Supprimer</button>
-    </a>`).join('') : '<p class="muted">Aucun répertoire pour le moment. Créez-en un, puis jouez vos coups sur l\'échiquier.</p>'}</div>
+    <div class="card rep-card">
+      <a class="rep-open" href="#/openings/${esc(r.id)}" aria-label="${esc(r.name)}, ${colorFr(r.color)}">
+        <span class="avatar-sm ${r.color}"><img src="pieces/${r.color}K.svg" alt=""></span>
+        <span class="rep-info"><b title="${esc(r.name)}">${esc(r.name)}</b><span class="muted small">${colorFr(r.color)} · ${plural(reachableEdges(r).length, 'coup')}${dueLabel(r, events, reps)}${homePerf(r)}<span class="cov-mini" data-cov="${esc(r.id)}"></span></span>
+          ${masteryBar(masterySummary(computeMastery(r, events, reps)))}</span>
+      </a>
+      <button class="btn small danger" data-del="${esc(r.id)}" title="Supprimer ce répertoire" aria-label="Supprimer le répertoire ${esc(r.name)}">Supprimer</button>
+    </div>`).join('') : '<p class="muted">Aucun répertoire pour le moment. Créez-en un, puis jouez vos coups sur l\'échiquier.</p>'}</div>
   ${reps.length && lichessStatus() ? `<p class="muted small li-status">${lichessStatus()}</p>` : ''}
   ${reps.length ? '<section class="card sugg-box" id="sugg-box"><h2>Suggestions</h2><p class="muted small">Recherche des erreurs répétées dans vos parties analysées…</p></section>' : ''}
   ${reps.length ? trainBox(reps, events) : ''}
@@ -410,6 +412,7 @@ function buildEditor(el) {
       <button id="rep-play" class="btn small" title="Jouer une partie contre Maia à partir de la position affichée, avec la couleur du répertoire">♟ Jouer contre Maia d'ici</button>
       <span class="muted small">Clic droit sur un coup (appui long de 2 s sur téléphone) pour le désactiver ou le supprimer. Votre note sur le coup affiché : sous la liste des coups.</span></div>
   </div>
+  <div id="rep-resize" class="resizer" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Largeur du panneau" aria-valuemin="420" aria-valuemax="720" title="Glisser pour redimensionner le panneau"></div>
   <aside class="panel" id="rep-panel">
     <div class="phead">
       <a href="#/openings" class="icon-btn" title="Retour aux répertoires" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
@@ -418,11 +421,16 @@ function buildEditor(el) {
     <div class="popening" id="rep-opening"></div>
     <div class="rperf small muted" id="rep-perf"></div>
     <div id="rep-suggest" class="rsugg hidden"></div>
-    <div id="rep-coverage"></div>
     <div id="rep-mastery"></div>
     <div class="pmoves rtree" id="rep-moves"></div>
-    <div id="rep-note"></div>
-    <div class="exp">
+    <div class="ptabs" role="tablist" aria-label="Détail du répertoire">
+      <button type="button" role="tab" id="rt-exp" aria-controls="rp-exp" aria-selected="true" data-rt="exp">Explorateur</button>
+      <button type="button" role="tab" id="rt-cov" aria-controls="rp-cov" aria-selected="false" tabindex="-1" data-rt="cov">Couverture</button>
+      <button type="button" role="tab" id="rt-note" aria-controls="rp-note" aria-selected="false" tabindex="-1" data-rt="note">Note</button>
+    </div>
+    <div id="rp-cov" role="tabpanel" aria-labelledby="rt-cov" class="tabpane hidden"><div id="rep-coverage"></div></div>
+    <div id="rp-note" role="tabpanel" aria-labelledby="rt-note" class="tabpane hidden"><div id="rep-note"></div></div>
+    <div id="rp-exp" role="tabpanel" aria-labelledby="rt-exp" class="tabpane exp">
       <div class="exp-head">
         <div class="exp-tabs" role="tablist"><button type="button" role="tab" data-db="masters">Masters</button><button type="button" role="tab" data-db="lichess">Lichess</button><button type="button" role="tab" data-db="stockfish">Stockfish</button></div>
         <button id="exp-gear" class="icon-btn" title="Paramètres : filtres Lichess, interface, moteur" aria-label="Paramètres">${SVG_GEAR}</button>
@@ -472,6 +480,35 @@ function buildEditor(el) {
   $('#rep-prev', el).onclick = () => go(E.k - 1);
   $('#rep-next', el).onclick = () => forward();
   $('#rep-last', el).onclick = () => { while (forward(false)); render(); };
+  // onglets Explorateur / Couverture / Note
+  const rtabs = [...el.querySelectorAll('[data-rt]')];
+  const selRt = (k, focus) => rtabs.forEach((t) => {
+    const on = t.dataset.rt === k;
+    t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1;
+    $('#' + t.getAttribute('aria-controls'), el).classList.toggle('hidden', !on);
+    if (on && focus) t.focus();
+  });
+  rtabs.forEach((t, i) => {
+    t.onclick = () => { selRt(t.dataset.rt); local.set('repTab', t.dataset.rt); };
+    t.onkeydown = (e) => {
+      const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+      if (d) { e.preventDefault(); const n = rtabs[(i + d + rtabs.length) % rtabs.length]; selRt(n.dataset.rt, true); local.set('repTab', n.dataset.rt); }
+      else if (e.key === 'Home') { e.preventDefault(); selRt('exp', true); } else if (e.key === 'End') { e.preventDefault(); selRt('note', true); }
+    };
+  });
+  selRt(['exp', 'cov', 'note'].includes(local.get('repTab')) ? local.get('repTab') : 'exp');
+  // largeur du panneau : 420–720 px (grand écran), glisser ou flèches
+  const rz = $('#rep-resize', el);
+  const setW = (w) => { w = Math.max(420, Math.min(720, Math.round(w))); el.style.setProperty('--panel-w', w + 'px'); rz.setAttribute('aria-valuenow', w); local.set('repPanelW', w); };
+  const w0 = Number(local.get('repPanelW'));
+  if (w0) setW(w0); else rz.setAttribute('aria-valuenow', 420);
+  rz.onpointerdown = (e) => { rz.setPointerCapture(e.pointerId); rz.dataset.drag = '1'; };
+  rz.onpointermove = (e) => { if (rz.dataset.drag) setW(el.getBoundingClientRect().right - 16 - e.clientX); };
+  rz.onpointerup = () => { delete rz.dataset.drag; };
+  rz.onkeydown = (e) => {
+    const cur = Number(rz.getAttribute('aria-valuenow')) || 420;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); setW(cur + 20); } else if (e.key === 'ArrowRight') { e.preventDefault(); setW(cur - 20); }
+  };
   el.querySelectorAll('.exp-tabs button').forEach((b) => { b.onclick = () => { E.db = b.dataset.db; local.set('expDb', E.db); updateEngine(); renderExplorer(); }; });
 
   // Paramètres (roue dentée) : trois onglets. « Appliquer » enregistre tout ; le moteur est celui de l'analyse.
@@ -612,7 +649,9 @@ async function deleteNode(n) {
   const gone = deleteMove({ ...E.rep, edges: [...E.rep.edges] }, edge.fenBefore, edge.uci); // essai à blanc, pour compter
   const label = moveLabel(edge, line.length - 1) + frSan(edge.san);
   const more = gone.length - 1;
-  if (!confirm(more ? `Supprimer ${label} et ${plural(more, 'coup')} qui en ${more > 1 ? 'dépendent' : 'dépend'} ?` : `Supprimer ${label} ?`)) return;
+  if (more && !confirm(`Supprimer ${label} et ${plural(more, 'coup')} qui en ${more > 1 ? 'dépendent' : 'dépend'} ?`)) return;
+  const rep = E.rep;
+  const before = { edges: [...rep.edges], path: [...E.path], k: E.k };
   deleteMove(E.rep, edge.fenBefore, edge.uci);
   const left = new Set(E.rep.edges);
   const cut = E.path.findIndex((e) => !left.has(e));
@@ -620,7 +659,18 @@ async function deleteNode(n) {
   await saveRepertoire(E.rep);
   render();
   rescanSoon();
-  toast(more ? `${label} et ${plural(more, 'coup')} supprimés.` : `${label} supprimé.`);
+  const after = [...rep.edges];
+  toast(more ? `${label} et ${plural(more, 'coup')} supprimés.` : `${label} supprimé.`, {
+    type: 'info',
+    action: { label: 'Annuler', fn: async () => {
+      if (E.rep !== rep) { toast('Annulation impossible : ce répertoire n’est plus ouvert.', { type: 'err' }); return; }
+      const added = rep.edges.filter((e) => !after.includes(e));
+      if (added.length) { toast('Annulation impossible : le répertoire a changé depuis.', { type: 'err' }); return; }
+      E.rep.edges = before.edges; E.path = before.path; E.k = before.k;
+      await saveRepertoire(E.rep); render(); rescanSoon();
+      toast('Suppression annulée.', { type: 'ok' });
+    } },
+  });
 }
 
 // ------------------------------------------------------------------ note du coup affiché
@@ -721,13 +771,21 @@ function summaryHtml(s) {
   return part('mastered', s.mastered > 1 ? 'maîtrisés' : 'maîtrisé') + part('weak', s.weak > 1 ? 'non maîtrisés' : 'non maîtrisé')
     + part('progress', 'en cours') + part('new', s.new > 1 ? 'jamais revus' : 'jamais revu') + part('shared', s.shared > 1 ? 'partagés' : 'partagé');
 }
+// Barre segmentée de maîtrise + légende textuelle (jamais la couleur seule).
+const MST_SYM = { mastered: '✓', progress: '◐', weak: '✗', new: '○', shared: '–' };
+function masteryBar(s) {
+  if (!s.positions) return '';
+  const seg = (k) => (s[k] ? `<i style="flex:${s[k]};background:${STATUS[k].color}" title="${s[k]} ${STATUS[k].label.split(' (')[0]}"></i>` : '');
+  const legend = ['mastered', 'progress', 'weak', 'new', 'shared'].filter((k) => s[k]).map((k) => `<span class="mst"><span aria-hidden="true">${MST_SYM[k]}</span> ${s[k]} ${STATUS[k].label.split(' (')[0]}</span>`).join('');
+  return `<span class="mbar" role="img" aria-label="Maîtrise : ${esc(legend.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim())}">${['mastered', 'progress', 'weak', 'new', 'shared'].map(seg).join('')}</span><span class="mst-row small">${legend}</span>`;
+}
 function renderMastery() {
   const s = masterySummary(E.mastery);
   const cur = E.k ? E.path[E.k - 1] : null;
   const m = cur && cur.fenBefore.split(' ')[1] === E.rep.color ? E.mastery.get(cur.fenBefore) : null;
   const detail = m ? `<div class="mst-cur small"><b>${moveLabel(cur, E.k - 1)}${figSan(cur.san, E.rep.color)}</b> · ${esc(masteryTip(m).replace('Maîtrise : ', ''))}</div>` : '';
   $('#rep-mastery').innerHTML = s.positions
-    ? `<div class="mst-row">${summaryHtml(s)}</div>${detail}<div class="muted small">Vos coups (soulignés), sur ${WINDOW_DAYS} jours de parties chess.com et d'entraînement : maîtrisé dès ${MIN_SITUATIONS} situations avec au moins ${Math.round(THRESHOLD * 100)} % de bonnes réponses. Cliquez sur un de vos coups pour le détail.</div>`
+    ? `<div class="mst-row">${summaryHtml(s)}</div>${detail}<div class="muted small" title="Maîtrisé dès ${MIN_SITUATIONS} situations avec au moins ${Math.round(THRESHOLD * 100)} % de bonnes réponses, sur ${WINDOW_DAYS} jours de parties chess.com et d'entraînement.">Vos coups sont soulignés selon leur maîtrise. Touchez-en un pour le détail.</div>`
     : '';
 }
 
@@ -896,11 +954,13 @@ function render() {
   const sg = $('#rep-suggest');
   if (atFocus && !childrenOf(E.rep, curEpd()).length) {
     const played = [...new Set(E.focus.errors.map((e) => frSan(e.san)))].join(', ');
-    sg.innerHTML = `💡 <b>Position à enrichir.</b> Vous y avez fait ${plural(E.focus.errors.length, 'faute')} (vous avez joué ${esc(played)}).`
-      + `${E.focus.best ? ` La flèche verte montre le meilleur coup selon l'analyse : <b>${esc(frSan(uciToSan(curEpd(), E.focus.best)))}</b>.` : ''} Jouez sur l'échiquier le coup à ajouter, ou choisissez-le dans l'explorateur.`;
+    sg.innerHTML = `<span aria-hidden="true">💡</span> <b>À enrichir</b> · ${plural(E.focus.errors.length, 'faute')} ici (joué : ${esc(played)})`
+      + `${E.focus.best ? ` · meilleur coup : <b>${esc(frSan(uciToSan(curEpd(), E.focus.best)))}</b>` : ''}`;
+    sg.title = 'Jouez sur l\'échiquier le coup à ajouter, ou choisissez-le dans l\'explorateur.';
     sg.classList.remove('hidden');
   } else if (E.gap && curEpd() === E.gap.epd && !childrenOf(E.rep, curEpd()).length) {
-    sg.innerHTML = `🕳️ <b>Trou dans le répertoire</b> : cette position arrive dans ${pct(E.gap.p)} de vos parties (à votre niveau) et vous n'y avez pas de coup. Jouez votre réponse sur l'échiquier, ou choisissez-la dans l'explorateur.`;
+    sg.innerHTML = `<span aria-hidden="true">🕳️</span> <b>Trou</b> · ${pct(E.gap.p)} de vos parties passent ici, sans coup de votre part`;
+    sg.title = 'Jouez votre réponse sur l\'échiquier, ou choisissez-la dans l\'explorateur.';
     sg.classList.remove('hidden');
   } else {
     if (E.focus && !atFocus && E.k > 0 && childrenOf(E.rep, E.focus.epd).length) E.focus = null; // coup ajouté : suggestion traitée
@@ -908,7 +968,7 @@ function render() {
     sg.classList.add('hidden');
   }
   $('#rep-train').href = '#/openings/train/rep/' + encodeURIComponent(E.rep.id);
-  $('#rep-title').innerHTML =`<span class="avatar-sm ${E.rep.color}"><img src="pieces/${E.rep.color}K.svg" alt=""></span>${esc(E.rep.name)}`;
+  $('#rep-title').innerHTML =`<span class="avatar-sm ${E.rep.color}"><img src="pieces/${E.rep.color}K.svg" alt=""></span><span class="ell" title="${esc(E.rep.name)}">${esc(E.rep.name)}</span>`;
   $('#rep-opening').textContent = E.k === 0 ? 'Position de départ' : openingName() || 'Ouverture inconnue';
   $('#rep-perf').innerHTML = perfLine(perfOf(E.rep).get(curEpd()));
   refreshMastery();
@@ -971,10 +1031,10 @@ function drawBoard() {
   const p = curEpd();
   const fen = fenOf(p);
   const atFocus = E.focus && p === E.focus.epd;
-  const arrows = atFocus && E.focus.best ? [{ from: E.focus.best.slice(0, 2), to: E.focus.best.slice(2, 4), color: '#4caf50' }] : [];
+  const arrows = atFocus && E.focus.best ? [{ from: E.focus.best.slice(0, 2), to: E.focus.best.slice(2, 4), color: 'var(--arrow-best)' }] : [];
   const eng = engHere();
   const best = repOn('repArrow') && eng && eng.res && eng.res.lines && eng.res.lines[0] ? eng.res.lines[0].pv[0] : null;
-  if (best && !(atFocus && E.focus.best === best)) arrows.push({ from: best.slice(0, 2), to: best.slice(2, 4), color: '#4caf50' });
+  if (best && !(atFocus && E.focus.best === best)) arrows.push({ from: best.slice(0, 2), to: best.slice(2, 4), color: 'var(--arrow-best)' });
   E.board.setPosition(fen, { lastMove: cur ? [cur.uci.slice(0, 2), cur.uci.slice(2, 4)] : null, arrows });
   drawBar(fen, eng);
 }

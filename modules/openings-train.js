@@ -17,7 +17,7 @@ import { figSan } from './analyse.js';
 import { explainOpeningMove } from '../explain.js';
 import {
   childrenOf, userPositions, reachableEdges, fenOf, listRepertoires, getRepertoire, listEvents, addEvent,
-  computeMastery, STATUS, pathTo, isActive, computeCards, NEW_PER_DAY,
+  computeMastery, masterySummary, STATUS, pathTo, isActive, computeCards, NEW_PER_DAY,
 } from './openings.js';
 
 const MODES = { due: 'À revoir', all: 'Tout le répertoire', rep: 'Une ouverture', targeted: 'Entraînement ciblé' };
@@ -144,6 +144,7 @@ export async function start(el, mode, id) {
   T.answered = new Set();
   T.requeued = new Set();
   T.target = null;
+  T.before = null;
   const all = await listRepertoires();
   if (seq !== T.seq) return;
   T.reps = all.filter((r) => userPositions(r).size);
@@ -159,6 +160,8 @@ export async function start(el, mode, id) {
     T.tIdx = 0;
   }
   preloadFrequencies(T.reps);
+  T.before = await masteryOf(T.reps);
+  if (seq !== T.seq) return;
   if (!T.reps.length || (TARGET_MODES.includes(T.mode) && !T.targets.length)) {
     T.done = true;
     T.board.setPosition(fenOf('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -'));
@@ -204,6 +207,21 @@ function nextLine() {
   step();
 }
 
+// Maîtrise cumulée des répertoires de la séance (avant / après).
+async function masteryOf(reps) {
+  const events = await listEvents().catch(() => []);
+  const tot = { mastered: 0, weak: 0, progress: 0, new: 0 };
+  for (const r of reps) { const m = masterySummary(computeMastery(r, events, T.reps)); for (const k in tot) tot[k] += m[k]; }
+  return tot;
+}
+async function sessionSummary() {
+  if (!T.before) return '';
+  await new Promise((r) => setTimeout(r, 400)); // laisse le temps d'enregistrer la dernière réponse
+  const a = await masteryOf(T.reps), b = T.before;
+  const part = (k, label) => `<span class="mst"><i style="background:${STATUS[k].color}"></i>${label} ${b[k]} → <b>${a[k]}</b></span>`;
+  return `<div class="tsum mst-row" aria-label="Maîtrise avant et après la séance">${part('mastered', 'Maîtrisés')}${part('progress', 'En cours')}${part('weak', 'Non maîtrisés')}${part('new', 'Jamais revus')}</div>`;
+}
+
 function finishTargets() {
   T.done = true;
   T.board.interactive = false;
@@ -212,6 +230,8 @@ function finishTargets() {
     : `Toutes les cibles ont été revues (${plural(T.targets.length, 'position')}). La maîtrise est mise à jour : relancez l'entraînement ciblé pour la suite.`);
   $('#train-next').disabled = true;
   render();
+  const seq = T.seq;
+  sessionSummary().then((h) => { if (h && seq === T.seq && T.done) { T.msg.html += h; render(); } });
 }
 
 // Avance jusqu'au prochain coup de l'utilisateur (l'adversaire répond seul), ou termine la ligne.
@@ -225,7 +245,7 @@ function step() {
     const isTarget = T.target && T.target.epd === T.cur;
     if (isTarget && T.target.status === 'fresh') {
       // nouveau coup (mode « à revoir ») : on le montre d'abord ; le jouer planifie la première révision
-      T.board.setArrows(exp.map((e) => ({ from: e.uci.slice(0, 2), to: e.uci.slice(2, 4), color: '#4caf50' })));
+      T.board.setArrows(exp.map((e) => ({ from: e.uci.slice(0, 2), to: e.uci.slice(2, 4), color: 'var(--arrow-best)' })));
       const idea = ideaOf(exp);
       setMsg('turn', `🆕 Nouveau coup à apprendre : <b>${exp.map((e) => moveName(e)).join(' ou ')}</b>.${idea ? ` ${esc(idea.txt)}` : ''} Jouez-le sur l'échiquier ; il reviendra demain.`);
       render();
@@ -293,7 +313,7 @@ function userMove(uci) {
   const fenBefore = fenOf(T.cur);
   let after = fenBefore;
   try { const c = new Chess(fenBefore); c.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] }); after = c.fen(); } catch { /* */ }
-  T.board.setPosition(after, { lastMove: [uci.slice(0, 2), uci.slice(2, 4)], mark: { sq: uci.slice(2, 4), color: '#fa412d', sym: '✗', label: 'Hors répertoire' } });
+  T.board.setPosition(after, { lastMove: [uci.slice(0, 2), uci.slice(2, 4)], mark: { sq: uci.slice(2, 4), color: 'var(--cls-manquee)', sym: '✗', label: 'Hors répertoire' } });
   setMsg('wrong', '✗ Ce n\'est pas le coup du répertoire. Réessayez, ou demandez un indice.');
   render();
   T.timer = setTimeout(() => {
@@ -336,7 +356,7 @@ function hint() {
     return;
   }
   T.hintStep = 2;
-  T.board.setArrows(exp.map((e) => ({ from: e.uci.slice(0, 2), to: e.uci.slice(2, 4), color: '#4caf50' })));
+  T.board.setArrows(exp.map((e) => ({ from: e.uci.slice(0, 2), to: e.uci.slice(2, 4), color: 'var(--arrow-best)' })));
   const names = exp.map((e) => moveName(e)).join(' ou ');
   setMsg('hint', `💡 Coup${exp.length > 1 ? 's' : ''} du répertoire : <b>${names}</b>. Jouez-le sur l'échiquier.`);
   render();

@@ -1,0 +1,182 @@
+/* =====================================================================
+   Chess Journey — tokens.css (refonte v1, thème sombre unique)
+   À charger AVANT style.css dans index.html.
+   - Les noms déjà utilisés par style.css (--bg, --panel, --panel2, --muted,
+     --warn, --side-bg…) sont conservés : ils pointent vers les nouvelles
+     valeurs, donc style.css fonctionne tel quel dès l'ajout de ce fichier.
+   - Les nouveaux noms (--surface-1, --text-muted, --cls-*, --mastery-*…)
+     sont ceux de la maquette ; les utiliser pour tout code nouveau.
+   - Toutes les paires texte/fond respectent WCAG AA (4,5:1), sauf les
+     coordonnées de l'échiquier et les boutons désactivés.
+   ===================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* ---- Surfaces ---------------------------------------------------- */
+  --bg:          #262421;   /* fond de page */
+  --sidebar:     #1f1e1c;   /* barre latérale, rail, barre du haut mobile */
+  --surface-1:   #302e2b;   /* cartes, panneaux */
+  --surface-2:   #3a3835;   /* champs, boutons secondaires, survol de carte */
+  --surface-3:   #4a4743;   /* survol de bouton secondaire */
+  --hover:       #2a2926;   /* survol de ligne sur --bg */
+  --active:      #34322f;   /* entrée de navigation active */
+  --cur:         #4b4847;   /* coup courant dans la liste */
+  --border:      #454340;
+  --line:        #34322f;   /* séparateurs de lignes */
+  --line-soft:   #2c2a27;
+  --overlay:     rgba(0, 0, 0, .7);   /* voile des modales et tiroirs */
+
+  /* ---- Texte ------------------------------------------------------- */
+  --text:        #e8e6e1;
+  --text-strong: #ffffff;
+  --text-soft:   #c9c6c1;   /* navigation non active */
+  --text-muted:  #a6a39d;   /* 6,2:1 sur --bg, 5,5:1 sur --surface-1 (était #9b9893) */
+  --text-zero:   #9a968f;   /* compteurs à zéro, tirets « — » dans les tableaux */
+
+  /* ---- Accent et états --------------------------------------------- */
+  --accent:        #81b64c;
+  --accent-hover:  #95c95f;
+  --accent-press:  #5d8a32;   /* ombre portée du gros bouton « Suivant » */
+  --on-accent:     #14200a;   /* texte sur bouton vert */
+  --link:          #8fc3ff;
+  --link-hover:    #b9daff;
+  --focus:         #8fc3ff;   /* anneau 2 px, décalé de 2 px */
+  --danger:        #fa412d;   /* fonds, points, pastille Gaffe */
+  --danger-text:   #ff7f6e;   /* texte rouge sur fond sombre (était #ff8a80 / #ff6a58) */
+  --danger-bg:     #4a2a26;   /* survol du bouton danger secondaire */
+  --warning:       #f7c045;
+  --on-warning:    #241a02;
+
+  /* Résultats de partie */
+  --win:  #81b64c;
+  --draw: #a6a39d;
+  --loss: #ff7f6e;
+
+  /* Explorateur d'ouvertures : barre Blancs / nulle / Noirs */
+  --explorer-white: #ebe9e4;
+  --explorer-draw:  #66635d;
+  --explorer-black: #1f1e1c;
+
+  /* ---- Classes de coups — ordre et clés de CLASSES (analysis.js) ---- */
+  --cls-brillant:    #1baaa6;   /* !!  brilliant  */
+  --cls-tresbon:     #5c8bb0;   /* !   great      */
+  --cls-meilleur:    #81b64c;   /* ★   best       */
+  --cls-excellent:   #96bc4b;   /* ✦   excellent  (remplace l'emoji 👍) */
+  --cls-bon:         #95b776;   /* ✓   good       */
+  --cls-theorie:     #a88865;   /* T   book       (remplace l'emoji 📖) */
+  --cls-imprecision: #f7c631;   /* ?!  inaccuracy */
+  --cls-erreur:      #ffa459;   /* ?   mistake    */
+  --cls-manquee:     #ff7769;   /* ✗   miss       */
+  --cls-gaffe:       #fa412d;   /* ??  blunder    */
+  --cls-on:          #161512;   /* symbole sur la pastille */
+  /* Pastille posée sur l'échiquier : double anneau blanc + sombre,
+     indispensable (Théorie sur Vert tournoi = 1,03:1 sans lui). */
+  --badge-ring: 0 0 0 2px #ffffff, 0 0 0 3.5px rgba(22, 21, 18, .7), 0 2px 4px rgba(0, 0, 0, .4);
+
+  /* ---- Maîtrise (répertoires) -------------------------------------- */
+  --mastery-ok:      #81b64c;   /* ✓ maîtrisé */
+  --mastery-wip:     #f7c045;   /* ◐ en cours */
+  --mastery-ko:      #ff7769;   /* ✗ non maîtrisé */
+  --mastery-new:     #6f6c67;   /* ○ jamais revu (symbole en blanc) */
+  --mastery-off:     #8fc3ff;   /* – non compté */
+
+  /* ---- Échiquier ----------------------------------------------------
+     Thème par défaut : Vert tournoi. Les autres via
+     <html data-board="ardoise|sable|graphite|sauge">.            */
+  --sq-light:      #ebecd0;
+  --sq-dark:       #779556;
+  --sq-last-light: #f5f682;
+  --sq-last-dark:  #b9ca43;
+  --sq-check:      #e5665a;
+  --sq-red-light:  #f2a99f;   /* surlignage clic droit */
+  --sq-red-dark:   #d4705f;
+  --sq-blue-light: #bcd8f5;
+  --sq-blue-dark:  #6f9fc8;
+  --sq-dot:        rgba(0, 0, 0, .2);   /* point de coup légal, anneau de prise */
+  --sq-ring:       rgba(255, 255, 255, .8);
+  --arrow-best:    #81b64c;   /* meilleur coup / coup prévu (remplace #4caf50) */
+  --arrow-threat:  #ffa459;   /* menace */
+  --arrow-alt:     #8fc3ff;   /* variante utilisateur / alternative (remplace #3b82f6) */
+  --eval-white:    #f1f1f1;
+  --eval-black:    #403d39;
+
+  /* ---- Typographie ------------------------------------------------- */
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, Menlo, Consolas, monospace;
+  --fs-display: 28px;  --lh-display: 34px;   /* titre de page bureau */
+  --fs-title:   24px;  --lh-title:   30px;   /* titre de page mobile, gros chiffres */
+  --fs-h2:      18px;  --lh-h2:      24px;
+  --fs-body:    15px;  --lh-body:    22px;
+  --fs-small:   13px;  --lh-small:   18px;
+  --fs-label:   12px;  --lh-label:   16px;   /* majuscules, +0,04em */
+
+  /* ---- Espacements (base 4) ---------------------------------------- */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 24px; --s-6: 32px; --s-7: 48px;
+
+  /* ---- Formes ------------------------------------------------------ */
+  --r-sm: 3px;  --r: 6px;  --r-lg: 8px;  --r-sheet: 14px;
+  --tap: 44px;              /* cible tactile minimale, partout sous 1280 px */
+  --icon: 24px; --icon-stroke: 1.8;
+  --shadow-pop:   0 8px 24px rgba(0, 0, 0, .4);
+  --shadow-sheet: 0 -8px 24px rgba(0, 0, 0, .45);
+
+  /* ---- Mise en page ------------------------------------------------ */
+  --side: 220px;            /* barre latérale ≥ 1280 px */
+  --rail: 72px;             /* rail d'icônes 761–1279 px paysage */
+  --topbar: 52px;           /* barre du haut mobile et tablette portrait */
+  --panel-w: clamp(340px, 30vw, 480px);
+  --chrome-v: 112px;        /* 2 barres joueurs + marges (bureau) */
+  --chrome-h: calc(var(--side) + var(--panel-w) + 28px + 64px);  /* nav + panneau + éval. + marges */
+  --board: clamp(288px, min(100dvh - var(--chrome-v), 100vw - var(--chrome-h)), 840px);
+
+  /* ---- Mouvement --------------------------------------------------- */
+  --dur-fast: 120ms;        /* survols, fondu de prise */
+  --dur-move: 180ms;        /* déplacement d'une pièce */
+  --dur-base: 200ms;        /* toasts, menus */
+  --dur-flash: 300ms;       /* coup illégal */
+  --dur-slow: 320ms;        /* feuilles, tiroir */
+  --ease: cubic-bezier(.2, .8, .2, 1);
+
+  /* ---- Empilement -------------------------------------------------- */
+  --z-sidebar: 50; --z-sheet: 80; --z-modal: 90; --z-toast: 100;
+
+  /* ---- Alias de compatibilité avec style.css actuel ---------------- */
+  --panel:   var(--surface-1);
+  --panel2:  var(--surface-2);
+  --muted:   var(--text-muted);
+  --warn:    var(--warning);
+  --side-bg: var(--sidebar);
+  --light:   var(--sq-light);
+  --dark:    var(--sq-dark);
+}
+
+/* ---- Thèmes d'échiquier (Paramètres › Interface) ------------------- */
+[data-board="ardoise"]  { --sq-light: #dee3e6; --sq-dark: #8ca2ad; --sq-last-light: #e4ea9c; --sq-last-dark: #a8b86d; }
+[data-board="sable"]    { --sq-light: #f0d9b5; --sq-dark: #b58863; --sq-last-light: #f3e27a; --sq-last-dark: #cdac4c; }
+[data-board="graphite"] { --sq-light: #d4d6d1; --sq-dark: #7d837b; --sq-last-light: #e6e8a4; --sq-last-dark: #a6ad6f; }
+[data-board="sauge"]    { --sq-light: #e6e9dd; --sq-dark: #9aab8f; --sq-last-light: #eef0a8; --sq-last-dark: #bccb7c; }
+
+/* ---- Points de rupture (pour mémoire : les @media ne lisent pas les variables)
+   mobile          : (max-width: 760px)
+   mobile paysage  : (max-height: 500px) and (orientation: landscape)
+   tablette        : (min-width: 761px) and (max-width: 1279px)  → rail en paysage, barre du haut en portrait
+   ordinateur      : (min-width: 1280px)
+   grand écran     : (min-width: 1600px)                          → échiquier plafonné à 840 px
+   Remplacent les anciens 1100 / 1150 de style.css.                                         */
+@media (min-width: 761px) and (max-width: 1279px) and (orientation: landscape) {
+  :root { --chrome-h: calc(var(--rail) + var(--panel-w) + 20px + 40px); }
+}
+@media (max-width: 1279px) and (orientation: portrait) {
+  :root { --chrome-h: 32px; --chrome-v: calc(var(--topbar) + 2 * 44px + 240px); }
+}
+@media (max-width: 760px) {
+  :root { --chrome-h: 0px; --chrome-v: calc(var(--topbar) + 2 * 44px + 120px); }
+}
+
+/* ---- Mouvement réduit --------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur-move: 0ms; --dur-base: 0ms; --dur-slow: 0ms; }
+  /* Le flash de coup illégal devient un liseré fixe de 300 ms (pas de secousse). */
+}

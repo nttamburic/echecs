@@ -199,11 +199,11 @@ export const WINDOW_DAYS = 90;
 export const MIN_SITUATIONS = 3;
 export const THRESHOLD = 0.9;
 export const STATUS = {
-  new: { label: 'jamais revu', color: '#9b9893' },
-  progress: { label: 'en cours', color: '#f7c045' },
-  mastered: { label: 'maîtrisé', color: '#81b64c' },
-  weak: { label: 'non maîtrisé', color: '#fa412d' },
-  shared: { label: 'non compté (position partagée par deux répertoires avec des coups différents)', color: '#8fc3ff' },
+  new: { label: 'jamais revu', color: 'var(--mastery-new)' },
+  progress: { label: 'en cours', color: 'var(--mastery-wip)' },
+  mastered: { label: 'maîtrisé', color: 'var(--mastery-ok)' },
+  weak: { label: 'non maîtrisé', color: 'var(--mastery-ko)' },
+  shared: { label: 'non compté (position partagée par deux répertoires avec des coups différents)', color: 'var(--mastery-off)' },
 };
 
 export function statusOf(correct, total) {

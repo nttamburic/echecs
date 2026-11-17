@@ -1,5 +1,6 @@
 // Classement des coups et précision.
 import { Chess } from './vendor/chess.js';
+import { fmtEval } from './core/format.js';
 
 export const VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 
@@ -30,16 +31,16 @@ export function gameAccuracy(accs) {
 }
 
 export const CLASSES = {
-  brilliant: { label: 'Brillant', sym: '!!', color: '#1baaa6', order: 0 },
-  great: { label: 'Très bon', sym: '!', color: '#5c8bb0', order: 1 },
-  best: { label: 'Meilleur', sym: '★', color: '#81b64c', order: 2 },
-  excellent: { label: 'Excellent', sym: '👍', color: '#96bc4b', order: 3 },
-  good: { label: 'Bon', sym: '✓', color: '#95b776', order: 4 },
-  book: { label: 'Théorie', sym: '📖', color: '#a88865', order: 5 },
-  inaccuracy: { label: 'Imprécision', sym: '?!', color: '#f7c631', order: 6 },
-  mistake: { label: 'Erreur', sym: '?', color: '#ffa459', order: 7 },
-  miss: { label: 'Occasion manquée', sym: '✗', color: '#ff7769', order: 8 },
-  blunder: { label: 'Gaffe', sym: '??', color: '#fa412d', order: 9 },
+  brilliant: { label: 'Brillant', sym: '!!', color: 'var(--cls-brillant)', order: 0 },
+  great: { label: 'Très bon', sym: '!', color: 'var(--cls-tresbon)', order: 1 },
+  best: { label: 'Meilleur', sym: '★', color: 'var(--cls-meilleur)', order: 2 },
+  excellent: { label: 'Excellent', sym: '✦', color: 'var(--cls-excellent)', order: 3 },
+  good: { label: 'Bon', sym: '✓', color: 'var(--cls-bon)', order: 4 },
+  book: { label: 'Théorie', sym: 'T', color: 'var(--cls-theorie)', order: 5 },
+  inaccuracy: { label: 'Imprécision', sym: '?!', color: 'var(--cls-imprecision)', order: 6 },
+  mistake: { label: 'Erreur', sym: '?', color: 'var(--cls-erreur)', order: 7 },
+  miss: { label: 'Occasion manquée', sym: '✗', color: 'var(--cls-manquee)', order: 8 },
+  blunder: { label: 'Gaffe', sym: '??', color: 'var(--cls-gaffe)', order: 9 },
 };
 export const SUMMARY_ORDER = ['brilliant', 'great', 'best', 'excellent', 'good', 'book', 'inaccuracy', 'mistake', 'miss', 'blunder'];
 
@@ -180,11 +181,10 @@ export function summarize(moves, results) {
   return s;
 }
 
-// Score lisible : +1.25, -0.40, M3, -M2
+// Score lisible (format.js) : +1,3 · −0,4 · M3 · −M2
 export function fmtScore(score) {
   if (!score) return '';
-  if (score.mate !== undefined) return score.mate === 0 ? '#' : (score.mate > 0 ? 'M' : '-M') + Math.abs(score.mate);
+  if (score.mate !== undefined) return score.mate === 0 ? '#' : fmtEval(0, score.mate);
   if (score.tb && Math.abs(score.cp) > 5000) return score.cp > 0 ? 'Gain (TB)' : 'Perte (TB)';
-  const v = score.cp / 100;
-  return (v > 0 ? '+' : '') + v.toFixed(2);
+  return fmtEval(score.cp);
 }
