@@ -1,30 +1,55 @@
 // Paramètres : profil chess.com, connexion GitHub (synchronisation).
-// Les réglages du moteur sont dans la roue dentée ⚙ du panneau d'une partie et dans « Analyse multiple ».
+// Onglets : Profil, Connexions, Moteur, Interface, Application. Sur mobile : liste puis détail.
 import { $, esc, local, toast } from '../core/ui.js';
 import { cfg, test, syncNow, state, onSync } from '../core/sync.js';
 import { getUser, changeUser } from './analyse.js';
 import { lichessCfg, setToken, forgetToken } from '../core/lichess.js';
+import { fmtAgo } from '../core/format.js';
+import { engineFields } from './analyse.js';
+import { applyBoardPrefs } from '../board.js';
+import { MAIA_MODELS, maiaModel } from '../core/maia.js';
 
 const SECTIONS = [
-  ['profile', 'Profil chess.com'],
-  ['connection', 'Connexion'],
+  ['profile', 'Profil', 'Pseudo chess.com'],
+  ['connection', 'Connexions', 'GitHub (synchro) et Lichess'],
+  ['engine', 'Moteur', 'Stockfish, profondeur, Maia'],
+  ['interface', 'Interface', 'Échiquier et coordonnées'],
+  ['app', 'Application', 'Installation, hors ligne, crédits'],
 ];
+const BOARDS = [['tournoi', 'Vert tournoi', '#ebecd0', '#779556'], ['ardoise', 'Ardoise', '#dee3e6', '#8ca2ad'], ['sable', 'Sable', '#f0d9b5', '#b58863'],
+  ['graphite', 'Graphite', '#d4d6d1', '#7d837b'], ['sauge', 'Sauge', '#e6e9dd', '#9aab8f']];
+const CHEV = '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
 
 let unsub = null;
 let installEvent = null;
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvent = e; });
 
 export function render(el, sub) {
-  const cur = SECTIONS.some(([k]) => k === sub) ? sub : 'profile';
+  const detail = SECTIONS.some(([k]) => k === sub); // sur mobile : liste si aucune section choisie
+  const cur = detail ? sub : 'profile';
+  const label = SECTIONS.find(([k]) => k === cur)[1];
   el.innerHTML = `
   <h1 class="page-title">Paramètres</h1>
-  <div class="settings">
-    <nav class="settings-nav">${SECTIONS.map(([k, label]) => `<a href="#/settings/${k}" class="${k === cur ? 'active' : ''}">${label}</a>`).join('')}</nav>
-    <div class="settings-body"></div>
+  <div class="settings ${detail ? 'is-detail' : 'is-list'}">
+    <nav class="settings-nav" aria-label="Sections des paramètres">${SECTIONS.map(([k, l, d]) => `<a href="#/settings/${k}" ${k === cur ? 'class="active" aria-current="page"' : ''}><span><b>${l}</b><span class="sdesc muted small">${d}</span></span>${CHEV}</a>`).join('')}</nav>
+    <div class="settings-body">
+      <a class="settings-back" href="#/settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg> Paramètres</a>
+      <h2 class="settings-h">${label}</h2>
+      <div id="settings-pane"></div>
+    </div>
   </div>`;
-  const body = $('.settings-body', el);
+  const nav = $('.settings-nav', el);
+  nav.onkeydown = (e) => {
+    const d = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+    const links = [...nav.querySelectorAll('a')];
+    const i = links.indexOf(document.activeElement);
+    if (!d || i < 0) return;
+    links[(i + d + links.length) % links.length].focus();
+    e.preventDefault();
+  };
+  const body = $('#settings-pane', el);
   if (unsub) { unsub(); unsub = null; }
-  ({ profile, connection })[cur](body);
+  ({ profile, connection, engine, interface: interfaceTab, app })[cur](body);
 }
 
 // ------------------------------------------------------------------ profil
@@ -101,13 +126,6 @@ function connection(el) {
         <li>« Créer », copiez le jeton (il commence par <b>lip_</b>), collez-le ci-dessus, puis « Enregistrer et tester ».</li>
       </ol>
     </details>
-  </section>
-  <section class="card">
-    <details>
-      <summary>Installer l'appli sur le téléphone</summary>
-      <p>Sur Android, ouvrez cette page dans Chrome, puis menu <b>⋮</b> → <b>« Ajouter à l'écran d'accueil »</b> (ou « Installer l'application »).</p>
-      <button id="install" class="btn ${installEvent ? '' : 'hidden'}">Installer l'application</button>
-    </details>
   </section>`;
 
   const msg = $('#gh-msg');
@@ -137,7 +155,7 @@ function connection(el) {
     if (!document.body.contains(msg)) return;
     if (st.running) { msg.className = 'muted'; msg.textContent = 'Synchronisation en cours…'; }
     else if (st.error) { msg.className = 'err'; msg.textContent = st.error; }
-    else if (st.lastSync && cfg.configured) { msg.className = 'muted'; msg.textContent = 'Dernière synchronisation : ' + new Date(st.lastSync).toLocaleString('fr-FR'); }
+    else if (st.lastSync && cfg.configured) { msg.className = 'muted'; msg.textContent = 'Dernière synchronisation : ' + fmtAgo(new Date(st.lastSync)); msg.title = new Date(st.lastSync).toLocaleString('fr-FR'); }
   });
   const liMsg = $('#li-msg');
   $('#li-save').onclick = async () => {
@@ -149,5 +167,86 @@ function connection(el) {
     if (!confirm('Supprimer le jeton Lichess de cet appareil ?')) return;
     forgetToken(); $('#li-token').value = ''; liMsg.className = 'muted'; liMsg.textContent = 'Jeton supprimé de cet appareil.';
   };
-  $('#install').onclick =async () => { if (installEvent) { installEvent.prompt(); installEvent = null; $('#install').classList.add('hidden'); } };
+}
+
+// ------------------------------------------------------------------ moteur
+function engine(el) {
+  el.innerHTML = `
+  <section class="card">
+    <h2>Stockfish</h2>
+    <p class="muted">Ces réglages valent pour toutes les analyses : parties, ouvertures, aide et flèches de « Jouer ».
+      Profondeur et temps maximum s'appliquent à chaque position : le moteur s'arrête au premier des deux atteint.</p>
+    <div id="st-eng"></div>
+    <div class="row"><button id="st-eng-save" class="btn primary">Enregistrer</button></div>
+    <p id="st-eng-msg" class="muted small" role="status"></p>
+  </section>
+  <section class="card">
+    <h2>Maia (partie contre le bot)</h2>
+    <div class="frow"><label for="st-maia">Modèle Maia</label><select id="st-maia"></select></div>
+    <p class="muted small">Le modèle 23M imite mieux le jeu humain ; le 5M est plus léger pour un téléphone. Chaque modèle n'est téléchargé qu'une fois.</p>
+  </section>`;
+  const f = engineFields($('#st-eng', el), 'st');
+  $('#st-eng-save', el).onclick = async () => {
+    await f.save();
+    const m = $('#st-eng-msg', el); m.className = 'ok small'; m.textContent = 'Enregistré. Pour une partie déjà analysée, utilisez « Relancer l\'analyse ».';
+  };
+  const sel = $('#st-maia', el);
+  sel.innerHTML = MAIA_MODELS.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('');
+  sel.value = maiaModel();
+  sel.onchange = () => { local.set('maiaModel', sel.value); toast('Modèle Maia enregistré.'); };
+}
+
+// ------------------------------------------------------------------ interface
+function interfaceTab(el) {
+  const get = (k, d) => { try { return localStorage.getItem(k) || d; } catch { return d; } };
+  const put = (k, v) => { try { localStorage.setItem(k, v); } catch { /* */ } };
+  const theme = get('cj-board', 'tournoi');
+  el.innerHTML = `
+  <section class="card">
+    <h2>Échiquier</h2>
+    <p class="muted">Réglage propre à cet appareil. Il s'applique à toutes les parties, aux ouvertures et à l'entraînement.</p>
+    <div id="st-boards" class="board-picks" role="radiogroup" aria-label="Modèle d'échiquier">${BOARDS.map(([k, l, a, b]) => `
+      <button type="button" role="radio" data-b="${k}" aria-checked="${k === theme}" tabindex="${k === theme ? 0 : -1}">
+        <span class="mini" aria-hidden="true" style="--a:${a};--b:${b}"></span><span>${l}</span></button>`).join('')}</div>
+    <label class="check"><input type="checkbox" id="st-coords" ${get('cj-coords', '1') !== '0' ? 'checked' : ''}> Afficher les coordonnées dans les cases</label>
+  </section>
+  <section class="card">
+    <h2>Pièces</h2>
+    <p class="muted">Jeu de pièces « cburnett » (Colin M.L. Burnett), licence CC BY-SA 3.0.</p>
+  </section>`;
+  const box = $('#st-boards', el);
+  const choose = (k) => {
+    put('cj-board', k); applyBoardPrefs();
+    box.querySelectorAll('button').forEach((b) => { const on = b.dataset.b === k; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; });
+  };
+  box.onclick = (e) => { const b = e.target.closest('button[data-b]'); if (b) choose(b.dataset.b); };
+  box.onkeydown = (e) => {
+    const d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    const bs = [...box.querySelectorAll('button')];
+    const i = bs.indexOf(document.activeElement);
+    if (!d || i < 0) return;
+    const n = bs[(i + d + bs.length) % bs.length];
+    choose(n.dataset.b); n.focus(); e.preventDefault();
+  };
+  $('#st-coords', el).onchange = (e) => { put('cj-coords', e.target.checked ? '1' : '0'); applyBoardPrefs(); };
+}
+
+// ------------------------------------------------------------------ application
+function app(el) {
+  el.innerHTML = `
+  <section class="card">
+    <h2>Installer l'application</h2>
+    <p>Sur Android, ouvrez cette page dans Chrome, puis menu <b>⋮</b> → <b>« Ajouter à l'écran d'accueil »</b> (ou « Installer l'application »).</p>
+    <button id="install" class="btn ${installEvent ? '' : 'hidden'}">Installer l'application</button>
+  </section>
+  <section class="card">
+    <h2>Hors ligne</h2>
+    <p class="muted">L'application fonctionne sans réseau pour vos parties déjà chargées et vos répertoires. Les récupérations chess.com, les statistiques Lichess et la synchronisation GitHub demandent une connexion.</p>
+  </section>
+  <section class="card">
+    <h2>Crédits</h2>
+    <p class="muted">Moteur : Stockfish. Bot : Maia. Pièces : cburnett (CC BY-SA 3.0). Statistiques d'ouvertures : Lichess.</p>
+  </section>`;
+  const b = $('#install', el);
+  b.onclick = async () => { if (installEvent) { installEvent.prompt(); installEvent = null; b.classList.add('hidden'); } };
 }
