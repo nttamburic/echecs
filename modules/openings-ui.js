@@ -168,7 +168,11 @@ export async function renderHome(el) {
       <div id="pgn-p-study" role="tabpanel" aria-labelledby="pgn-t-study" class="hidden"><label for="pgn-study">Lien de l'étude Lichess</label>
         <div class="inline"><input id="pgn-study" placeholder="https://lichess.org/study/…" autocomplete="off" spellcheck="false"><button type="button" id="pgn-paste" class="btn">Coller</button></div></div>
       <div id="pgn-p-text" role="tabpanel" aria-labelledby="pgn-t-text" class="hidden"><label>Texte du PGN <textarea id="pgn-text" rows="6" spellcheck="false" placeholder="1. e4 e5 2. Nf3 (2. Bc4) 2... Nc6 3. Bb5 *"></textarea></label></div>
-      <label>Ajouter dans <select id="pgn-target"><option value="">Un nouveau répertoire</option>${reps.map((r) => `<option value="${esc(r.id)}">${esc(r.name)} (${colorFr(r.color)})</option>`).join('')}</select></label>
+      <p id="pgn-status" class="pgn-status hidden" role="status"></p>
+      <fieldset class="pgn-dest" id="pgn-dest"><legend class="lbl-up">Destination</legend>
+        ${reps.map((r) => `<label class="dest"><input type="radio" name="pgn-dest" value="${esc(r.id)}"><span><strong>${esc(r.name)}</strong><span class="muted" data-sub="${esc(r.id)}">Fusionner · ${colorFr(r.color)}</span></span></label>`).join('')}
+        <label class="dest"><input type="radio" name="pgn-dest" value="" checked><span><strong>Nouveau répertoire</strong><span class="muted" data-sub="">Nom et couleur à choisir</span></span></label>
+      </fieldset>
     </div>
     <div id="pgn-new">
       <div class="form"><label>Nom <input id="pgn-name" placeholder="ex. Répertoire importé" autocomplete="off"></label></div>
@@ -181,7 +185,7 @@ export async function renderHome(el) {
     <p id="pgn-err" class="err small"></p>
     <div class="row end"><button value="cancel" class="btn">Annuler</button><button id="pgn-go" value="ok" class="btn primary">Importer</button></div>
   </form></dialog>`;
-  bindImport(el);
+  bindImport(el, reps);
   if (reps.length && !LI.loaded) loadLichess();
   if (reps.length) renderSuggestions($('#sugg-box', el), reps);
   homeCoverage(el, reps);
@@ -226,18 +230,85 @@ function enterIsPrimary(dlg) {
 }
 
 // ------------------------------------------------------------------ import PGN
-function bindImport(el) {
+function bindImport(el, reps) {
   const dlg = $('#pgn-dlg', el);
   let color = 'w';
   const picks = dlg.querySelectorAll('.side-pick button');
   picks.forEach((b) => { b.onclick = () => { color = b.dataset.c; picks.forEach((x) => x.classList.toggle('on', x === b)); }; });
-  const target = $('#pgn-target', el);
-  target.onchange = () => $('#pgn-new', el).classList.toggle('hidden', !!target.value);
+  const radios = [...dlg.querySelectorAll('input[name=pgn-dest]')];
+  const targetId = () => (radios.find((r) => r.checked) || { value: '' }).value;
+  let touched = false;
+  radios.forEach((r) => { r.onchange = () => { $('#pgn-new', el).classList.toggle('hidden', !!targetId()); renderPv(); }; r.onclick = () => { touched = true; }; });
   let src = 'file';
+  // Source lue (fichier, étude téléchargée ou texte) + aperçu : chapitres, coups, coups nouveaux par destination.
+  let cache = null, pv = null, seq = 0, timer = 0;
+  async function getSource() {
+    if (src === 'text') return { text: $('#pgn-text', el).value };
+    if (src === 'file') {
+      const f = $('#pgn-file', el).files[0];
+      if (!f) return { text: '', empty: 'Choisissez un fichier PGN.' };
+      if (f.size > 5 * 1048576) throw new Error('Fichier trop gros (5 Mo au maximum)');
+      if (cache && cache.key === f) return cache;
+      return (cache = { key: f, text: await f.text(), fileName: f.name });
+    }
+    const link = $('#pgn-study', el).value.trim();
+    if (!link) return { text: '', empty: 'Collez le lien d’une étude Lichess.' };
+    if (cache && cache.key === link) return cache;
+    const text = await studyPgn(link);
+    const sn = /\[StudyName "([^"]*)"\]/.exec(text);
+    return (cache = { key: link, text, studyName: sn ? sn[1] : '' });
+  }
+  const status = $('#pgn-status', el), goBtn = $('#pgn-go', el);
+  const destAdded = () => { if (!pv) return null; const id = targetId(); return id ? (pv.adds[id] ?? 0) : pv.total; };
+  function renderPv() {
+    const err = $('#pgn-err', el);
+    status.classList.toggle('hidden', !pv);
+    if (pv) status.innerHTML = `<span class="ok" aria-hidden="true">✓</span><span>${pv.name ? `« ${esc(pv.name)} » · ` : ''}${plural(pv.games, 'chapitre')} · ${plural(pv.total, 'coup')}</span>`;
+    dlg.querySelectorAll('[data-sub]').forEach((sp) => {
+      const id = sp.dataset.sub;
+      if (!id) { sp.textContent = 'Nom et couleur à choisir'; return; }
+      const r = reps.find((x) => x.id === id), n = pv ? pv.adds[id] : null;
+      sp.textContent = `Fusionner · ${n == null ? colorFr(r.color) : n ? `+${plural(n, 'coup')} nouveau${n > 1 ? 'x' : ''}` : 'aucun coup nouveau'}`;
+    });
+    dlg.querySelectorAll('.dest').forEach((l) => l.classList.toggle('on', l.querySelector('input').checked));
+    const n = destAdded();
+    goBtn.textContent = n == null ? 'Importer' : n ? `Importer ${plural(n, 'coup')}` : 'Aucun coup à importer';
+    goBtn.disabled = n === 0;
+    if (err.dataset.kind === 'pv' && pv) err.textContent = '';
+  }
+  async function refreshPv() {
+    const my = ++seq, err = $('#pgn-err', el);
+    pv = null; err.textContent = ''; err.dataset.kind = ''; renderPv();
+    let r;
+    try {
+      if (src === 'study' && $('#pgn-study', el).value.trim() && !(cache && cache.key === $('#pgn-study', el).value.trim())) { err.textContent = 'Téléchargement de l’étude…'; err.dataset.kind = 'pv'; }
+      r = await getSource();
+    } catch (x) { if (my === seq) { err.textContent = x.message + '.'; err.dataset.kind = 'pv'; } return; }
+    if (my !== seq) return;
+    err.textContent = ''; err.dataset.kind = '';
+    if (!r.text.trim()) return;
+    const fresh = importPgn(newRepertoire({ name: 'x', color: 'w' }), r.text);
+    if (!fresh.added) { err.textContent = fresh.errors.length ? `Aucun coup d'échecs reconnu (premier coup refusé : « ${fresh.errors[0]} »).` : 'Aucun coup trouvé dans ce PGN.'; err.dataset.kind = 'pv'; return; }
+    const adds = {};
+    for (const rep of reps) adds[rep.id] = importPgn(structuredClone(rep), r.text).added;
+    pv = { name: r.studyName || (r.fileName || '').replace(/\.[^.]+$/, ''), games: fresh.games, total: fresh.added, adds };
+    if (!touched) { // propose le répertoire qui recoupe le plus l'import
+      let best = '', ov = 0;
+      for (const rep of reps) { const o = fresh.added - adds[rep.id]; if (o > ov) { ov = o; best = rep.id; } }
+      radios.forEach((x) => { x.checked = x.value === best; });
+      $('#pgn-new', el).classList.toggle('hidden', !!best);
+    }
+    renderPv();
+  }
+  const schedulePv = (ms = 0) => { clearTimeout(timer); timer = setTimeout(refreshPv, ms); };
+  $('#pgn-file', el).onchange = () => schedulePv();
+  $('#pgn-text', el).oninput = () => schedulePv(400);;
+  $('#pgn-study', el).onchange = () => schedulePv();
   const tabs = dlg.querySelectorAll('.pgn-tabs [role=tab]');
   const setSrc = (k) => {
     src = k; $('#pgn-err', el).textContent = '';
     tabs.forEach((b) => { const on = b.dataset.src === k; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; $('#' + b.getAttribute('aria-controls'), el).classList.toggle('hidden', !on); });
+    schedulePv();
   };
   tabs.forEach((b) => { b.onclick = () => setSrc(b.dataset.src); });
   dlg.querySelector('.pgn-tabs').addEventListener('keydown', (e) => {
@@ -247,38 +318,30 @@ function bindImport(el) {
     setSrc(n.dataset.src); n.focus(); e.preventDefault();
   });
   $('#pgn-paste', el).onclick = async () => {
-    try { const t = await navigator.clipboard.readText(); if (t) $('#pgn-study', el).value = t.trim(); }
+    try { const t = await navigator.clipboard.readText(); if (t) { $('#pgn-study', el).value = t.trim(); schedulePv(); } }
     catch { $('#pgn-err', el).textContent = 'Le presse-papiers n’est pas accessible : collez le lien dans le champ.'; }
   };
   $('#rep-import', el).onclick = () => {
     setSrc('file');
     $('#pgn-file', el).value = ''; $('#pgn-text', el).value = ''; $('#pgn-study', el).value = ''; $('#pgn-err', el).textContent = '';
+    cache = null; pv = null; touched = false; radios.forEach((x) => { x.checked = !x.value; }); $('#pgn-new', el).classList.remove('hidden'); renderPv();
     dlg.showModal();
   };
   $('#pgn-go', el).onclick = async (e) => {
     e.preventDefault();
     const err = $('#pgn-err', el);
-    let text = src === 'text' ? $('#pgn-text', el).value : '';
-    const file = src === 'file' ? $('#pgn-file', el).files[0] : null;
-    if (file) {
-      if (file.size > 5 * 1048576) { err.textContent = 'Fichier trop gros (5 Mo au maximum).'; return; }
-      text = await file.text();
-    }
-    const link = $('#pgn-study', el).value.trim();
-    let studyName = '';
-    if (src === 'study' && link) {
-      const go = $('#pgn-go', el);
-      err.textContent = 'Téléchargement de l’étude…';
-      go.disabled = true;
-      try { text = await studyPgn(link); } catch (x) { err.textContent = x.message + '.'; return; } finally { go.disabled = false; }
-      err.textContent = '';
-      const sn = /\[StudyName "([^"]*)"\]/.exec(text);
-      studyName = sn ? sn[1] : '';
-    }
+    err.dataset.kind = '';
+    let text = '', studyName = '', fileName = '';
+    goBtn.disabled = true;
+    try {
+      const r = await getSource();
+      if (r.empty) { err.textContent = r.empty; return; }
+      ({ text, studyName = '', fileName = '' } = r);
+    } catch (x) { err.textContent = x.message + '.'; return; } finally { renderPv(); }
     if (!text.trim()) { err.textContent = src === 'file' ? 'Choisissez un fichier PGN.' : src === 'study' ? 'Collez le lien d’une étude Lichess.' : 'Collez le texte du PGN.'; return; }
-    let rep = target.value ? await getRepertoire(target.value) : null;
+    let rep = targetId() ? await getRepertoire(targetId()) : null;
     const isNew = !rep;
-    if (isNew) rep = newRepertoire({ name: $('#pgn-name', el).value.trim() || (file ? file.name.replace(/\.[^.]+$/, '') : studyName || `Répertoire ${colorFr(color)}`), color });
+    if (isNew) rep = newRepertoire({ name: $('#pgn-name', el).value.trim() || (fileName ? fileName.replace(/\.[^.]+$/, '') : studyName || `Répertoire ${colorFr(color)}`), color });
     const r = importPgn(rep, text);
     if (!r.added && isNew) {
       err.textContent = r.errors.length ? `Aucun coup d'échecs reconnu dans ce texte (premier coup refusé : « ${r.errors[0]} »).` : 'Aucun coup trouvé dans ce PGN.';
