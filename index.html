@@ -63,24 +63,25 @@
   <section class="card">
     <div class="row filters">
       <input id="filter" type="search" placeholder="Filtrer par adversaire" aria-label="Filtrer par adversaire" autocomplete="off">
-      <select id="tc" aria-label="Cadence">
-        <option value="">Toutes cadences</option>
-        <option value="bullet">Bullet</option>
-        <option value="blitz">Blitz</option>
-        <option value="rapid">Rapide</option>
-        <option value="daily">Par jour</option>
-      </select>
       <select id="op" title="Ouverture jouée (parties analysées)" aria-label="Ouverture jouée"><option value="">Toutes ouvertures</option></select>
-      <span id="count" class="muted"></span>
+      <span id="count" class="muted" role="status" aria-live="polite"></span>
       <button id="multi" class="btn push-right" disabled>Analyse multiple</button>
     </div>
-    <p id="batch-progress" class="small hidden"></p>
+    <div id="tc" class="chips" role="group" aria-label="Cadence">
+      <button class="chip" data-tc="" aria-pressed="true">Toutes</button>
+      <button class="chip" data-tc="bullet" aria-pressed="false">Bullet</button>
+      <button class="chip" data-tc="blitz" aria-pressed="false">Blitz</button>
+      <button class="chip" data-tc="rapid" aria-pressed="false">Rapide</button>
+      <button class="chip" data-tc="daily" aria-pressed="false">Par jour</button>
+    </div>
+    <p id="batch-progress" class="small hidden" role="status"></p>
     <div class="table-wrap">
-    <table id="games">
-      <thead><tr><th>Date</th><th class="opt">Cadence</th><th>Moi</th><th>Adversaire</th><th>Résultat</th><th>Précision</th></tr></thead>
-      <tbody></tbody>
+    <table id="games" role="table" aria-label="Historique des parties">
+      <thead><tr role="row"><th role="columnheader" scope="col" class="c-date">Date</th><th role="columnheader" scope="col" class="c-tc">Cadence</th><th role="columnheader" scope="col" class="c-me">Moi</th><th role="columnheader" scope="col" class="c-opp">Adversaire</th><th role="columnheader" scope="col" class="c-res">Résultat</th><th role="columnheader" scope="col" class="c-acc">Précision</th></tr></thead>
+      <tbody role="rowgroup"></tbody>
     </table>
     </div>
+    <div id="hist-state" class="hstate hidden"></div>
     <button id="more" class="btn hidden">Afficher plus</button>
   </section>
 </main>

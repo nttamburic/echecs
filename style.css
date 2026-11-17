@@ -90,6 +90,23 @@ a.btn { text-decoration: none; }
 #games th { color: var(--muted); font-weight: 600; font-size: 13px; }
 #games tbody tr[data-id] { cursor: pointer; }
 @media (hover: hover) { #games tbody tr[data-id]:hover { background: var(--panel2); } }
+#games tbody tr[data-id]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; background: var(--panel2); }
+#games td { min-height: var(--tap); }
+
+/* puces de filtre (cadence) */
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.chip { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; min-height: 36px; font: inherit; cursor: pointer; }
+@media (hover: hover) { .chip:hover { background: var(--surface-3); } }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--text-strong); font-weight: 600; }
+
+/* états : vide, erreur, chargement */
+.hstate { margin-top: 12px; }
+.hs { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 18px 4px; }
+.hs.err strong { color: var(--danger-text); }
+#games tr.skel td { padding: 10px 8px; }
+#games tr.skel span { display: block; height: 18px; border-radius: 4px; background: linear-gradient(90deg, var(--panel2) 25%, var(--surface-3) 50%, var(--panel2) 75%); background-size: 200% 100%; animation: skel 1.4s linear infinite; }
+@keyframes skel { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { #games tr.skel span { animation: none; } }
 .win { color: var(--accent); } .loss { color: var(--loss); } .draw { color: var(--muted); }
 .acc { font-weight: 600; } .acc.partial { color: var(--muted); font-weight: 400; }
 .color-dot { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; border: 1px solid var(--text-zero); }
@@ -341,9 +358,24 @@ a.btn { text-decoration: none; }
   .settings-nav a.active { box-shadow: inset 0 -3px 0 var(--accent); }
   .card { padding: 10px 12px; }
   #user { width: 100%; }
-  #games th, #games td { padding: 6px 4px; font-size: 13px; }
-  .opt { display: none; }
-  #games td.opp { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* tableau → cartes */
+  #games, #games tbody { display: block; }
+  #games thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  #games tbody tr { display: grid; grid-template-columns: auto auto 1fr auto; grid-template-areas: "opp opp opp res" "date tc me acc"; gap: 4px 10px; align-items: center; padding: 12px 10px; margin-top: 8px; background: var(--panel2); border-radius: var(--r-lg); min-height: var(--tap); }
+  #games td { display: block; padding: 0; border: 0; font-size: 14px; min-height: 0; }
+  #games td.c-opp { grid-area: opp; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #games td.c-res { grid-area: res; text-align: right; font-weight: 600; }
+  #games td.c-acc { grid-area: acc; text-align: right; }
+  #games td.c-date, #games td.c-tc, #games td.c-me { color: var(--muted); font-size: 13px; }
+  #games td.c-date { grid-area: date; } #games td.c-tc { grid-area: tc; } #games td.c-me { grid-area: me; }
+  #games tr.skel { display: block; background: none; padding: 0; margin: 0; }
+  #games tr.skel td { display: block; padding: 6px 0; }
+  #games tr.skel span { height: 64px; border-radius: var(--r-lg); }
+  .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: -4px; padding-inline: 4px; }
+  .chip { flex: none; min-height: var(--tap); }
+  /* « Analyser plusieurs parties » en feuille du bas */
+  #multi-dlg { margin: auto 0 0; max-height: 88vh; overflow-y: auto; width: 100%; max-width: none; border-radius: var(--r-sheet) var(--r-sheet) 0 0; padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
+  #multi-dlg .btn { min-height: var(--tap); }
   #game-view, #play-view, #rep-view, #train-view { padding: 6px 4px; }
   .pmoves { max-height: 220px; }
   #moves { max-height: 220px; }

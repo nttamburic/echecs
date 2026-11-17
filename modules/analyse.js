@@ -1,5 +1,6 @@
 // Module « Analyse » : liste des parties chess.com et analyse détaillée d'une partie.
 import { initSheet } from '../core/sheet.js';
+import { fmtGameDate, fmtPct } from '../core/format.js';
 import { Chess } from '../vendor/chess.js';
 import { Board } from '../board.js';
 import { classifyMove, classifyGame, summarize, CLASSES, SUMMARY_ORDER, fmtScore, winPct, epd } from '../analysis.js';
@@ -25,6 +26,9 @@ const S = {
   games: [],
   index: {},
   shown: 100,
+  tc: '', // puce de cadence active
+  err: '', // dernière erreur de chargement
+  busy: false, // chargement des parties en cours
   g: null, // partie ouverte
   cycle: {},
   batch: null, // l'analyse multiple en cours : { stop, done, total, cur, failed }
@@ -72,6 +76,9 @@ export async function loadGames() {
   if (!user) return;
   S.games = [];
   S.shown = 100;
+  S.err = '';
+  S.busy = true;
+  renderList();
   const token = (S.loadToken = {}); // un nouveau chargement annule le précédent
   const prog = $('#load-progress');
   try {
@@ -91,18 +98,24 @@ export async function loadGames() {
     S.games.sort((a, b) => b.end - a.end);
     prog.textContent = `${S.games.length} parties terminées récupérées (${months.length} mois depuis la création du compte).`;
   } catch (e) {
-    if (token === S.loadToken) prog.textContent = 'Erreur : ' + e.message;
+    if (token === S.loadToken) { S.err = e.message || 'Erreur inconnue'; prog.textContent = ''; }
   } finally {
     if (token === S.loadToken) {
+      S.busy = false;
       await backfillOpenings(); renderList(); renderBatch();
       scanGames(S.games, user); // situations du module Ouvertures tirées des parties récentes
     }
   }
 }
 
+function setTc(v) {
+  S.tc = v;
+  document.querySelectorAll('#tc .chip').forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.tc === v)));
+}
+
 function renderList() {
   const q = $('#filter').value.trim().toLowerCase();
-  const tc = $('#tc').value;
+  const tc = S.tc;
   const op = $('#op').value;
   renderOpeningFilter();
   const list = S.games.filter((g) => {
@@ -126,20 +139,39 @@ function renderList() {
     let acc = '';
     if (a) {
       const myAcc = meWhite ? a.accW : a.accB;
-      acc = a.complete ? `<span class="acc">${fr1(myAcc)} %</span>` : '<span class="acc partial">en partie</span>';
+      acc = a.complete ? `<span class="acc">${fmtPct(myAcc, 1)}</span>` : '<span class="acc partial">en cours</span>';
     }
-    const d = new Date(g.end * 1000);
-    return `<tr data-id="${esc(g.id)}">
-      <td>${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
-      <td class="opt">${TIME_FR[g.timeClass] || esc(g.timeClass)}</td>
-      <td><span class="color-dot ${meWhite ? 'w' : 'b'}"></span>${esc(me.rating)}</td>
-      <td class="opp">${esc(opp.name)} <span class="muted">(${esc(opp.rating)})</span></td>
-      <td class="${res.cls}">${res.txt}</td>
-      <td>${acc}</td></tr>`;
-  }).join('');
-  $('#games tbody').innerHTML = rows || `<tr><td colspan="6" class="muted">${S.games.length ? 'Aucune partie ne correspond.' : 'Aucune partie pour le moment.'}</td></tr>`;
+    const when = fmtGameDate(g.end * 1000);
+    const tcl = TIME_FR[g.timeClass] || esc(g.timeClass);
+    const label = `${when}, ${tcl}, contre ${opp.name} (${opp.rating}), ${res.txt}${a && a.complete ? `, précision ${fmtPct(meWhite ? a.accW : a.accB, 1)}` : ''}. Ouvrir la partie.`;
+    return `<tr role="row" class="grow" data-id="${esc(g.id)}" tabindex="0" aria-label="${esc(label)}">
+      <td role="cell" class="c-date">${when}</td>
+      <td role="cell" class="c-tc">${tcl}</td>
+      <td role="cell" class="c-me"><span class="color-dot ${meWhite ? 'w' : 'b'}" title="${meWhite ? 'Blancs' : 'Noirs'}"></span>${esc(me.rating)}</td>
+      <td role="cell" class="c-opp opp">${esc(opp.name)} <span class="muted">(${esc(opp.rating)})</span></td>
+      <td role="cell" class="c-res ${res.cls}">${res.txt}</td>
+      <td role="cell" class="c-acc">${acc}</td></tr>`;
+  });
+  let html = rows.join('');
+  const st = $('#hist-state');
+  let state = '';
+  if (!S.games.length) {
+    if (S.err) state = `<div role="alert" class="hs err"><strong>Impossible de récupérer les parties.</strong><span class="muted">${esc(S.err)}</span><button class="btn" id="hs-retry">Réessayer</button></div>`;
+    else if (S.busy) html = Array.from({ length: 6 }, () => '<tr role="row" class="skel" aria-hidden="true"><td role="cell" colspan="6"><span></span></td></tr>').join('');
+    else if (S.user) state = '<div class="hs"><strong>Aucune partie pour le moment.</strong><span class="muted">Récupérez vos parties terminées depuis chess.com.</span><button class="btn primary" id="hs-load">Actualiser</button></div>';
+  } else if (!list.length) {
+    state = '<div class="hs"><strong>Aucune partie ne correspond.</strong><span class="muted">Essayez d\'élargir les filtres.</span><button class="btn" id="hs-reset">Réinitialiser les filtres</button></div>';
+  }
+  $('#games tbody').innerHTML = html;
+  $('#games').setAttribute('aria-busy', S.busy ? 'true' : 'false');
+  st.innerHTML = state;
+  st.classList.toggle('hidden', !state);
+  const bind = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
+  bind('#hs-retry', () => { S.loading = loadGames(); });
+  bind('#hs-load', () => { S.loading = loadGames(); });
+  bind('#hs-reset', () => { $('#filter').value = ''; $('#op').value = ''; setTc(''); S.shown = 100; renderList(); });
   $('#more').classList.toggle('hidden', list.length <= S.shown);
-  $('#count').textContent = S.games.length ? `${list.length} partie(s)` : '';
+  $('#count').textContent = S.games.length ? `${list.length} partie${list.length > 1 ? 's' : ''}` : '';
   renderBatch();
 }
 
@@ -825,7 +857,7 @@ function renderGame() {
   $('#reanalyze').parentElement.classList.toggle('hidden', !!g.free);
   const k = g.var ? g.var.basePly : g.ply;
   $('#opening').textContent = k === 0 && !g.var ? (g.custom ? 'Position définie' : 'Position de départ') : (g.openingAt[k] || g.openingAt[g.openingAt.length - 1] || 'Ouverture inconnue');
-  const date = new Date(g.game.end * 1000).toLocaleDateString('fr-FR');
+  const date = fmtGameDate(g.game.end * 1000);
   $('#game-meta').textContent = g.free ? '' : `${TIME_FR[g.game.timeClass] || ''} · ${date} · ${g.game.result || ''}`;
 
   renderEngine();
@@ -1228,7 +1260,7 @@ export async function init() {
   showUser();
   $('#load').onclick = () => { S.loading = loadGames(); };
   $('#filter').oninput = () => { S.shown = 100; renderList(); };
-  $('#tc').onchange = renderList;
+  document.querySelectorAll('#tc .chip').forEach((c) => { c.onclick = () => { setTc(c.dataset.tc); S.shown = 100; renderList(); }; });
   $('#op').onchange = () => { S.shown = 100; renderList(); };
   $('#multi').onclick = openMultiDialog;
   $('#clear-hist').onclick = clearHistory;
@@ -1236,6 +1268,15 @@ export async function init() {
   $('#games tbody').onclick = (e) => {
     const tr = e.target.closest('tr[data-id]');
     if (tr) location.hash = '#/game/' + encodeURIComponent(tr.dataset.id);
+  };
+  $('#games tbody').onkeydown = (e) => {
+    const tr = e.target.closest('tr[data-id]');
+    if (!tr) return;
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tr.click(); }
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const n = e.key === 'ArrowDown' ? tr.nextElementSibling : tr.previousElementSibling;
+      if (n && n.dataset.id) { e.preventDefault(); n.focus(); }
+    }
   };
   $('#back').onclick = () => { location.hash = S.g && S.g.free ? '#/free' : '#/games'; };
   $('#first').onclick = nav(() => setPly(0));
