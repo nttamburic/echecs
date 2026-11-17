@@ -202,29 +202,32 @@
     </div>
     <div id="play-setup" class="psetup">
       <div class="bot-card"><span class="avatar"><img src="pieces/bN.svg" alt=""></span>
-        <div><b>Maia</b> <span class="muted">· bot au jeu humain</span><div class="bot-elo"><span id="play-elo-val">1500</span> Elo</div></div></div>
+        <div><b>Maia</b> <span class="muted">· bot au jeu humain</span><div class="bot-elo" aria-live="polite"><span id="play-elo-val">1500</span> Elo <span id="play-elo-name" class="elo-name"></span></div></div></div>
       <label for="play-elo" class="muted small">Niveau du bot</label>
-      <input type="range" id="play-elo" min="600" max="2800" step="100" value="1500">
-      <div class="elo-scale muted small"><span>600</span><span>1700</span><span>2800</span></div>
-      <div class="muted small">Je joue</div>
-      <div id="play-side" class="side-pick">
-        <button type="button" data-side="w" title="Blancs"><img src="pieces/wK.svg" alt=""><span>Blancs</span></button>
-        <button type="button" data-side="r" title="Aléatoire"><span class="rnd">?</span><span>Aléatoire</span></button>
-        <button type="button" data-side="b" title="Noirs"><img src="pieces/bK.svg" alt=""><span>Noirs</span></button>
+      <input type="range" id="play-elo" min="600" max="2800" step="100" value="1500" aria-valuetext="1500 Elo">
+      <div class="elo-scale muted small" aria-hidden="true"><span>600</span><span>1700</span><span>2800</span></div>
+      <div id="play-presets" class="chips" role="group" aria-label="Niveaux prédéfinis"></div>
+      <div class="muted small" id="lbl-side">Je joue</div>
+      <div id="play-side" class="side-pick" role="radiogroup" aria-labelledby="lbl-side">
+        <button type="button" role="radio" data-side="w" title="Blancs"><img src="pieces/wK.svg" alt=""><span>Blancs</span></button>
+        <button type="button" role="radio" data-side="r" title="Aléatoire"><span class="rnd" aria-hidden="true">?</span><span>Aléatoire</span></button>
+        <button type="button" role="radio" data-side="b" title="Noirs"><img src="pieces/bK.svg" alt=""><span>Noirs</span></button>
       </div>
+      <div class="muted small" id="lbl-tc">Pendule</div>
+      <div id="play-tc" class="chips" role="radiogroup" aria-labelledby="lbl-tc"></div>
       <p id="play-load" class="muted small">Maia3 imite le jeu d'un humain du niveau choisi. Les parties ne sont pas enregistrées dans l'historique.</p>
       <button id="play-start" class="btn big primary">Jouer</button>
     </div>
     <div id="play-game" class="pgame hidden">
       <div class="pactions">
-        <button id="play-undo" class="btn" title="Annuler votre dernier coup pour le rejouer">↶ Rejouer le coup</button>
-        <button id="play-hint" class="btn" title="Demander à Stockfish le meilleur coup">💡 Aide</button>
-        <button id="play-resign" class="btn" title="Abandonner la partie">⚑ Abandonner</button>
-        <button id="play-new" class="btn" title="Commencer une nouvelle partie">⟳ Rejouer la partie</button>
+        <button id="play-undo" class="btn" title="Annuler votre dernier coup pour le rejouer" aria-label="Rejouer le coup">↶ <span class="lg">Rejouer le coup</span><span class="sh">Reprendre</span></button>
+        <button id="play-hint" class="btn" title="Demander à Stockfish le meilleur coup" aria-label="Aide">💡 <span>Aide</span></button>
+        <button id="play-resign" class="btn" title="Abandonner la partie" aria-label="Abandonner">⚑ <span>Abandonner</span></button>
+        <button id="play-new" class="btn" title="Commencer une nouvelle partie" aria-label="Nouvelle partie">⟳ <span class="lg">Rejouer la partie</span><span class="sh">Nouvelle</span></button>
       </div>
-      <div id="play-status" class="pstatus"></div>
+      <div id="play-status" class="pstatus" role="status" aria-live="polite"></div>
       <div id="play-opening" class="popening"></div>
-      <div id="play-moves" class="pmoves"></div>
+      <div id="play-moves" class="pmoves" aria-label="Coups de la partie"></div>
       <div class="navbar four">
         <button id="pl-first" class="btn" title="Début (↑)" aria-label="Début"><svg viewBox="0 0 24 24"><path d="M6 5v14M18 5l-8 7 8 7"/></svg></button>
         <button id="pl-prev" class="btn" title="Coup précédent (←)" aria-label="Coup précédent"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>

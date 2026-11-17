@@ -24,10 +24,17 @@ const P = {
   hint: null, // { fen, uci, san }
   evals: new Map(),
   evalPending: new Set(),
+  tc: 0, // cadence en secondes (0 = sans pendule)
+  clock: null, // { w, b } temps restant en ms
+  last: 0, // dernier instant de décompte
 };
 let board;
 
 const ELO_MIN = 600, ELO_MAX = 2800;
+const PRESETS = [[800, 'Débutant'], [1200, 'Club'], [1500, 'Intermédiaire'], [1900, 'Avancé'], [2300, 'Expert'], [2600, 'Maître']];
+const TCS = [[0, 'Sans pendule'], [180, '3 min'], [300, '5 min'], [600, '10 min']];
+const eloName = (e) => (PRESETS.slice().reverse().find(([v]) => e >= v) || PRESETS[0])[1];
+const fmtClock = (ms) => { const t = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
 const opt = (k) => local.get(k, '1') !== '0';
 const fenAt = (k) => (k === 0 ? P.startFen : P.moves[k - 1].after);
 const atLatest = () => P.ply === P.moves.length;
@@ -40,8 +47,13 @@ function renderSetup() {
   const elo = Number(local.get('playElo')) || 1500;
   $('#play-elo').value = elo;
   $('#play-elo-val').textContent = elo;
+  $('#play-elo').setAttribute('aria-valuetext', `${elo} Elo, ${eloName(elo)}`);
+  $('#play-elo-name').textContent = '· ' + eloName(elo);
+  $('#play-presets').innerHTML = PRESETS.map(([v, l]) => `<button type="button" class="chip" data-elo="${v}" aria-pressed="${v === elo}" title="${l}, ${v} Elo">${v}<span class="muted small"> ${l}</span></button>`).join('');
   const side = local.get('playSide', 'w');
-  document.querySelectorAll('#play-side button').forEach((b) => b.classList.toggle('on', b.dataset.side === side));
+  document.querySelectorAll('#play-side button').forEach((b) => { b.classList.toggle('on', b.dataset.side === side); b.setAttribute('aria-checked', String(b.dataset.side === side)); b.tabIndex = b.dataset.side === side ? 0 : -1; });
+  const tc = Number(local.get('playTc')) || 0;
+  $('#play-tc').innerHTML = TCS.map(([v, l]) => `<button type="button" role="radio" class="chip" data-tc="${v}" aria-checked="${v === tc}" tabindex="${v === tc ? 0 : -1}">${l}</button>`).join('');
 }
 
 // Départ demandé par un autre module (ex. l'éditeur de répertoire) : { fen, ucis, user, label }.
@@ -68,11 +80,15 @@ async function startGame(from = null) {
   P.result = null;
   P.hint = null;
   P.token++;
+  P.tc = Number(local.get('playTc')) || 0;
+  P.clock = P.tc ? { w: P.tc * 1000, b: P.tc * 1000 } : null;
+  P.last = Date.now();
   P.phase = 'play';
   P.label = from && from.label ? from.label : null;
   board.setOrientation(P.user);
   checkEnd();
   render();
+  window.scrollTo(0, 0); document.getElementById('play-view').scrollTop = 0;
   if (P.phase !== 'play') return;
   if (P.chess.turn() !== P.user) botMove();
   else loadMaia().catch(() => {}); // téléchargement du modèle pendant que l'on réfléchit au premier coup
@@ -80,6 +96,7 @@ async function startGame(from = null) {
 
 // ------------------------------------------------------------------ coups
 function push(uci) {
+  tickClock();
   const m = P.chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
   P.moves.push(m);
   P.ply = P.moves.length;
@@ -104,6 +121,7 @@ async function botMove() {
     const wait = 400 + Math.random() * 500 - (Date.now() - t0); // petit temps de « réflexion » naturel
     if (wait > 0) await new Promise((res) => setTimeout(res, wait));
     if (token !== P.token || P.phase !== 'play') return;
+    if (P.clock) { const mt = P.chess.turn(); P.clock[mt] = Math.max(1000, P.clock[mt] - Math.min(Date.now() - t0, 3000)); }
     if (r.uci) push(r.uci);
   } catch (e) {
     if (token === P.token) toast('Maia : ' + esc(e.message), 6000);
@@ -129,6 +147,39 @@ function checkEnd() {
   P.phase = 'over';
 }
 
+// ------------------------------------------------------------------ pendule
+function tickClock() {
+  const now = Date.now();
+  // la pendule de Maia ne tourne pas en continu (le téléchargement du modèle ne doit pas la faire perdre) : son temps est déduit à son coup
+  if (P.phase === 'play' && P.clock && P.chess.turn() === P.user) {
+    const t = P.user;
+    P.clock[t] -= now - P.last;
+    if (P.clock[t] <= 0) {
+      P.clock[t] = 0;
+      P.token++;
+      P.thinking = false;
+      setMaiaProgress(null);
+      const loser = t;
+      P.result = { text: loser === P.user ? 'Temps écoulé : vous avez perdu au temps.' : 'Temps écoulé : Maia a perdu au temps.', score: loser === 'w' ? '0-1' : '1-0', flag: true };
+      P.phase = 'over';
+      P.last = now;
+      render();
+      return;
+    }
+  }
+  P.last = now;
+  paintClocks();
+}
+function paintClocks() {
+  document.querySelectorAll('#play-view .clk[data-c]').forEach((el) => {
+    const c = el.dataset.c;
+    const ms = P.phase === 'setup' ? (Number(local.get('playTc')) || 0) * 1000 : P.clock ? P.clock[c] : null;
+    if (ms == null) { el.textContent = ''; return; }
+    el.textContent = fmtClock(ms);
+    el.classList.toggle('low', P.phase !== 'setup' && ms < 10000);
+  });
+}
+
 // « Rejouer le coup » : annule votre dernier coup (et la réponse de Maia).
 function undo() {
   if (!canUndo()) return;
@@ -146,7 +197,7 @@ function undo() {
   P.hint = null;
   render();
 }
-const canUndo = () => P.phase !== 'setup' && !(P.result && P.result.resigned) && P.moves.slice(P.base).some((m) => m.color === P.user);
+const canUndo = () => P.phase !== 'setup' && !(P.result && (P.result.resigned || P.result.flag)) && P.moves.slice(P.base).some((m) => m.color === P.user);
 
 function resign() {
   if (P.phase !== 'play' || !confirm('Abandonner la partie ?')) return;
@@ -252,11 +303,17 @@ function render() {
     const me = P.phase === 'setup' ? c === 'w' : c === P.user;
     const elo = P.phase === 'setup' ? Number($('#play-elo').value) || 1500 : P.elo;
     const name = me ? '<b>Vous</b>' : `<b>Maia</b> <span class="muted">(${elo})</span>${P.thinking && c !== P.user ? ' <span class="muted small">réfléchit…</span>' : ''}`;
+    const hasClk = P.phase === 'setup' ? !!Number(local.get('playTc')) : !!P.clock;
     return `<span class="avatar-sm ${c}"><img src="pieces/${c}${me ? 'P' : 'N'}.svg" alt=""></span>
-      <span class="pinfo"><span>${name}</span>${capturedHtml(mat, c)}</span>`;
+      <span class="pinfo"><span class="pname">${name}</span>${capturedHtml(mat, c)}</span>${hasClk ? `<span class="clk" data-c="${c}" role="timer" aria-label="Pendule ${c === 'w' ? 'des Blancs' : 'des Noirs'}"></span>` : ''}`;
   };
-  $('#play-top').innerHTML = pl(flipped ? 'w' : 'b');
-  $('#play-bottom').innerHTML = pl(flipped ? 'b' : 'w');
+  const topC = flipped ? 'w' : 'b', botC = flipped ? 'b' : 'w';
+  $('#play-top').innerHTML = pl(topC);
+  $('#play-bottom').innerHTML = pl(botC);
+  const turn = P.phase === 'play' ? P.chess.turn() : null;
+  $('#play-top').classList.toggle('act', turn === topC);
+  $('#play-bottom').classList.toggle('act', turn === botC);
+  paintClocks();
   if (P.phase === 'setup') return;
 
   // boutons
@@ -268,8 +325,8 @@ function render() {
   const st = $('#play-status');
   let html = '';
   if (P.result) {
-    html = `<div class="result"><div class="rtitle">${esc(P.result.text)} <span class="rscore">${P.result.score}</span></div>
-      <div class="row"><button id="play-again" class="btn primary">Rejouer la partie</button><button id="play-analyse" class="btn">Analyser la partie</button></div></div>`;
+    html = `<div class="result" role="group" aria-label="Fin de partie"><div class="rtitle">${esc(P.result.text)} <span class="rscore">${P.result.score}</span></div>
+      <div class="row"><button id="play-analyse" class="btn primary">Analyser la partie</button><button id="play-again" class="btn">Rejouer la partie</button></div></div>`;
   } else if (P.hint) {
     html = P.hint.uci
       ? `<div class="hint">Conseil de Stockfish : <b>${figSan(P.hint.san, P.user)}</b> <span class="muted">(${fmtScore(P.hint.score)})</span></div>`
@@ -347,7 +404,31 @@ export function init() {
   if (local.get('playEval') == null) local.set('playEval', '1');
   if (local.get('playArrows') == null) local.set('playArrows', '0');
   $('#play-elo').min = ELO_MIN; $('#play-elo').max = ELO_MAX;
-  $('#play-elo').oninput = () => { local.set('playElo', $('#play-elo').value); $('#play-elo-val').textContent = $('#play-elo').value; render(); };
+  $('#play-elo').oninput = () => { local.set('playElo', $('#play-elo').value); render(); };
+  $('#play-presets').onclick = (e) => {
+    const b = e.target.closest('button[data-elo]');
+    if (b) { local.set('playElo', b.dataset.elo); render(); }
+  };
+  const radioKeys = (box, attr, key) => box.addEventListener('keydown', (e) => {
+    const d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!d) return;
+    const bs = [...box.querySelectorAll('button')];
+    const i = bs.indexOf(document.activeElement);
+    if (i < 0) return;
+    const n = bs[(i + d + bs.length) % bs.length];
+    local.set(key, n.dataset[attr]);
+    renderSetup();
+    box.querySelector(`button[data-${attr}="${n.dataset[attr]}"]`).focus();
+    e.preventDefault();
+  });
+  radioKeys($('#play-side'), 'side', 'playSide');
+  radioKeys($('#play-tc'), 'tc', 'playTc');
+  $('#play-tc').onclick = (e) => {
+    const b = e.target.closest('button[data-tc]');
+    if (!b) return;
+    local.set('playTc', b.dataset.tc);
+    render();
+  };
   $('#play-side').onclick = (e) => {
     const b = e.target.closest('button[data-side]');
     if (!b) return;
@@ -371,6 +452,7 @@ export function init() {
     el.textContent = d.compiling ? 'Préparation de Maia…'
       : `Téléchargement de Maia (une seule fois) : ${(d.got / 1048576).toFixed(0)}${d.total ? ` / ${(d.total / 1048576).toFixed(0)}` : ''} Mo…`;
   });
+  setInterval(() => { if (document.body.dataset.view === 'play' && P.phase === 'play' && P.clock) tickClock(); }, 250);
   document.addEventListener('keydown', (e) => {
     if (document.body.dataset.view !== 'play' || P.phase === 'setup' || document.querySelector('dialog[open]')) return;
     if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;

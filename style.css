@@ -672,3 +672,48 @@ button.link { background: none; border: 0; padding: 0; font: inherit; color: var
 }
 #rep-view .ptitle { display: flex; align-items: center; gap: 8px; min-width: 0; }
 #rep-view .ptitle .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ======== Phase 6 : Jouer contre Maia ======== */
+.psetup .chips { display: flex; flex-wrap: wrap !important; overflow: visible !important; gap: 6px; margin: 0; padding: 0; }
+.chip[aria-checked="true"] { background: var(--accent); border-color: var(--accent); color: var(--text-strong); font-weight: 600; }
+.chip[aria-pressed="true"] .muted { color: inherit; }
+.psetup .chip { min-height: var(--tap); }
+.psetup .chip .small { margin-left: 2px; }
+.elo-name { font-size: 14px; font-weight: 600; color: var(--muted); }
+.bot-elo { font-variant-numeric: tabular-nums; }
+.side-pick button { min-height: var(--tap); }
+.side-pick button[aria-checked="true"] { border-color: var(--accent); }
+#play-elo { min-height: var(--tap); }
+#play-start { min-height: 48px; margin-top: 4px; }
+/* barres joueurs : pseudo coupé, Elo / pendule jamais */
+#play-view .player { flex-wrap: nowrap; }
+#play-view .player .pinfo { flex: 1 1 auto; }
+#play-view .player .pname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+#play-view .player .pname .muted { white-space: nowrap; }
+.clk { margin-left: auto; flex: none; min-width: 64px; text-align: center; padding: 4px 10px; border-radius: var(--r); background: var(--panel2); color: var(--muted);
+  font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+#play-view .player.act .clk { background: var(--light); color: #1b1b1b; }
+#play-view .player .clk.low { background: var(--danger); color: #fff; }
+#play-view .player.act { background: color-mix(in srgb, var(--accent) 10%, transparent); border-radius: var(--r); }
+.pactions .btn { min-height: var(--tap); display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.pactions .sh { display: none; }
+.pstatus .result .row { display: flex; gap: 8px; flex-wrap: wrap; }
+.pstatus .result .row .btn { flex: 1 1 140px; min-height: var(--tap); font-weight: 700; }
+.pstatus .result .rtitle { align-items: baseline; }
+.pstatus .result .rscore { font-variant-numeric: tabular-nums; }
+.pmoves .mv { min-height: 36px; }
+
+@media (max-width: 760px) {
+  #play-panel .pactions { grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 8px; }
+  #play-panel .pactions .btn { flex-direction: column; gap: 2px; font-size: 12px; padding: 6px 2px; line-height: 1.15; }
+  .pactions .lg { display: none; }
+  .pactions .sh { display: inline; }
+  /* liste des coups en bandeau horizontal */
+  #play-view .pmoves { display: flex; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; max-height: none; min-height: 0; flex: none; padding: 4px 6px; gap: 2px; align-items: center; }
+  #play-view .pmoves .mrow { display: flex; flex: none; align-items: center; background: none; }
+  #play-view .pmoves .mno { width: auto; padding: 0 2px 0 8px; color: var(--muted); font-size: 13px; }
+  #play-view .pmoves .mv { min-height: var(--tap); padding: 0 4px; }
+  #play-view .pmoves .mv.empty { display: none; }
+  #play-view .pmoves .pad { padding: 10px; }
+  .clk { font-size: 16px; min-width: 58px; padding: 3px 8px; }
+}
