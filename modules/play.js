@@ -43,14 +43,15 @@ const atLatest = () => P.ply === P.moves.length;
 function renderSetup() {
   $('#play-setup').classList.toggle('hidden', P.phase !== 'setup');
   $('#play-game').classList.toggle('hidden', P.phase === 'setup');
+  $('#play-view').classList.toggle('is-setup', P.phase === 'setup');
   if (P.phase !== 'setup') return;
   const elo = Number(local.get('playElo')) || 1500;
   $('#play-elo').value = elo;
   $('#play-elo-val').textContent = elo;
   $('#play-elo').setAttribute('aria-valuetext', `${elo} Elo, ${eloName(elo)}`);
-  $('#play-elo-name').textContent = '· ' + eloName(elo);
+  $('#play-elo-name').textContent = eloName(elo);
   const keep = document.activeElement && document.activeElement.closest('#play-presets, #play-tc') ? { box: document.activeElement.parentElement.id, k: document.activeElement.dataset.elo ? 'elo' : 'tc', v: document.activeElement.dataset.elo || document.activeElement.dataset.tc } : null;
-  $('#play-presets').innerHTML = PRESETS.map(([v, l]) => `<button type="button" class="chip" data-elo="${v}" aria-pressed="${v === elo}" title="${l}, ${v} Elo">${v}<span class="muted small"> ${l}</span></button>`).join('');
+  $('#play-presets').innerHTML = PRESETS.map(([v, l]) => `<button type="button" class="chip" data-elo="${v}" aria-pressed="${v === elo}" title="${l}, ${v} Elo">${l} · ${v}</button>`).join('');
   const side = local.get('playSide', 'w');
   document.querySelectorAll('#play-side button').forEach((b) => { b.classList.toggle('on', b.dataset.side === side); b.setAttribute('aria-checked', String(b.dataset.side === side)); b.tabIndex = b.dataset.side === side ? 0 : -1; });
   const tc = Number(local.get('playTc')) || 0;
@@ -446,6 +447,7 @@ export function init() {
   $('#play-resign').onclick = resign;
   $('#play-new').onclick = newGame;
   $('#play-gear').onclick = openGear;
+  $('#play-gear2').onclick = openGear;
   $('#play-flip').onclick = () => { board.flip(); render(); };
   $('#pl-first').onclick = () => setPly(0);
   $('#pl-prev').onclick = () => setPly(P.ply - 1);

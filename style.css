@@ -814,3 +814,26 @@ button.link { background: none; border: 0; padding: 0; font: inherit; color: var
   #play-flip { min-height: var(--tap); }
   label:has(> input[type="checkbox"]) { min-height: var(--tap); display: flex; align-items: center; gap: 10px; }
 }
+
+/* ---- Phase 9 : fidélité aux maquettes — Jouer, écran de départ ---- */
+.lbl-up { font-size: var(--fs-label); line-height: var(--lh-label); font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+#play-view.is-setup { align-items: flex-start; }
+#play-view.is-setup #play-top, #play-view.is-setup #play-bottom, #play-view.is-setup .board-opts, #play-view.is-setup #play-evalbar { display: none; }
+#play-view.is-setup #play-panel { flex: 0 1 420px; max-width: 420px; align-self: flex-start; height: auto; min-height: 0; background: var(--surface-1); border-radius: var(--r-lg); }
+#play-view.is-setup #play-panel .phead { display: none; }
+#play-view.is-setup .psetup { padding: 24px; gap: 14px; }
+.bot-card { gap: 16px; }
+.bot-card .avatar, .bot-card .avatar { width: 72px; height: 72px; background: var(--surface-2); border: 2px solid var(--accent); }
+.bot-card .avatar img { width: 56px; height: 56px; }
+.bot-name { margin: 0; font-size: 22px; line-height: 28px; font-weight: 700; }
+.bot-card .bot-elo { font-size: inherit; font-weight: 700; color: var(--accent); }
+.bot-card .elo-name { font-size: 14px; font-weight: 400; color: var(--text-muted); }
+.bot-intro { margin: 0; font-size: 14px; line-height: 21px; color: var(--text-soft); }
+.psetup .chip[aria-pressed="true"], .psetup .chip[aria-checked="true"] { background: var(--text); border-color: var(--text); color: #161512; font-weight: 600; }
+.psetup .chip { border: 0; font-size: 13px; font-weight: 600; }
+.side-pick button { background: transparent; border: 1px solid #55524d; min-height: 72px; }
+.side-pick button[aria-checked="true"] { background: #2f3a25; border: 2px solid var(--accent); }
+#play-start { min-height: 56px; font-size: 18px; font-weight: 800; box-shadow: 0 4px 0 var(--accent-press); }
+.linkbtn { background: none; border: 0; color: var(--link); font: inherit; font-size: 14px; font-weight: 600; text-decoration: underline; cursor: pointer; min-height: var(--tap); }
+@media (hover: hover) { .linkbtn:hover { color: var(--link-hover); } }
+@media (max-width: 760px) { #play-view.is-setup #play-panel { flex: none; max-width: none; } }
