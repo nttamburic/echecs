@@ -182,3 +182,133 @@ export function explainMove({ fenBefore, san, uci, color, r, pos, openingName, p
   }
   return out;
 }
+
+// ------------------------------------------------------------------ ouvertures
+// Commentaire pédagogique d'un coup d'ouverture (répertoire, entraînement) : l'idée du coup en
+// quelques mots, à partir de règles simples (développement, centre, roque, case f7/f2, clouage,
+// fou libéré, fianchetto…), plus les faits tactiques de describeMove (prise, échec, attaque).
+// Renvoie une phrase, ou '' si rien de sûr à dire. fenBefore : FEN (ou EPD) avant le coup.
+const CENTER = ['d4', 'e4', 'd5', 'e5'];
+const fileOf = (sq) => sq[0];
+const rankOf = (sq) => +sq[1];
+export function explainOpeningMove(fenBefore, uci) {
+  const full = fenBefore.split(' ').length >= 6 ? fenBefore : `${fenBefore} 0 1`;
+  let before, after, m;
+  try { before = new Chess(full); after = new Chess(full); m = playUci(after, uci); } catch { return ''; }
+  if (!m) return '';
+  const me = m.color, opp = me === 'w' ? 'b' : 'w';
+  const home = me === 'w' ? 1 : 8;
+  const ideas = [];
+  const add = (s) => { if (s && !ideas.includes(s)) ideas.push(s); };
+
+  // faits tactiques (prise, échec, fourchette, attaque d'une pièce, pièce en prise)
+  const tact = describeMove(new Chess(full), m, after);
+  if (tact) for (const t of tact.split(', ')) add(t);
+
+  if (m.san.startsWith('O-O')) add('met le roi à l’abri et rapproche la tour du centre');
+  // centre
+  if (m.piece === 'p' && CENTER.includes(m.to) && !m.captured) add('occupe le centre');
+  else if (m.piece === 'p' && ['c', 'f'].includes(fileOf(m.to)) && Math.abs(rankOf(m.to) - home) >= 3) add('conteste le centre');
+  // développement d'une pièce mineure depuis sa case de départ
+  if ((m.piece === 'n' || m.piece === 'b') && rankOf(m.from) === home && !m.captured) add(`développe ${m.piece === 'n' ? 'un cavalier' : 'un fou'}`);
+  // cases centrales contrôlées par la pièce jouée
+  if (m.piece !== 'p' && m.piece !== 'k') {
+    let ctl = [];
+    try { ctl = CENTER.filter((sq) => after.attackers(sq, me).includes(m.to)); } catch { ctl = []; }
+    if (ctl.length) add(`contrôle ${ctl.length > 1 ? 'les cases ' + ctl.slice(0, -1).join(', ') + ' et ' + ctl.at(-1) : 'la case ' + ctl[0]}`);
+  }
+  // pion qui contrôle une case centrale : prépare la poussée du pion central voisin (c3 → d4)
+  if (m.piece === 'p' && !CENTER.includes(m.to)) {
+    const fwd = me === 'w' ? 1 : -1;
+    for (const df of [-1, 1]) {
+      const sq = String.fromCharCode(m.to.charCodeAt(0) + df) + (rankOf(m.to) + fwd);
+      if (!CENTER.includes(sq)) continue;
+      const there = after.get(sq);
+      if (there) { if (there.type === 'p' && there.color === me) add(`soutient le pion ${sq}`); continue; }
+      // la poussée préparée : d2-d4 pour les Blancs, d7-d5 pour les Noirs
+      const pusher = after.get(`${sq[0]}${me === 'w' ? 2 : 7}`);
+      const target = rankOf(sq) === (me === 'w' ? 4 : 5);
+      add(target && pusher && pusher.type === 'p' && pusher.color === me ? `prépare ${sq}` : `contrôle la case ${sq}`);
+    }
+  }
+  // fou libéré par un coup de pion, fianchetto
+  if (m.piece === 'p') {
+    if (['g', 'b'].includes(fileOf(m.to)) && Math.abs(rankOf(m.to) - rankOf(m.from)) === 1 && rankOf(m.from) === (me === 'w' ? 2 : 7)) add('prépare le fianchetto du fou');
+    else {
+      const bishops = before.board().flat().filter((p) => p && p.type === 'b' && p.color === me && rankOf(p.square) === home);
+      for (const b of bishops) {
+        const n0 = bishopMoves(before, b.square, me);
+        const n1 = bishopMoves(after, b.square, me);
+        if (n0 === 0 && n1 > 0) { add('ouvre la diagonale du fou'); break; }
+      }
+    }
+  }
+  // préparation du roque : avant, une case entre roi et tour était occupée ; après, plus aucune
+  const castleFree = (c, side) => (side === 'k' ? ['f', 'g'] : ['b', 'c', 'd']).every((f) => !c.get(`${f}${home}`));
+  const rights = full.split(' ')[2];
+  for (const side of ['k', 'q']) {
+    const has = rights.includes(me === 'w' ? side.toUpperCase() : side);
+    if (has && !m.san.startsWith('O-O') && !castleFree(before, side) && castleFree(after, side)) add(side === 'k' ? 'prépare le petit roque' : 'prépare le grand roque');
+  }
+  // point faible f7 / f2 visé par un fou ou la dame
+  const weak = opp === 'b' ? 'f7' : 'f2';
+  if ((m.piece === 'b' || m.piece === 'q') && after.get(weak) && after.get(weak).color === opp) {
+    let hits = [];
+    try { hits = after.attackers(weak, me); } catch { hits = []; }
+    if (hits.includes(m.to)) add(`vise le point faible ${weak}`);
+  }
+  // clouage : la pièce longue jouée aligne une pièce adverse devant le roi ou la dame
+  if (['b', 'r', 'q'].includes(m.piece)) {
+    const pin = pinnedBy(after, m.to, me);
+    if (pin) add(`cloue ${the(pin.type)} ${pin.behind === 'k' ? 'sur le roi' : 'sur la dame'}`);
+  }
+  // sortie précoce de la dame
+  if (m.piece === 'q' && rankOf(m.from) === home && Math.abs(rankOf(m.to) - home) >= 2 && before.moveNumber() <= 4 && !m.captured) add('sortie précoce de la dame : elle risque d’être chassée');
+  // pion qui avance loin sans autre idée : gain d'espace
+  if (m.piece === 'p' && !ideas.length && Math.abs(rankOf(m.to) - home) >= 4) add('gagne de l’espace');
+
+  if (!ideas.length) return '';
+  const txt = ideas.slice(0, 3).join(', ');
+  return txt[0].toUpperCase() + txt.slice(1) + '.';
+}
+
+// Nombre de cases où le fou en `sq` peut aller (pièces du camp `me` seulement comme obstacles).
+function bishopMoves(chess, sq, me) {
+  let n = 0;
+  const f0 = sq.charCodeAt(0) - 97, r0 = +sq[1];
+  for (const [df, dr] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+    for (let i = 1; i < 8; i++) {
+      const f = f0 + df * i, r = r0 + dr * i;
+      if (f < 0 || f > 7 || r < 1 || r > 8) break;
+      const q = chess.get(String.fromCharCode(97 + f) + r);
+      if (q && q.color === me) break;
+      n++;
+      if (q) break;
+    }
+  }
+  return n;
+}
+
+// Pièce adverse clouée par la pièce longue posée en `sq` : { type, behind } ou null. Clouage
+// seulement si la pièce clouée vaut moins que celle de derrière (roi, ou dame derrière une pièce).
+function pinnedBy(chess, sq, me) {
+  const p = chess.get(sq);
+  if (!p) return null;
+  const diag = [[1, 1], [1, -1], [-1, 1], [-1, -1]], line = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  const dirs = p.type === 'b' ? diag : p.type === 'r' ? line : [...diag, ...line];
+  const f0 = sq.charCodeAt(0) - 97, r0 = +sq[1];
+  for (const [df, dr] of dirs) {
+    let first = null;
+    for (let i = 1; i < 8; i++) {
+      const f = f0 + df * i, r = r0 + dr * i;
+      if (f < 0 || f > 7 || r < 1 || r > 8) break;
+      const q = chess.get(String.fromCharCode(97 + f) + r);
+      if (!q) continue;
+      if (!first) { if (q.color === me || q.type === 'k' || q.type === 'p') break; first = q; continue; }
+      // une dame ne « cloue » utilement que sur le roi (sur la dame adverse, c'est un échange)
+      if (q.color !== me && (q.type === 'k' || (q.type === 'q' && first.type !== 'q' && p.type !== 'q'))) return { type: first.type, behind: q.type };
+      break;
+    }
+  }
+  return null;
+}

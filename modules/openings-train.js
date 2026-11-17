@@ -14,6 +14,7 @@ import { $, esc, local } from '../core/ui.js';
 import { moveFrequencies } from '../core/lichess.js';
 import { epd } from '../analysis.js';
 import { figSan } from './analyse.js';
+import { explainOpeningMove } from '../explain.js';
 import {
   childrenOf, userPositions, reachableEdges, fenOf, listRepertoires, getRepertoire, listEvents, addEvent,
   computeMastery, STATUS, pathTo, isActive, computeCards, NEW_PER_DAY,
@@ -220,12 +221,13 @@ function step() {
   if (turnOf(T.cur) === T.rep.color) {
     const exp = userPositions(T.rep).get(T.cur);
     if (!exp || !exp.length) { endLine(); return; }
-    T.wrong = false; T.hinted = false; T.busy = false; T.board.interactive = true;
+    T.wrong = false; T.hinted = false; T.hintStep = 0; T.busy = false; T.board.interactive = true;
     const isTarget = T.target && T.target.epd === T.cur;
     if (isTarget && T.target.status === 'fresh') {
       // nouveau coup (mode « à revoir ») : on le montre d'abord ; le jouer planifie la première révision
       T.board.setArrows(exp.map((e) => ({ from: e.uci.slice(0, 2), to: e.uci.slice(2, 4), color: '#4caf50' })));
-      setMsg('turn', `🆕 Nouveau coup à apprendre : <b>${exp.map((e) => moveName(e)).join(' ou ')}</b>. Jouez-le sur l'échiquier ; il reviendra demain.`);
+      const idea = ideaOf(exp);
+      setMsg('turn', `🆕 Nouveau coup à apprendre : <b>${exp.map((e) => moveName(e)).join(' ou ')}</b>.${idea ? ` ${esc(idea.txt)}` : ''} Jouez-le sur l'échiquier ; il reviendra demain.`);
       render();
       return;
     }
@@ -310,12 +312,30 @@ function requeue() {
   T.targets.push({ ...T.target, status: 'due' });
 }
 
+// Idée du coup à trouver : la note de l'utilisateur si elle existe, sinon le commentaire automatique.
+function ideaOf(exp) {
+  const noted = exp.find((e) => e.note);
+  if (noted) return { txt: noted.note, auto: false };
+  for (const e of exp) { const a = explainOpeningMove(e.fenBefore, e.uci); if (a) return { txt: a, auto: true }; }
+  return null;
+}
+
+// Indice en deux temps : d'abord l'idée du coup (note ou commentaire automatique), puis le coup.
+// Les deux comptent comme une erreur (une seule fois par position).
 function hint() {
   if (T.done || T.busy || turnOf(T.cur) !== T.rep.color) return;
   const exp = userPositions(T.rep).get(T.cur) || [];
   if (!exp.length) return;
   if (!T.wrong && !T.hinted) { record('', false); requeue(); }
   T.hinted = true;
+  const idea = T.hintStep ? null : ideaOf(exp);
+  if (idea) {
+    T.hintStep = 1;
+    setMsg('hint', `💡 Indice${idea.auto ? ' (automatique)' : ''} : ${esc(idea.txt)} <span class="muted">— « Indice » à nouveau pour voir le coup.</span>`);
+    render();
+    return;
+  }
+  T.hintStep = 2;
   T.board.setArrows(exp.map((e) => ({ from: e.uci.slice(0, 2), to: e.uci.slice(2, 4), color: '#4caf50' })));
   const names = exp.map((e) => moveName(e)).join(' ou ');
   setMsg('hint', `💡 Coup${exp.length > 1 ? 's' : ''} du répertoire : <b>${names}</b>. Jouez-le sur l'échiquier.`);

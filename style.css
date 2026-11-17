@@ -502,3 +502,8 @@ a.btn { text-decoration: none; }
 button.link { background: none; border: 0; padding: 0; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
 @media (hover: hover) { button.link:hover { text-decoration: underline; } }
 .cov-mini .cov-bar { width: 48px; height: 6px; }
+#rep-note { padding: 8px 14px; border-top: 1px solid var(--line); }
+#rep-note:empty { display: none; }
+.note-auto { margin-bottom: 6px; line-height: 1.4; }
+#note-txt { width: 100%; resize: vertical; min-height: 44px; font-size: 14px; }
+.rnote { margin-left: 3px; font-size: 11px; color: var(--link); vertical-align: super; }

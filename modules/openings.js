@@ -68,35 +68,40 @@ export function addLine(rep, moves, fen = rep.root) {
 
 // ------------------------------------------------------------------ import PGN (arbre complet)
 // Ajoute à rep tous les coups d'un texte PGN : ligne principale, variantes et sous-variantes, pour
-// une ou plusieurs parties. Commentaires {…} et ;…, annotations $n, !?, numéros et résultats ignorés.
+// une ou plusieurs parties. Un commentaire {…} devient la note du coup qui le précède (sans écraser
+// une note existante) ; commentaires ;…, annotations $n, !?, numéros et résultats ignorés.
 // Une partie qui part d'une autre position que la racine du répertoire est ignorée ; un coup
 // illégal interrompt seulement la ligne où il se trouve.
 export function importPgn(rep, text) {
-  const out = { added: 0, games: 0, skipped: 0, errors: [] };
+  const out = { added: 0, games: 0, skipped: 0, notes: 0, errors: [] };
   const before = rep.edges.length;
   const games = String(text || '').replace(/\r/g, '').split(/\n(?=\s*\[Event\s)/);
   for (const g of games) {
     const fenTag = /\[FEN\s+"([^"]+)"\]/.exec(g);
     const body = g.replace(/^\s*\[[^\]]*\]\s*$/gm, ' ');
+    const comments = [];
     const tokens = body
-      .replace(/\{[^}]*\}/g, ' ')
+      .replace(/\{([^}]*)\}/g, (_, c) => ` \u0001${comments.push(c.replace(/\s+/g, ' ').trim()) - 1} `)
       .replace(/;[^\n]*/g, ' ')
       .replace(/\(/g, ' ( ').replace(/\)/g, ' ) ')
       .split(/\s+/).filter(Boolean);
     if (!tokens.some((t) => /^[a-hNBRQKO0]/.test(t))) continue;
+    let lastEdge = null;
     if (fenTag && epd(fenTag[1]) !== epd(rep.root)) { out.skipped++; continue; }
     out.games++;
     let cur = { fen: epd(rep.root), prev: null, broken: false };
     const stack = [];
     for (let t of tokens) {
-      if (t === '(') { stack.push(cur); cur = { fen: cur.prev || cur.fen, prev: null, broken: cur.broken || !cur.prev }; continue; }
-      if (t === ')') { if (stack.length) cur = stack.pop(); continue; }
+      if (t[0] === '\u0001') { const c = comments[+t.slice(1)]; if (c && lastEdge && !lastEdge.note) { lastEdge.note = c; out.notes++; } continue; }
+      if (t === '(') { lastEdge = null; stack.push(cur); cur = { fen: cur.prev || cur.fen, prev: null, broken: cur.broken || !cur.prev }; continue; }
+      if (t === ')') { lastEdge = null; if (stack.length) cur = stack.pop(); continue; }
       if (/^\$\d+$/.test(t) || /^(1-0|0-1|1\/2-1\/2|\*)$/.test(t)) continue;
       t = t.replace(/^\d+\.(\.\.)?/, '').replace(/[!?]+$/, '').replace(/^0-0-0/, 'O-O-O').replace(/^0-0/, 'O-O');
       if (!t || /^\.+$/.test(t) || /^\d+$/.test(t)) continue;
       if (cur.broken) continue;
       const e = addMove(rep, cur.fen, t);
-      if (!e) { cur.broken = true; if (out.errors.length < 5) out.errors.push(t); continue; }
+      if (!e) { cur.broken = true; lastEdge = null; if (out.errors.length < 5) out.errors.push(t); continue; }
+      lastEdge = e;
       cur.prev = cur.fen;
       cur.fen = e.fenAfter;
     }

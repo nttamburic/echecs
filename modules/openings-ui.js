@@ -6,7 +6,7 @@ import { $, esc, local, toast, keyActivate } from '../core/ui.js';
 import { epd } from '../analysis.js';
 import { figSan, BOOK, getGames, getUser, engineFields } from './analyse.js';
 import * as store from '../core/store.js';
-import { frSan } from '../explain.js';
+import { frSan, explainOpeningMove } from '../explain.js';
 import { lichessCfg, explore, expRatings, expSpeeds } from '../core/lichess.js';
 import { analyzePosition, analysisSettings, maxTime, nLines, SOURCE_LABEL, onStatus } from '../core/engine.js';
 import {
@@ -193,6 +193,7 @@ function bindImport(el) {
     dlg.close();
     const extra = [];
     if (r.skipped) extra.push(`${plural(r.skipped, 'partie')} ignorée${r.skipped > 1 ? 's' : ''} (autre position de départ)`);
+    if (r.notes) extra.push(`${plural(r.notes, 'commentaire')} gardé${r.notes > 1 ? 's' : ''} comme note${r.notes > 1 ? 's' : ''}`);
     if (r.errors.length) extra.push(`ligne${r.errors.length > 1 ? 's' : ''} interrompue${r.errors.length > 1 ? 's' : ''} au coup illisible ${r.errors.map(esc).join(', ')}`);
     toast(`${plural(r.added, 'coup')} importé${r.added > 1 ? 's' : ''} depuis ${plural(r.games, 'partie')}.${extra.length ? ' ' + extra.join(' ; ').replace(/^./, (c) => c.toUpperCase()) + '.' : ''}`, 6000);
     rescanSoon();
@@ -341,7 +342,7 @@ function buildEditor(el) {
     <div class="board-wrap"><div id="rep-evalbar" class="evalbar hidden"><div class="white"></div><span class="label"></span></div><div id="rep-board"></div></div>
     <div class="board-opts"><button id="rep-flip" class="btn small" title="Retourner l'échiquier (F)">⇅ Retourner</button>
       <a id="rep-train" class="btn small primary" title="S'entraîner sur ce répertoire">▶ S'entraîner</a>
-      <span class="muted small">Clic droit sur un coup (appui long de 2 s sur téléphone) pour le désactiver ou le supprimer.</span></div>
+      <span class="muted small">Clic droit sur un coup (appui long de 2 s sur téléphone) pour le désactiver ou le supprimer. Votre note sur le coup affiché : sous la liste des coups.</span></div>
   </div>
   <aside class="panel" id="rep-panel">
     <div class="phead">
@@ -353,6 +354,7 @@ function buildEditor(el) {
     <div id="rep-coverage"></div>
     <div id="rep-mastery"></div>
     <div class="pmoves rtree" id="rep-moves"></div>
+    <div id="rep-note"></div>
     <div class="exp">
       <div class="exp-head">
         <div class="exp-tabs" role="tablist"><button type="button" role="tab" data-db="masters">Masters</button><button type="button" role="tab" data-db="lichess">Lichess</button><button type="button" role="tab" data-db="stockfish">Stockfish</button></div>
@@ -548,6 +550,34 @@ async function deleteNode(n) {
   toast(more ? `${label} et ${plural(more, 'coup')} supprimés.` : `${label} supprimé.`);
 }
 
+// ------------------------------------------------------------------ note du coup affiché
+// Sous la liste : l'idée du coup (commentaire automatique, explain.js) et la note de l'utilisateur,
+// enregistrée dans l'arête (edge.note) au fil de la frappe. La note sert aussi d'indice à l'entraînement.
+let noteTimer = null;
+function renderNote() {
+  const box = $('#rep-note');
+  if (!box) return;
+  const cur = E.k ? E.path[E.k - 1] : null;
+  if (!cur) { box.innerHTML = ''; box.dataset.edge = ''; return; }
+  const id = `${cur.fenBefore}|${cur.uci}`;
+  const ta = $('#note-txt', box);
+  if (box.dataset.edge === id && ta) return; // même coup : on ne touche pas à la saisie en cours
+  box.dataset.edge = id;
+  const label = moveLabel(cur, E.k - 1) + frSan(cur.san);
+  const auto = explainOpeningMove(cur.fenBefore, cur.uci);
+  box.innerHTML = `${auto ? `<div class="note-auto small"><span class="muted">Idée de ${esc(label)} (automatique) :</span> ${esc(auto)}</div>` : ''}
+    <textarea id="note-txt" rows="2" maxlength="600" spellcheck="true" aria-label="Votre note sur ${esc(label)}" placeholder="Votre note sur ${esc(label)} (idée, plan, piège à retenir…)">${esc(cur.note || '')}</textarea>`;
+  $('#note-txt', box).oninput = (ev) => {
+    const txt = ev.target.value.trim();
+    clearTimeout(noteTimer);
+    noteTimer = setTimeout(async () => {
+      if (txt) cur.note = txt; else delete cur.note;
+      await saveRepertoire(E.rep);
+      renderTree();
+    }, 600);
+  };
+}
+
 // ------------------------------------------------------------------ couverture et trous
 // Calculée en tâche de fond (explorateur Lichess, cache de 30 jours), recalculée quand le
 // répertoire, le seuil ou les filtres changent. Voir openings-coverage.js.
@@ -661,7 +691,8 @@ function renderTree() {
     if (onLine(prefix) && E.path[prefix.length] === e) cls += e === cur && prefix.length === E.k - 1 ? ' cur' : ' onpath';
     const tip = off ? ` title="${e.disabled ? 'Coup désactivé' : 'Suite d\'un coup désactivé'} : ni entraîné ni compté dans la maîtrise"`
       : m ? ` title="${esc(masteryTip(m))}"` : '';
-    return `${num}<span class="rm${cls}" role="button" tabindex="0" data-n="${n}"${tip}>${figSan(e.san, white ? 'w' : 'b')}</span> `;
+    const note = e.note ? `<span class="rnote" title="${esc(e.note)}" aria-label="Note">✎</span>` : '';
+    return `${num}<span class="rm${cls}" role="button" tabindex="0" data-n="${n}"${tip}>${figSan(e.san, white ? 'w' : 'b')}${note}</span> `;
   };
   const cont = (e, ply, prefix, forceNum) => {
     if (owner.get(e.fenAfter) !== e) return '<span class="rtrans" title="Cette position est déjà dans le répertoire par un autre ordre de coups">↪ transposition</span> ';
@@ -807,6 +838,7 @@ function render() {
   renderCoverage();
   renderMastery();
   renderTree();
+  renderNote();
   updateEngine();
   renderExplorer();
 }
