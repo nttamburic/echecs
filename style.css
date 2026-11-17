@@ -1149,3 +1149,11 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .tmoves .rm.cur { background: var(--accent); color: #14200a; box-shadow: none; }
 .thole { font-size: 12px; color: var(--warn); font-weight: 600; white-space: nowrap; }
 @media (max-width: 760px) { #rep-moves.rtree { max-height: 240px; } .trow { min-height: 44px; } .tchev { width: 36px; height: 44px; } }
+
+/* ---- Phase 9 : import PGN en onglets ---- */
+.pgn-tabs { margin: 4px 0 14px; }
+.pgn-tabs .chip { min-height: 44px; }
+#pgn-dlg .inline input { flex: 1; min-width: 0; }
+#pgn-dlg [role=tabpanel] { margin-bottom: 12px; }
+#pgn-dlg [role=tabpanel] > label { display: flex; flex-direction: column; gap: 6px; }
+.pgn-tabs .chip[aria-selected="true"] { background: #45423e; color: var(--text-strong); font-weight: 700; }

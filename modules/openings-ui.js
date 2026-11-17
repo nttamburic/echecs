@@ -158,9 +158,15 @@ export async function renderHome(el) {
     <h2>Importer un PGN</h2>
     <p class="muted small">Toutes les variantes et sous-variantes sont importées. Plusieurs parties dans le même fichier sont réunies.</p>
     <div class="form">
-      <label>Fichier PGN <input id="pgn-file" type="file" accept=".pgn,.txt,application/x-chess-pgn,text/plain"></label>
-      <label>ou lien d'étude Lichess <input id="pgn-study" placeholder="https://lichess.org/study/…" autocomplete="off" spellcheck="false"></label>
-      <label>ou collez le texte <textarea id="pgn-text" rows="6" spellcheck="false" placeholder="1. e4 e5 2. Nf3 (2. Bc4) 2... Nc6 3. Bb5 *"></textarea></label>
+      <div class="segctl pgn-tabs" role="tablist" aria-label="Source du PGN">
+        <button type="button" class="chip" role="tab" id="pgn-t-file" data-src="file" aria-selected="true" aria-controls="pgn-p-file">Fichier</button>
+        <button type="button" class="chip" role="tab" id="pgn-t-study" data-src="study" aria-selected="false" tabindex="-1" aria-controls="pgn-p-study">Lichess</button>
+        <button type="button" class="chip" role="tab" id="pgn-t-text" data-src="text" aria-selected="false" tabindex="-1" aria-controls="pgn-p-text">Texte</button>
+      </div>
+      <div id="pgn-p-file" role="tabpanel" aria-labelledby="pgn-t-file"><label>Fichier PGN <input id="pgn-file" type="file" accept=".pgn,.txt,application/x-chess-pgn,text/plain"></label></div>
+      <div id="pgn-p-study" role="tabpanel" aria-labelledby="pgn-t-study" class="hidden"><label for="pgn-study">Lien de l'étude Lichess</label>
+        <div class="inline"><input id="pgn-study" placeholder="https://lichess.org/study/…" autocomplete="off" spellcheck="false"><button type="button" id="pgn-paste" class="btn">Coller</button></div></div>
+      <div id="pgn-p-text" role="tabpanel" aria-labelledby="pgn-t-text" class="hidden"><label>Texte du PGN <textarea id="pgn-text" rows="6" spellcheck="false" placeholder="1. e4 e5 2. Nf3 (2. Bc4) 2... Nc6 3. Bb5 *"></textarea></label></div>
       <label>Ajouter dans <select id="pgn-target"><option value="">Un nouveau répertoire</option>${reps.map((r) => `<option value="${esc(r.id)}">${esc(r.name)} (${colorFr(r.color)})</option>`).join('')}</select></label>
     </div>
     <div id="pgn-new">
@@ -226,22 +232,40 @@ function bindImport(el) {
   picks.forEach((b) => { b.onclick = () => { color = b.dataset.c; picks.forEach((x) => x.classList.toggle('on', x === b)); }; });
   const target = $('#pgn-target', el);
   target.onchange = () => $('#pgn-new', el).classList.toggle('hidden', !!target.value);
+  let src = 'file';
+  const tabs = dlg.querySelectorAll('.pgn-tabs [role=tab]');
+  const setSrc = (k) => {
+    src = k; $('#pgn-err', el).textContent = '';
+    tabs.forEach((b) => { const on = b.dataset.src === k; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; $('#' + b.getAttribute('aria-controls'), el).classList.toggle('hidden', !on); });
+  };
+  tabs.forEach((b) => { b.onclick = () => setSrc(b.dataset.src); });
+  dlg.querySelector('.pgn-tabs').addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const arr = [...tabs], i = arr.findIndex((b) => b.dataset.src === src);
+    const n = arr[(i + (e.key === 'ArrowRight' ? 1 : arr.length - 1)) % arr.length];
+    setSrc(n.dataset.src); n.focus(); e.preventDefault();
+  });
+  $('#pgn-paste', el).onclick = async () => {
+    try { const t = await navigator.clipboard.readText(); if (t) $('#pgn-study', el).value = t.trim(); }
+    catch { $('#pgn-err', el).textContent = 'Le presse-papiers n’est pas accessible : collez le lien dans le champ.'; }
+  };
   $('#rep-import', el).onclick = () => {
+    setSrc('file');
     $('#pgn-file', el).value = ''; $('#pgn-text', el).value = ''; $('#pgn-study', el).value = ''; $('#pgn-err', el).textContent = '';
     dlg.showModal();
   };
   $('#pgn-go', el).onclick = async (e) => {
     e.preventDefault();
     const err = $('#pgn-err', el);
-    let text = $('#pgn-text', el).value;
-    const file = $('#pgn-file', el).files[0];
+    let text = src === 'text' ? $('#pgn-text', el).value : '';
+    const file = src === 'file' ? $('#pgn-file', el).files[0] : null;
     if (file) {
       if (file.size > 5 * 1048576) { err.textContent = 'Fichier trop gros (5 Mo au maximum).'; return; }
       text = await file.text();
     }
     const link = $('#pgn-study', el).value.trim();
     let studyName = '';
-    if (!file && !text.trim() && link) {
+    if (src === 'study' && link) {
       const go = $('#pgn-go', el);
       err.textContent = 'Téléchargement de l’étude…';
       go.disabled = true;
@@ -250,7 +274,7 @@ function bindImport(el) {
       const sn = /\[StudyName "([^"]*)"\]/.exec(text);
       studyName = sn ? sn[1] : '';
     }
-    if (!text.trim()) { err.textContent = 'Choisissez un fichier PGN, collez un lien d’étude ou le texte.'; return; }
+    if (!text.trim()) { err.textContent = src === 'file' ? 'Choisissez un fichier PGN.' : src === 'study' ? 'Collez le lien d’une étude Lichess.' : 'Collez le texte du PGN.'; return; }
     let rep = target.value ? await getRepertoire(target.value) : null;
     const isNew = !rep;
     if (isNew) rep = newRepertoire({ name: $('#pgn-name', el).value.trim() || (file ? file.name.replace(/\.[^.]+$/, '') : studyName || `Répertoire ${colorFr(color)}`), color });
