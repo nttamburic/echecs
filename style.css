@@ -1264,3 +1264,11 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 #pgn-dlg [role=tabpanel] > label { gap: 8px; }
 #pgn-dlg [role=tabpanel] > label, #pgn-dlg [role=tabpanel] > .inline { margin-bottom: 0; }
 #pgn-dlg .pgn-dest .dest strong { color: var(--text); }
+
+/* ---- Phase 9 : nom de l'ouverture + « Ici dans vos parties » ---- */
+#rep-panel .popening { padding: 14px 16px 2px; font-size: 16px; font-weight: 700; color: #d2b18c; border-bottom: 0; background: var(--surface-1); line-height: 22px; }
+#rep-panel .rperf { padding: 0 16px 12px; font-size: 13px; line-height: 20px; color: var(--text-muted); background: var(--surface-1); border-bottom: 1px solid var(--line-soft); }
+#rep-panel .rperf .pf-w { color: #b5de88; font-weight: 600; }
+#rep-panel .rperf .pf-d { color: var(--text-soft); font-weight: 600; }
+#rep-panel .rperf .pf-l { color: #ff8f80; font-weight: 600; }
+#rep-panel .popening:has(+ .rperf:empty) { padding-bottom: 12px; border-bottom: 1px solid var(--line-soft); }

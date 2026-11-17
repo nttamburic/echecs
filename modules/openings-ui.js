@@ -76,8 +76,8 @@ function perfOf(rep) {
 const perfShort = (st) => `${plural(st.n, 'partie')} · ${pct(st.score)}`;
 function perfLine(st) {
   if (!getUser() && !lichessCfg.user) return '';
-  if (!st) return `Aucune de vos parties des ${WINDOW_DAYS} derniers jours n’est passée par cette position.`;
-  return `Vos parties ici (${WINDOW_DAYS} j) : <b>${plural(st.n, 'partie')}</b> · <span class="pf-w">+${st.w}</span> <span class="pf-d">=${st.d}</span> <span class="pf-l">−${st.l}</span> · score <b>${pct(st.score)}</b>`;
+  if (!st) return `Ici dans vos parties : aucune (${WINDOW_DAYS} derniers jours)`;
+  return `<span title="Parties des ${WINDOW_DAYS} derniers jours passées par cette position · score ${pct(st.score)}">Ici dans vos parties : <span class="pf-w">+${st.w}</span> <span class="pf-d">=${st.d}</span> <span class="pf-l">−${st.l}</span> · ${plural(st.n, 'partie')}</span>`;
 }
 function lichessStatus() {
   if (!lichessCfg.connected) return 'Connectez Lichess (Paramètres → Connexion) pour compter aussi vos parties Lichess.';
@@ -1077,7 +1077,7 @@ async function renderExplorer() {
   }
   if (seq !== E.expSeq) return;
   body.classList.remove('loading');
-  if (E.k && j.opening && j.opening.name && !openingName()) $('#rep-opening').textContent = j.opening.name;
+  if (E.k && j.opening && j.opening.name && !openingName()) $('#rep-opening').textContent = openingHead(j.opening);
   const total = j.white + j.draws + j.black;
   if (!j.moves.length) { body.innerHTML = '<p class="muted pad">Aucune partie de cette base n\'atteint cette position.</p>'; return; }
   const mine = new Set(childrenOf(E.rep, p).map((e) => e.uci));
@@ -1098,6 +1098,16 @@ function openingName() {
   let name = null;
   for (const e of E.path.slice(0, E.k)) { const o = BOOK[e.fenAfter]; if (o && o.length) name = o[1]; }
   return name;
+}
+// « Giuoco Pianissimo · 6… a6 (C54) » : ouverture, dernier coup joué, code ECO.
+function openingHead(alt) {
+  if (E.k === 0) return 'Position de départ';
+  let o = null;
+  for (const e of E.path.slice(0, E.k)) { const b = BOOK[e.fenAfter]; if (b && b.length) o = b; }
+  const cur = E.path[E.k - 1];
+  const mv = cur ? `${moveLabel(cur, E.k - 1).replace('...', '…')} ${frSan(cur.san)}` : '';
+  const name = o ? o[1] : alt && alt.name, eco = o ? o[0] : alt && alt.eco;
+  return [name || 'Ouverture inconnue', mv].filter(Boolean).join(' · ') + (eco ? ` (${eco})` : '');
 }
 
 function render() {
@@ -1124,7 +1134,7 @@ function render() {
   }
   $('#rep-train').href = '#/openings/train/rep/' + encodeURIComponent(E.rep.id);
   $('#rep-title').innerHTML =`<span class="avatar-sm ${E.rep.color}"><img src="pieces/${E.rep.color}K.svg" alt=""></span><span class="ell" title="${esc(E.rep.name)}">${esc(E.rep.name)}</span>`;
-  $('#rep-opening').textContent = E.k === 0 ? 'Position de départ' : openingName() || 'Ouverture inconnue';
+  $('#rep-opening').textContent = openingHead();
   $('#rep-perf').innerHTML = perfLine(perfOf(E.rep).get(curEpd()));
   refreshMastery();
   renderCoverage();
