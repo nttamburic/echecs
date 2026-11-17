@@ -5,6 +5,7 @@ import { Chess } from '../vendor/chess.js';
 import { Board } from '../board.js';
 import { classifyMove, classifyGame, summarize, CLASSES, SUMMARY_ORDER, fmtScore, winPct, epd } from '../analysis.js';
 import { frSan, explainMove } from '../explain.js';
+import { frOpening } from './opening-names.js';
 import { $, esc, fr1, uciOf, local, toast, badge, keyActivate } from '../core/ui.js';
 import {
   analyzePosition, parallelism, SOURCE_LABEL, analysisSettings, maxTime, nLines, pcDepth, wasmDepth,
@@ -201,9 +202,9 @@ function renderOpeningFilter() {
   }
   let html = '<option value="">Toutes ouvertures</option>';
   for (const [f, e] of [...fams].sort((a, b) => b[1].n - a[1].n || a[0].localeCompare(b[0]))) {
-    html += `<option value="f:${esc(f)}">${esc(f)} (${e.n})</option>`;
+    html += `<option value="f:${esc(f)}">${esc(frOpening(f))} (${e.n})</option>`;
     for (const [v, n] of [...e.vars].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))) {
-      html += `<option value="v:${esc(v)}">   ${esc(v.slice(f.length + 1).trim())} (${n})</option>`;
+      html += `<option value="v:${esc(v)}">   ${esc(frOpening(v).slice(frOpening(f).length).replace(/^\s*:\s*/, '').trim())} (${n})</option>`;
     }
   }
   if (sel.dataset.html === html) return;
@@ -890,7 +891,7 @@ function renderGame() {
   $('#back').title = g.free ? 'Retour à l\'analyse libre' : 'Retour à l\'historique des parties';
   $('#reanalyze').parentElement.classList.toggle('hidden', !!g.free);
   const k = g.var ? g.var.basePly : g.ply;
-  $('#opening').textContent = k === 0 && !g.var ? (g.custom ? 'Position définie' : 'Position de départ') : (g.openingAt[k] || g.openingAt[g.openingAt.length - 1] || 'Ouverture inconnue');
+  $('#opening').textContent = k === 0 && !g.var ? (g.custom ? 'Position définie' : 'Position de départ') : frOpening(g.openingAt[k] || g.openingAt[g.openingAt.length - 1]) || 'Ouverture inconnue';
   const date = fmtGameDate(g.game.end * 1000);
   $('#game-meta').textContent = g.free ? '' : `${TIME_FR[g.game.timeClass] || ''} · ${date} · ${g.game.result || ''}`;
 
@@ -1050,7 +1051,7 @@ function renderCoach(g, d, review) {
     bindCoach(g);
     return;
   }
-  const ex = explainMove({ fenBefore: d.fenBefore, san: d.san, uci: d.uci, color: d.color, r: d.r, pos: d.pos, openingName: g.openingAt[g.ply], playerColor: g.playerColor });
+  const ex = explainMove({ fenBefore: d.fenBefore, san: d.san, uci: d.uci, color: d.color, r: d.r, pos: d.pos, openingName: frOpening(g.openingAt[g.ply]), playerColor: g.playerColor });
   html += `<div class="coach-title">${badge(d.r.cls)} <span>${esc(ex.title)}</span><span class="score${/^[−-]/.test(fmtScore(d.pos.played.score)) ? ' neg' : ''}">${fmtScore(d.pos.played.score)}</span></div>`;
   const open = S.coachOpen === g.ply + ':' + (g.var ? g.var.idx : '');
   html += ex.paras.map((p, i) => `<p${!open && i === 2 ? ' class="clamp"' : ''}${!open && i > 2 ? ' hidden' : ''}>${esc(p)}</p>`).join('');
