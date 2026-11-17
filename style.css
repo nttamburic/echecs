@@ -1054,3 +1054,19 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 #train-panel .tstats b { font-size: 20px; line-height: 26px; color: var(--text); font-weight: 700; }
 #train-panel .tstats > span:nth-child(1) b { color: #a9d67a; } #train-panel .tstats > span:nth-child(2) b { color: #ff8f80; }
 @media (max-width: 760px) { #train-panel .tstats { grid-template-columns: repeat(4, 1fr); } }
+
+/* ---- Phase 9 : mobile (historique compact, feuille de la vue partie) ---- */
+@media (max-width: 760px) {
+  .hist-head { margin-bottom: 12px; }
+  .hist-head .stack { flex-wrap: wrap; gap: 8px; }
+  .hist-filters { background: transparent; padding: 0; gap: 8px; box-shadow: none; }
+  .hist-filters .fcol { flex: 1 1 100%; gap: 0; }
+  .hist-filters .lbl-up { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .hist-filters input, .hist-filters select { background: var(--surface-1); font-size: 16px; }
+  .hist-filters #tc { background: transparent; padding: 0; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+  .hist-filters #tc .chip { flex: 0 0 auto; min-height: 44px; padding: 0 14px; border-radius: 999px; background: #3a3835; font-size: 13px; }
+  .hist-filters #tc .chip[aria-pressed="true"] { background: var(--text-strong); color: #161512; }
+  .hist-filters .fcol:nth-child(3) { flex: 1 1 0; }
+  .hist-filters .fcount { height: 44px; font-size: 12px; }
+  #gpanel { border-radius: 14px 14px 0 0; box-shadow: 0 -8px 24px rgba(0,0,0,.45); }
+}
