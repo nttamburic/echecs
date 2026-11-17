@@ -396,5 +396,5 @@ function render() {
   const s = T.stats;
   const tot = s.ok + s.ko;
   $('#train-stats').innerHTML = `<span><b>${s.ok}</b> bonne${s.ok > 1 ? 's' : ''} réponse${s.ok > 1 ? 's' : ''}</span><span><b>${s.ko}</b> erreur${s.ko > 1 ? 's' : ''}</span>`
-    + (tot ? `<span>${Math.round((100 * s.ok) / tot)} %</span>` : '') + `<span class="muted">${plural(s.lines, 'ligne')} terminée${s.lines > 1 ? 's' : ''}</span>`;
+    + (tot ? `<span><b>${Math.round((100 * s.ok) / tot)} %</b> réussite</span>` : '<span><b>–</b> réussite</span>') + `<span><b>${s.lines}</b> ligne${s.lines > 1 ? 's' : ''} finie${s.lines > 1 ? 's' : ''}</span>`;
 }
