@@ -8,18 +8,47 @@ const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
 const NAMES = { K: 'Roi', Q: 'Dame', R: 'Tour', B: 'Fou', N: 'Cavalier', P: 'Pion' };
 
 // ------------------------------------------------------------------ page d'accueil
+// Petit échiquier statique (accueil) : cases du thème et pièces cburnett.
+function miniBoard(placementStr, size = 150) {
+  let html = '';
+  const rows = placementStr.split('/');
+  for (let y = 0; y < 8; y++) {
+    let x = 0;
+    const cells = {};
+    for (const ch of rows[y]) { if (/\d/.test(ch)) x += +ch; else { cells[x] = (ch === ch.toUpperCase() ? 'w' : 'b') + ch.toUpperCase(); x++; } }
+    for (let c = 0; c < 8; c++) html += `<span class="mb-sq ${(c + y) % 2 ? 'd' : 'l'}">${cells[c] ? `<img src="pieces/${cells[c]}.svg" alt="">` : ''}</span>`;
+  }
+  return `<span class="mini-board" style="width:${size}px;height:${size}px" aria-hidden="true">${html}</span>`;
+}
+
 export function renderHome(el) {
-  el.innerHTML = `<h1 class="page-title">Analyse libre</h1>
+  el.innerHTML = `<header class="free-head"><h1 class="page-title">Analyse libre</h1>
+      <p class="muted">Explorez une position avec Stockfish, sans partie associée.</p></header>
     <div class="free-cards">
       <a class="card free-card" href="#/free/new">
-        <img src="pieces/wN.svg" alt="">
-        <div><h2>Nouvelle analyse</h2><p class="muted">Échiquier en position de départ : jouez les coups de votre choix pour les deux camps, Stockfish les note.</p></div>
+        ${miniBoard(START)}
+        <div><h2>Nouvelle analyse</h2><p class="muted">Depuis la position de départ. Jouez les coups des deux camps, le moteur suit.</p>
+          <span class="btn primary fc-cta">Commencer</span></div>
       </a>
       <a class="card free-card" href="#/free/setup">
-        <img src="pieces/wK.svg" alt="">
-        <div><h2>Définir la position</h2><p class="muted">Placez les pièces où vous voulez sur un échiquier vide, choisissez qui a le trait, puis analysez.</p></div>
+        ${miniBoard('8/5pk1/6p1/8/3R4/6P1/5PK1/1r6')}
+        <div><h2>Définir la position</h2><p class="muted">Placez les pièces, collez un FEN, choisissez le trait et les roques.</p>
+          <span class="btn fc-cta">Ouvrir l’éditeur</span></div>
       </a>
-    </div>`;
+    </div>
+    <form id="free-fen-form" class="free-fen"><label for="free-fen">Coller un FEN</label>
+      <div class="row"><input id="free-fen" spellcheck="false" autocomplete="off" placeholder="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1">
+      <button class="btn" type="submit">Analyser</button></div>
+      <p id="free-fen-err" class="small err" role="alert"></p></form>`;
+  $('#free-fen-form', el).onsubmit = (e) => {
+    e.preventDefault();
+    const v = $('#free-fen').value.trim();
+    const full = v.split(/\s+/).length === 1 ? v + ' w - - 0 1' : v;
+    const r = validateFen(full);
+    if (!r.ok) { $('#free-fen-err').textContent = 'FEN invalide : ' + r.error; return; }
+    stashFree({ fen: full, orient: full.split(' ')[1] === 'b' ? 'b' : 'w' });
+    location.hash = '#/free/new';
+  };
 }
 
 // ------------------------------------------------------------------ éditeur
@@ -120,6 +149,7 @@ function renderBoard() {
 function renderSide() {
   document.querySelectorAll('.palette [data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === E.tool));
   $('#setup-turn').value = E.turn;
+  document.querySelectorAll('#setup-turn-seg [data-turn]').forEach((b) => { const on = b.dataset.turn === E.turn; b.setAttribute('aria-checked', String(on)); b.setAttribute('aria-pressed', String(on)); });
   for (const k of Object.keys(E.castle)) {
     const cb = $('#setup-c' + k);
     const ok = castleOk(k);
@@ -129,8 +159,10 @@ function renderSide() {
   const f = fen();
   if (document.activeElement !== $('#setup-fen')) $('#setup-fen').value = f;
   const err = problem();
-  $('#setup-msg').textContent = err || 'Position valide.';
-  $('#setup-msg').className = 'small ' + (err ? 'err' : 'ok');
+  let okTxt = 'Position valide.';
+  if (!err) { try { okTxt = `Position valide · ${E.turn === 'w' ? 'Blancs' : 'Noirs'} au trait · ${new Chess(f).moves().length} coups légaux`; } catch { /* */ } }
+  $('#setup-msg').textContent = err || okTxt;
+  $('#setup-msg').className = 'msg ' + (err ? 'err' : 'ok');
   $('#setup-ok').disabled = !!err;
 }
 
@@ -174,15 +206,19 @@ export function renderEditor(el) {
   const pal = (c) => ['K', 'Q', 'R', 'B', 'N', 'P'].map((t) => `<button type="button" data-tool="${c}${t}" title="${NAMES[t]} ${c === 'w' ? 'blanc' : 'noir'}"><img src="pieces/${c}${t}.svg" alt=""></button>`).join('');
   el.innerHTML = `<div class="setup">
     <div class="setup-left">
-      <div class="palette">${pal('b')}<button type="button" data-tool="move" title="Déplacer les pièces (glisser)">✋</button></div>
+      <div class="palette">${pal('b')}<button type="button" data-tool="move" title="Déplacer les pièces (glisser)" aria-label="Main : déplacer les pièces"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12M11 11V4.5a1.5 1.5 0 0 1 3 0V12M14 11.5V6a1.5 1.5 0 0 1 3 0v8a7 7 0 0 1-7 7h-.5a6 6 0 0 1-4.8-2.4L3 16.3a1.5 1.5 0 0 1 2.3-1.9L8 17"/></svg></button></div>
       <div id="setup-board" class="board"><div class="squares"></div><div class="pieces"></div></div>
-      <div class="palette">${pal('w')}<button type="button" data-tool="erase" title="Gomme : retirer une pièce">🗑</button></div>
+      <div class="palette">${pal('w')}<button type="button" data-tool="erase" title="Gomme : retirer une pièce" aria-label="Gomme : retirer une pièce" class="erase"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 20h12M5 15l9-9 5 5-8 9H8zM10 10l5 5"/></svg></button></div>
       <p class="muted small">Choisissez une pièce puis cliquez sur les cases pour la poser. Glissez une pièce pour la déplacer, ou hors de l'échiquier pour la retirer (clic droit : retirer).</p>
     </div>
     <aside class="card setup-side">
       <h1>Définir la position</h1>
-      <div class="frow"><label for="setup-turn">Trait aux</label><select id="setup-turn"><option value="w">Blancs</option><option value="b">Noirs</option></select></div>
-      <fieldset class="castles"><legend>Roques possibles</legend>
+      <div class="setup-sec"><span class="lbl-up" id="lbl-turn">Trait</span>
+        <div class="segctl" id="setup-turn-seg" role="radiogroup" aria-labelledby="lbl-turn">
+          <button type="button" role="radio" class="chip" data-turn="w"><img src="pieces/wK.svg" alt="" width="20" height="20"> Blancs</button>
+          <button type="button" role="radio" class="chip" data-turn="b"><img src="pieces/bK.svg" alt="" width="20" height="20"> Noirs</button></div>
+        <select id="setup-turn" class="sr-only" aria-label="Trait aux" tabindex="-1"><option value="w">Blancs</option><option value="b">Noirs</option></select></div>
+      <fieldset class="castles"><legend class="lbl-up">Roques possibles</legend>
         <label><input type="checkbox" id="setup-cK"> Blancs O-O</label><label><input type="checkbox" id="setup-cQ"> Blancs O-O-O</label>
         <label><input type="checkbox" id="setup-ck"> Noirs O-O</label><label><input type="checkbox" id="setup-cq"> Noirs O-O-O</label>
       </fieldset>
@@ -191,9 +227,9 @@ export function renderEditor(el) {
         <button type="button" id="setup-clear" class="btn">Vider l'échiquier</button>
         <button type="button" id="setup-flip" class="btn">⇅ Retourner</button>
       </div>
-      <label class="fenl">FEN<input id="setup-fen" spellcheck="false" autocomplete="off"></label>
+      <label class="fenl lbl-up">FEN<input id="setup-fen" spellcheck="false" autocomplete="off"></label>
       <p id="setup-msg" class="small"></p>
-      <button type="button" id="setup-ok" class="btn big primary">Valider la position</button>
+      <button type="button" id="setup-ok" class="btn big primary">Valider et analyser</button>
       <p><a href="#/free">← Retour</a></p>
     </aside>
   </div>`;
@@ -224,6 +260,7 @@ export function renderEditor(el) {
     };
   });
   $('#setup-turn').onchange = (e) => { E.turn = e.target.value; render(); };
+  document.querySelectorAll('#setup-turn-seg [data-turn]').forEach((b) => { b.onclick = () => { E.turn = b.dataset.turn; render(); }; });
   for (const k of Object.keys(E.castle)) $('#setup-c' + k).onchange = (e) => { E.castle[k] = e.target.checked; render(); };
   $('#setup-start').onclick = () => { setPosition(START, 'w', 'KQkq'); render(); };
   $('#setup-clear').onclick = () => { E.pos = {}; render(); };
@@ -235,7 +272,7 @@ export function renderEditor(el) {
       render();
     } catch (err) {
       $('#setup-msg').textContent = 'FEN illisible : ' + err.message;
-      $('#setup-msg').className = 'small err';
+      $('#setup-msg').className = 'msg err';
     }
   };
   $('#setup-ok').onclick = () => {
