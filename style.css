@@ -1225,3 +1225,26 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 @media (max-width: 760px), (max-width: 1279px) and (orientation: portrait) {
   #gpanel[data-detent="mid"]:has(.coach-btns) { min-height: 226px; }
 }
+
+/* ---- Phase 9 : pages « Bientôt » mobiles ---- */
+.soon-m, #topbar-soon { display: none; }
+@media (max-width: 760px) {
+  body[data-view="puzzles"] #topbar .brand, body[data-view="strategy"] #topbar .brand, body[data-view="endgames"] #topbar .brand { display: none; }
+  body[data-view="puzzles"] #topbar-soon, body[data-view="strategy"] #topbar-soon, body[data-view="endgames"] #topbar-soon { display: block; flex: 1; min-width: 0; font-size: 17px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .soon2 { display: none; }
+  .soon-m { display: flex; flex-direction: column; min-height: calc(100dvh - var(--topbar) - env(safe-area-inset-top) - var(--nav-h, 0px)); margin: -16px -8px; }
+  .soon-m-body { flex: 1; padding: 20px 16px; display: flex; flex-direction: column; gap: 16px; }
+  .soon-m .soon-badge { align-self: flex-start; height: 26px; padding: 0 10px; border-radius: 999px; background: #25384d; color: var(--link); font-weight: 700; font-size: 13px; display: flex; align-items: center; }
+  .soon-m h2 { margin: 0; font-size: 28px; line-height: 34px; font-weight: 800; }
+  .soon-m .soon-lead { font-size: 16px; line-height: 24px; }
+  .soon-m-board { position: relative; align-self: center; width: 240px; height: 240px; }
+  .soon-m-board .soon-arrows { position: absolute; inset: 0; width: 240px; height: 240px; pointer-events: none; }
+  .soon-m .soon-m-feats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .soon-m .soon-m-feats li { margin: 0; display: flex; gap: 12px; align-items: flex-start; background: var(--surface-1); border-radius: var(--r-lg); padding: 12px; }
+  .soon-m-feats .n { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #14200a; font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center; flex: none; }
+  .soon-m-feats li > span:last-child { display: flex; flex-direction: column; gap: 2px; }
+  .soon-m-feats strong { font-size: 15px; }
+  .soon-m-feats .muted { font-size: 13px; line-height: 19px; }
+  .soon-m-foot { position: sticky; bottom: 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: var(--bg, #262421); }
+  .soon-m-foot .btn { height: 52px; border-radius: var(--r); background: #3a3835; border: 1px solid #55524d; color: var(--text); font-weight: 600; font-size: 16px; display: flex; align-items: center; justify-content: center; text-decoration: none; }
+}
