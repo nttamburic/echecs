@@ -1,4 +1,4 @@
-// Formats d'affichage partagés (nombres, dates, durées) — à placer dans core/format.js.
+// Formats d'affichage partagés (nombres, dates, durées).
 // Une seule source pour l'écran, les toasts et les annonces du lecteur d'écran.
 // Règles : planche « Formats et textes longs » du canevas.
 
@@ -11,13 +11,6 @@ const nf = (min, max = min) => new Intl.NumberFormat('fr-FR', {
 const dec = (x, digits) => nf(digits).format(x);              // 1,2 (virgule, pas de groupement)
 const signed = (s) => s.replace(/^-/, MINUS);
 
-/** Entier : sans séparateur jusqu'à 9999, espace fine au-delà. 412 · 2200 · 18 402 */
-export function fmtInt(n) {
-  const s = String(Math.round(Math.abs(n)));
-  const g = s.length > 4 ? s.replace(/\B(?=(\d{3})+(?!\d))/g, NNBSP) : s;
-  return (n < 0 ? MINUS : '') + g;
-}
-
 /** Évaluation moteur. cp en centipions (point de vue des Blancs), mate en coups signés.
  *  +0,4 · −2,1 · 0,0 · M3 · −M5 */
 export function fmtEval(cp, mate = null) {
@@ -27,22 +20,9 @@ export function fmtEval(cp, mate = null) {
   return (v > 0 ? '+' : '') + signed(dec(v, 1));
 }
 
-/** Perte d'un coup en pions. « perte ≈ 2,5 pions » */
-export function fmtLoss(cp) {
-  const v = Math.abs(cp) / 100;
-  return `perte ≈ ${dec(v, 1)} pion${v >= 2 ? 's' : ''}`;
-}
-
 /** Pourcentage. fmtPct(71.84, 1) → 71,8 % ; fmtPct(52.4) → 52 % */
 export function fmtPct(x, digits = 0) {
   return dec(x, digits) + NNBSP + '%';
-}
-
-/** Nœuds par seconde. 850 k nœuds/s · 1,2 M nœuds/s */
-export function fmtNps(n) {
-  if (n >= 1e6) return dec(n / 1e6, 1) + ' M nœuds/s';
-  if (n >= 1e3) return Math.round(n / 1e3) + ' k nœuds/s';
-  return n + ' nœuds/s';
 }
 
 const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -68,16 +48,6 @@ export function fmtAgo(date, now = new Date()) {
   return `il y a ${Math.floor(s / 86400)} j`;
 }
 
-/** Échéance de révision. aujourd'hui · demain · dans 4 j */
-export function fmtDue(date, now = new Date()) {
-  const a = new Date(now); a.setHours(0, 0, 0, 0);
-  const b = new Date(date); b.setHours(0, 0, 0, 0);
-  const days = Math.round((b - a) / 86400000);
-  if (days <= 0) return 'aujourd’hui';
-  if (days === 1) return 'demain';
-  return `dans ${days} j`;
-}
-
 /** Pendule. 12:47 · 1:05:12 · 0:08,4 (dixièmes sous 10 s) */
 export function fmtClock(ms) {
   const t = Math.max(0, ms);
@@ -87,29 +57,3 @@ export function fmtClock(ms) {
   return h ? `${h}:${p(m)}:${p(r)}` : `${m}:${p(r)}`;
 }
 
-const TC = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapide', daily: 'Par jour', classical: 'Rapide' };
-/** Cadence chess.com. ('blitz', '180+2') → Blitz 3+2 ; ('daily', '1/259200') → Par jour (3 j) */
-export function fmtTimeControl(timeClass, tc = '') {
-  const name = TC[timeClass] || timeClass;
-  if (timeClass === 'daily') {
-    const sec = Number(String(tc).split('/')[1]);
-    return sec ? `${name} (${Math.round(sec / 86400)} j)` : name;
-  }
-  const [base, inc = '0'] = String(tc).split('+');
-  return base ? `${name} ${Math.round(Number(base) / 60)}+${inc}` : name;
-}
-
-/** Durée estimée. ≈ 40 s · ≈ 6 min · ≈ 1 h 20 */
-export function fmtEta(sec) {
-  if (sec < 60) return `≈ ${Math.max(5, Math.round(sec / 5) * 5)} s`;
-  if (sec < 3600) return `≈ ${Math.round(sec / 60)} min`;
-  const h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60);
-  return m ? `≈ ${h} h ${String(m).padStart(2, '0')}` : `≈ ${h} h`;
-}
-
-/** Numéro de coup devant un SAN déjà converti en figurines. ply 0 = premier coup blanc.
- *  (30, '♗b3') → 16. ♗b3 ; (11, 'a6') → 6… a6 */
-export function fmtMove(ply, san) {
-  const n = Math.floor(ply / 2) + 1;
-  return ply % 2 === 0 ? `${n}. ${san}` : `${n}… ${san}`;
-}

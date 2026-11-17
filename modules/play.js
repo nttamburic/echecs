@@ -6,6 +6,7 @@ import { fmtScore, winPct, epd } from '../analysis.js';
 import { $, esc, uciOf, local, toast, keyActivate } from '../core/ui.js';
 import { analyzePosition, analysisSettings, maxTime } from '../core/engine.js';
 import { maiaMove, loadMaia, maiaModel, setMaiaProgress, MAIA_MODELS } from '../core/maia.js';
+import { fmtClock } from '../core/format.js';
 import { BOOK, figSan, material, capturedHtml, stashFree } from './analyse.js';
 
 const P = {
@@ -34,7 +35,6 @@ const ELO_MIN = 600, ELO_MAX = 2800;
 const PRESETS = [[800, 'Débutant'], [1200, 'Club'], [1500, 'Intermédiaire'], [1900, 'Avancé'], [2300, 'Expert'], [2600, 'Maître']];
 const TCS = [[0, 'Sans pendule'], [180, '3 min'], [300, '5 min'], [600, '10 min']];
 const eloName = (e) => (PRESETS.slice().reverse().find(([v]) => e >= v) || PRESETS[0])[1];
-const fmtClock = (ms) => { const t = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
 const opt = (k) => local.get(k, '1') !== '0';
 const fenAt = (k) => (k === 0 ? P.startFen : P.moves[k - 1].after);
 const atLatest = () => P.ply === P.moves.length;

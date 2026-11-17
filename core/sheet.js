@@ -50,6 +50,7 @@ export function initSheet(panel, grab, { onChange } = {}) {
     panel.classList.remove('measuring');
     if (!d.moved) { panel.style.height = ''; return; }
     grab.dataset.dragged = '1';
+    setTimeout(() => delete grab.dataset.dragged, 60); // le clic de fin de geste suit tout de suite ; sans clic (pointercancel), le drapeau ne reste pas
     const cur = panel.offsetHeight;
     const best = ORDER.reduce((a, k) => (Math.abs(d.hs[k] - cur) < Math.abs(d.hs[a] - cur) ? k : a), 'mid');
     set(best);

@@ -88,8 +88,9 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 export function mergeRepertoires(mine, theirs) {
   const key = (e) => `${e.fenBefore}|${e.uci}`;
   const byKey = new Map(mine.edges.map((e) => [key(e), e]));
+  const theirsByKey = new Map(theirs.edges.map((e) => [key(e), e]));
   const edges = mine.edges.map((e) => {
-    const o = theirs.edges.find((x) => key(x) === key(e));
+    const o = theirsByKey.get(key(e));
     return o && !e.note && o.note ? { ...e, note: o.note } : e;
   });
   for (const e of theirs.edges) if (!byKey.has(key(e))) edges.push(e);
