@@ -9,7 +9,7 @@ const NAMES = { K: 'Roi', Q: 'Dame', R: 'Tour', B: 'Fou', N: 'Cavalier', P: 'Pio
 
 // ------------------------------------------------------------------ page d'accueil
 // Petit échiquier statique (accueil) : cases du thème et pièces cburnett.
-function miniBoard(placementStr, size = 150) {
+export function miniBoard(placementStr, size = 150) {
   let html = '';
   const rows = placementStr.split('/');
   for (let y = 0; y < 8; y++) {
