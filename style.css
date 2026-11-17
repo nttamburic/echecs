@@ -1070,3 +1070,13 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .hist-filters .fcount { height: 44px; font-size: 12px; }
   #gpanel { border-radius: 14px 14px 0 0; box-shadow: 0 -8px 24px rgba(0,0,0,.45); }
 }
+#tb-back, #topbar-title { display: none; }
+@media (max-width: 760px), (max-width: 1279px) and (orientation: portrait) {
+  body[data-view="game"] #menu-btn, body[data-view="game"] #topbar .brand { display: none; }
+  body[data-view="game"] #tb-back { display: flex; min-width: var(--tap); min-height: var(--tap); align-items: center; justify-content: center; }
+  body[data-view="game"] #topbar-title { display: block; margin: 0; flex: 1; min-width: 0; font-size: 17px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #topbar-title .tt-opp { font-size: 14px; font-weight: 500; color: var(--text-muted); }
+  #gpanel[data-detent="max"] .phead { display: none; }
+  #gpanel .ptabs { padding: 0 8px; border-bottom: 1px solid var(--line); }
+  #gpanel .ptabs button { flex: 1; min-height: 44px; }
+}

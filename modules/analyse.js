@@ -679,6 +679,15 @@ function nextKey() {
   setPly(g.moves.length);
 }
 
+// « Suivant · 4/9 » : rang du prochain coup clé parmi tous ceux de la partie
+function suivantLabel(g, review) {
+  if (!review || g.var || g.free || !isComplete(g)) return 'Suivant';
+  const keys = [];
+  g.results.forEach((r, j) => { if (r && NOTABLE.includes(r.cls)) keys.push(j + 1); });
+  const n = keys.filter((p) => p <= g.ply).length + 1;
+  return n <= keys.length ? `Suivant · ${n}/${keys.length}` : 'Suivant';
+}
+
 // ----- onglets du panneau (Coups · Bilan · Moteur)
 function selectTab(name) {
   document.querySelectorAll('#gpanel .ptabs [role=tab]').forEach((b) => {
@@ -853,6 +862,11 @@ function renderGame() {
   $('#gpanel').classList.toggle('review', review);
   $('#review-empty').classList.toggle('hidden', review);
   $('#ptitle').innerHTML = g.free ? 'Analyse libre' : review ? `<span class="badge" style="background:${CLASSES.best.color}">★</span> Bilan` : 'Analyse';
+  const tt = $('#topbar-title');
+  if (tt) {
+    const oppN = g.free ? '' : (g.game.white.name.toLowerCase() === (S.user || '').toLowerCase() ? g.game.black.name : g.game.white.name);
+    tt.innerHTML = (g.free ? 'Analyse libre' : review ? 'Bilan' : 'Analyse') + (oppN ? ` <span class="tt-opp">· vs ${esc(oppN)}</span>` : '');
+  }
   $('#cc-link').href = g.game.url || '#';
   $('#cc-link').classList.toggle('hidden', !!g.free);
   $('#back').title = g.free ? 'Retour à l\'analyse libre' : 'Retour à l\'historique des parties';
@@ -968,6 +982,7 @@ function renderCoach(g, d, review) {
   el.classList.toggle('hidden', !show);
   $('#next-wrap').classList.toggle('hidden', !review || !!g.free);
   $('#suivant').disabled = atEnd(g);
+  $('#suivant').textContent = suivantLabel(g, review);
   if (!show) { el.innerHTML = ''; return; }
   let html = '';
   if (g.var) {
@@ -1266,7 +1281,7 @@ export async function init() {
       if (n && n.dataset.id) { e.preventDefault(); n.focus(); }
     }
   };
-  $('#back').onclick = () => { location.hash = S.g && S.g.free ? '#/free' : '#/games'; };
+  $('#back').onclick = $('#tb-back').onclick = () => { location.hash = S.g && S.g.free ? '#/free' : '#/games'; };
   $('#first').onclick = nav(() => setPly(0));
   $('#prev').onclick = nav(() => step(-1));
   $('#next').onclick = nav(() => step(1));
