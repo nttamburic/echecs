@@ -643,3 +643,32 @@ button.link { background: none; border: 0; padding: 0; font: inherit; color: var
   body[data-view="game"] #content { padding-bottom: calc(var(--nav-h) + 4px); }
 }
 @media (prefers-reduced-motion: reduce) { #gpanel { transition: none; } }
+
+/* ---- phase 5 : Ouvertures ---- */
+.rep-card { display: flex; align-items: center; gap: 12px; }
+.rep-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; }
+.rep-card:has(.rep-open:hover) { background: var(--panel2); }
+.rep-card:has(.rep-open:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.rep-open:focus-visible { outline: none; }
+.mbar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--panel2); margin-top: 6px; gap: 1px; }
+.mbar i { display: block; min-width: 3px; }
+.rep-info .mst-row { margin-top: 4px; }
+.rsugg { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tsum { padding-top: 8px; }
+.resizer { display: none; }
+@media (min-width: 1280px) {
+  #rep-view .resizer { display: block; width: 10px; align-self: stretch; margin: 0 -8px; cursor: col-resize; border-radius: 4px; flex: none; position: relative; z-index: 1; }
+  #rep-view .resizer::after { content: ""; position: absolute; left: 4px; top: 50%; width: 2px; height: 40px; margin-top: -20px; background: var(--border); border-radius: 1px; }
+  .resizer:hover::after, .resizer:focus-visible::after { background: var(--accent); }
+  .resizer:focus-visible { outline: 2px solid var(--focus); }
+}
+#rep-panel .ptabs { flex: none; }
+#rep-panel .tabpane.exp { flex: 1 1 auto; }
+#rep-panel .tabpane { overflow-y: auto; }
+@media (max-width: 760px) {
+  #rep-dlg, #pgn-dlg { margin: auto 0 0; max-height: 88vh; overflow-y: auto; width: 100%; max-width: none; border-radius: var(--r-sheet) var(--r-sheet) 0 0; padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
+  #rep-dlg .btn, #pgn-dlg .btn, .rep-card .btn { min-height: var(--tap); }
+  .side-pick button { min-height: var(--tap); }
+}
+#rep-view .ptitle { display: flex; align-items: center; gap: 8px; min-width: 0; }
+#rep-view .ptitle .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
