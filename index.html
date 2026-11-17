@@ -113,31 +113,51 @@
       <button id="flip" class="btn small" title="Retourner l'échiquier (F)">⇅ Retourner</button>
     </div>
   </div>
-  <aside class="panel" id="gpanel">
+  <aside class="panel" id="gpanel" data-detent="mid">
+    <button id="grab" class="grab" type="button" aria-label="Agrandir ou réduire le panneau" aria-expanded="true"><span></span></button>
     <div class="phead">
       <button id="back" class="icon-btn" title="Retour à l'historique des parties" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
       <span id="ptitle"></span>
-      <a id="cc-link" class="icon-btn" target="_blank" rel="noopener" title="Voir la partie sur chess.com"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
+      <a id="cc-link" class="icon-btn" target="_blank" rel="noopener" title="Voir la partie sur chess.com" aria-label="Voir la partie sur chess.com"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
     </div>
-    <div class="peng">
-      <label class="switch" title="Afficher les meilleures lignes du moteur pour la position"><input type="checkbox" id="live" aria-label="Afficher les meilleures lignes du moteur"><span></span></label>
-      <span>Analyse</span>
-      <span id="eng-desc" class="muted small"></span>
-      <button id="eng-gear" class="icon-btn" title="Paramètres d'analyse" aria-label="Paramètres d'analyse"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
-    </div>
-    <div id="lines" class="hidden"></div>
     <div id="coach" class="hidden"></div>
-    <div id="next-wrap" class="hidden"><button id="suivant" class="btn big primary">→ Suivant</button></div>
-    <div id="opening"></div>
-    <div id="moves"></div>
-    <div id="graph" class="hidden" title="Cliquez pour aller à ce moment de la partie"></div>
+    <div id="next-wrap" class="hidden"><button id="suivant" class="btn big primary">Suivant</button></div>
     <div id="pfoot">
       <div id="progress" class="hidden"><div class="bar"><div class="fill"></div></div><div class="row between"><span class="txt"></span><button id="stop" class="btn small">Arrêter</button></div></div>
       <button id="analyze" class="btn big primary">Analyser</button>
     </div>
-    <details id="stats" class="hidden"><summary>Statistiques de la partie</summary><div id="summary"></div>
-      <p><button id="reanalyze" class="btn small">Relancer l'analyse avec les réglages actuels</button></p></details>
-    <div id="game-meta" class="muted small"></div>
+    <div id="opening"></div>
+    <div class="ptabs" role="tablist" aria-label="Contenu du panneau">
+      <button type="button" role="tab" id="t-moves" data-tab="moves" aria-selected="true" aria-controls="tab-moves">Coups</button>
+      <button type="button" role="tab" id="t-review" data-tab="review" aria-selected="false" aria-controls="tab-review" tabindex="-1">Bilan</button>
+      <button type="button" role="tab" id="t-engine" data-tab="engine" aria-selected="false" aria-controls="tab-engine" tabindex="-1">Moteur</button>
+    </div>
+    <div class="tabpane" id="tab-moves" role="tabpanel" aria-labelledby="t-moves">
+      <div id="moves"></div>
+      <div id="game-meta" class="muted small"></div>
+    </div>
+    <div class="tabpane hidden" id="tab-review" role="tabpanel" aria-labelledby="t-review">
+      <p id="review-empty" class="muted pad">Lancez l'analyse de la partie pour obtenir le graphique d'avantage et les statistiques.</p>
+      <div id="graph" class="hidden" title="Cliquez pour aller à ce moment de la partie"></div>
+      <div id="stats" class="hidden"><h3>Statistiques de la partie</h3><div id="summary"></div>
+        <p><button id="reanalyze" class="btn small">Relancer l'analyse avec les réglages actuels</button></p></div>
+    </div>
+    <div class="tabpane hidden" id="tab-engine" role="tabpanel" aria-labelledby="t-engine">
+      <div class="peng">
+        <label class="switch" title="Afficher les meilleures lignes du moteur pour la position"><input type="checkbox" id="live" aria-label="Analyse en direct"><span></span></label>
+        <span>Analyse en direct</span>
+      </div>
+      <div id="eng-desc" class="muted small pad"></div>
+      <div id="lines" class="hidden"></div>
+      <section class="areg" aria-labelledby="areg-h">
+        <h3 id="areg-h">Réglages de l'analyse</h3>
+        <div class="frow"><label for="ar-lines">Lignes affichées</label><select id="ar-lines"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></div>
+        <div class="frow"><label for="ui-arrows">Flèche du meilleur coup</label><select id="ui-arrows"><option value="best">Oui</option><option value="none">Non</option></select></div>
+        <div class="frow"><label for="ui-keys">Marquer les coups clés</label><select id="ui-keys"><option value="1">Oui</option><option value="0">Non</option></select></div>
+        <div class="frow"><label for="ui-class">Classification sur l'échiquier</label><select id="ui-class"><option value="1">Oui</option><option value="0">Non</option></select></div>
+        <button id="eng-gear" type="button" class="btn">Tous les réglages moteur</button>
+      </section>
+    </div>
     <div class="navbar">
       <button id="first" class="btn" title="Début (↑)" aria-label="Début"><svg viewBox="0 0 24 24"><path d="M6 5v14M18 5l-8 7 8 7"/></svg></button>
       <button id="prev" class="btn" title="Coup précédent (←)" aria-label="Coup précédent"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
@@ -150,26 +170,11 @@
 
 <dialog id="eng-dlg" class="dlg">
   <form method="dialog">
-    <h2>Paramètres</h2>
-    <div class="dtabs" role="tablist">
-      <button type="button" role="tab" data-tab="eng" class="on">Moteur</button>
-      <button type="button" role="tab" data-tab="ui">Interface</button>
-    </div>
-    <div data-pane="ui" class="hidden">
-      <div class="frow"><label for="ui-arrows">Afficher les flèches</label><select id="ui-arrows">
-        <option value="best">Oui (meilleur coup en vert)</option><option value="none">Non</option>
-      </select></div>
-      <div class="frow"><label for="ui-keys">Marquer les coups clés</label><select id="ui-keys"><option value="1">Oui</option><option value="0">Non</option></select></div>
-      <div class="frow"><label for="ui-class">Afficher la classification des coups sur l'échiquier</label><select id="ui-class"><option value="1">Oui</option><option value="0">Non</option></select></div>
-      <p class="muted small">Flèche verte : le meilleur coup à jouer dans la position affichée, avant de jouer.
-        Coups clés : pastilles et couleurs (Brillant, Gaffe…) dans la liste des coups.</p>
-    </div>
-    <div data-pane="eng">
+    <h2>Réglages du moteur</h2>
     <div id="eng-fields"></div>
     <p class="muted small">Profondeur et temps maximum s'appliquent à chaque position : le moteur s'arrête au premier des deux atteint.
-      Le nombre de variantes est celui des lignes affichées quand « Analyse » est activé.
+      Le nombre de variantes est celui des lignes affichées quand « Analyse en direct » est activé.
       Les nouveaux réglages valent pour les prochaines analyses (« Relancer l'analyse » pour une partie déjà analysée).</p>
-    </div>
     <div class="row end">
       <button value="cancel" class="btn">Annuler</button>
       <button value="save" class="btn primary">Sauvegarder</button>

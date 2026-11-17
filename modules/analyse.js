@@ -1,4 +1,5 @@
 // Module « Analyse » : liste des parties chess.com et analyse détaillée d'une partie.
+import { initSheet } from '../core/sheet.js';
 import { Chess } from '../vendor/chess.js';
 import { Board } from '../board.js';
 import { classifyMove, classifyGame, summarize, CLASSES, SUMMARY_ORDER, fmtScore, winPct, epd } from '../analysis.js';
@@ -632,6 +633,55 @@ function step(d) {
   setPly(g.ply + d);
 }
 
+// « Suivant » : saute au coup clé suivant (Bilan), sinon à la fin ; en variante ou analyse libre, un coup.
+function nextKey() {
+  const g = S.g;
+  if (!g) return;
+  if (g.var || g.free || !isComplete(g)) return step(1);
+  for (let j = g.ply; j < g.moves.length; j++) {
+    const r = g.results[j];
+    if (r && NOTABLE.includes(r.cls)) return setPly(j + 1);
+  }
+  setPly(g.moves.length);
+}
+
+// ----- onglets du panneau (Coups · Bilan · Moteur)
+function selectTab(name) {
+  document.querySelectorAll('#gpanel .ptabs [role=tab]').forEach((b) => {
+    const on = b.dataset.tab === name;
+    b.setAttribute('aria-selected', String(on));
+    b.tabIndex = on ? 0 : -1;
+    $('#tab-' + b.dataset.tab).classList.toggle('hidden', !on);
+  });
+  try { local.set('gtab', name); } catch { /* ignoré */ }
+  if (name === 'moves') { const c = document.querySelector('#moves .mv.cur'); if (c) c.scrollIntoView({ block: 'nearest' }); }
+}
+function initPanelTabs() {
+  const tabs = [...document.querySelectorAll('#gpanel .ptabs [role=tab]')];
+  tabs.forEach((b, i) => {
+    b.onclick = () => selectTab(b.dataset.tab);
+    b.onkeydown = (e) => {
+      const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+      if (!d && e.key !== 'Home' && e.key !== 'End') return;
+      const n = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : (i + d + tabs.length) % tabs.length;
+      selectTab(tabs[n].dataset.tab); tabs[n].focus(); e.preventDefault(); e.stopPropagation();
+    };
+  });
+  const saved = local.get('gtab', 'moves');
+  selectTab(['moves', 'review', 'engine'].includes(saved) ? saved : 'moves');
+}
+// Réglages locaux de l'analyse (onglet Moteur) : appliqués tout de suite.
+function initAnalysisSettings() {
+  $('#ar-lines').value = String(nLines());
+  $('#ui-arrows').value = uiArrows();
+  $('#ui-keys').value = uiOn('keyMoves') ? '1' : '0';
+  $('#ui-class').value = uiOn('boardClass') ? '1' : '0';
+  $('#ar-lines').onchange = (e) => { local.set('multipv', e.target.value); S.liveRes = null; S.livePending = null; if (S.g) renderGame(); };
+  $('#ui-arrows').onchange = (e) => { local.set('arrows', e.target.value); if (S.g) renderGame(); };
+  $('#ui-keys').onchange = (e) => { local.set('keyMoves', e.target.value); if (S.g) renderGame(); };
+  $('#ui-class').onchange = (e) => { local.set('boardClass', e.target.value); if (S.g) renderGame(); };
+}
+
 // Lecture automatique (bouton ▶ du panneau).
 function atEnd(g) { return g.var ? g.var.idx >= g.var.items.length : g.ply >= g.moves.length; }
 function stopAuto() { if (S.auto) { clearInterval(S.auto); S.auto = null; renderNav(); } }
@@ -749,7 +799,7 @@ function renderGame() {
   }
   const flipped = board.orientation === 'b';
   $('#evalbar').classList.toggle('flipped', flipped);
-  $('#evalbar .white').style.height = wp + '%';
+  $('#evalbar').style.setProperty('--wp', wp + '%');
   $('#evalbar .label').textContent = label;
   $('#evalbar .label').className = 'label ' + (wp >= 50 ? 'on-white' : 'on-black');
 
@@ -767,6 +817,7 @@ function renderGame() {
 
   // panneau
   $('#gpanel').classList.toggle('review', review);
+  $('#review-empty').classList.toggle('hidden', review);
   $('#ptitle').innerHTML = g.free ? 'Analyse libre' : review ? `<span class="badge" style="background:${CLASSES.best.color}">★</span> Bilan` : 'Analyse';
   $('#cc-link').href = g.game.url || '#';
   $('#cc-link').classList.toggle('hidden', !!g.free);
@@ -922,7 +973,9 @@ function renderCoach(g, d, review) {
   }
   const ex = explainMove({ fenBefore: d.fenBefore, san: d.san, uci: d.uci, color: d.color, r: d.r, pos: d.pos, openingName: g.openingAt[g.ply], playerColor: g.playerColor });
   html += `<div class="coach-title">${badge(d.r.cls)} <span>${esc(ex.title)}</span><span class="score">${fmtScore(d.pos.played.score)}</span></div>`;
-  html += ex.paras.map((p) => `<p>${esc(p)}</p>`).join('');
+  const open = S.coachOpen === g.ply + ':' + (g.var ? g.var.idx : '');
+  html += ex.paras.map((p, i) => `<p${!open && i === 2 ? ' class="clamp"' : ''}${!open && i > 2 ? ' hidden' : ''}>${esc(p)}</p>`).join('');
+  if (ex.paras.length > 3) html += `<button type="button" class="link coach-more" id="coach-more" aria-expanded="${open}">${open ? 'Réduire' : 'Lire la suite'}</button>`;
   if (ex.refutation && ex.refutation.items.length > 1) {
     html += `<div class="line bad"><div class="lhead">Après ce coup <button class="btn small" data-line="played">▶ Voir</button></div>${esc(ex.refutation.text)}</div>`;
   }
@@ -939,6 +992,8 @@ const coachWrap = (html) => `<div class="coach-wrap"><div class="avatar"><img sr
 function bindCoach(g, d) {
   const ev = $('#exit-var');
   if (ev) ev.onclick = exitVar;
+  const cm = $('#coach-more');
+  if (cm) cm.onclick = () => { const k = g.ply + ':' + (g.var ? g.var.idx : ''); S.coachOpen = S.coachOpen === k ? null : k; renderGame(); };
   document.querySelectorAll('.vmove').forEach((s) => { s.onclick = () => { stopAuto(); g.var.idx = +s.dataset.vi; renderGame(); }; keyActivate(s); });
   if (!d) return;
   document.querySelectorAll('[data-line]').forEach((b) => {
@@ -1143,25 +1198,13 @@ export function engineFields(root, p, onChange = () => {}) {
 function openEngineDialog() {
   const dlg = $('#eng-dlg');
   const f = engineFields($('#eng-fields'), 'eng');
-  const tabs = [...dlg.querySelectorAll('.dtabs button')];
-  const show = (t) => {
-    tabs.forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
-    dlg.querySelectorAll('[data-pane]').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== t));
-  };
-  tabs.forEach((b) => { b.onclick = () => show(b.dataset.tab); });
-  show('eng');
-  $('#ui-arrows').value = uiArrows();
-  $('#ui-keys').value = uiOn('keyMoves') ? '1' : '0';
-  $('#ui-class').value = uiOn('boardClass') ? '1' : '0';
   dlg.returnValue = '';
   dlg.showModal();
   // « submit » (et non « close ») : déclenché tout de suite par le bouton Sauvegarder.
   dlg.querySelector('form').onsubmit = async (e) => {
     if (!e.submitter || e.submitter.value !== 'save') return;
-    local.set('arrows', $('#ui-arrows').value);
-    local.set('keyMoves', $('#ui-keys').value);
-    local.set('boardClass', $('#ui-class').value);
     await f.save();
+    $('#ar-lines').value = String(nLines());
     if (S.g) renderGame();
   };
 }
@@ -1200,11 +1243,14 @@ export async function init() {
   $('#next').onclick = nav(() => step(1));
   $('#last').onclick = nav(() => { if (S.g) setPly(S.g.moves.length); });
   $('#play').onclick = toggleAuto;
-  $('#suivant').onclick = nav(() => step(1));
+  $('#suivant').onclick = nav(nextKey);
   $('#flip').onclick = () => { board.flip(); renderGame(); };
   $('#analyze').onclick = startAnalysis;
   $('#stop').onclick = () => { if (S.g && S.g.analyzing) S.g.abort = true; };
   $('#eng-gear').onclick = openEngineDialog;
+  initPanelTabs();
+  initAnalysisSettings();
+  initSheet($('#gpanel'), $('#grab'));
   $('#live').checked = S.live;
   $('#live').onchange = (e) => { S.live = e.target.checked; local.set('liveEval', S.live ? '1' : '0'); if (S.g) renderGame(); };
   $('#reanalyze').onclick = () => {
