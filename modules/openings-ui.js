@@ -690,7 +690,7 @@ export async function openRepertoire(el, id) {
   const rep = await getRepertoire(id);
   if (!rep) { toast('Répertoire introuvable.'); location.hash = '#/openings'; return; }
   if (!E.rep || E.rep.id !== rep.id) { E.path = []; E.k = 0; E.board.setOrientation(rep.color); }
-  E.rep = rep; E.folded = new Set();
+  E.rep = rep; E.folded = new Set(); E.addHere = null;
   // ouverture depuis une suggestion : on se place sur la position à enrichir
   if (E.focus && E.focus.repId === rep.id) {
     const p = pathTo(rep, rep.root, E.focus.epd);
@@ -747,6 +747,7 @@ function moveMenu(n) {
     <div class="mv-head">${miniBoard(edge.fenAfter.split(' ')[0], 64)}
       <span class="mv-title"><b id="mv-t">${esc(label)}</b><span class="muted small">${esc(E.rep.name)}${edge.disabled ? ' · coup désactivé' : ''}</span></span></div>
     <div role="menu" aria-labelledby="mv-t" class="mv-list">
+      ${act('add', '+', 'Ajouter un coup ici')}
       ${act('note', '✎', edge.note ? 'Modifier la note' : 'Ajouter une note')}
       ${act('toggle', edge.disabled ? '↺' : '⊘', edge.disabled ? 'Réactiver la ligne' : 'Désactiver la ligne')}
       ${subOff.length ? act('resub', '↻', `Réactiver les sous-lignes (${subOff.length})`) : ''}
@@ -762,6 +763,12 @@ function moveMenu(n) {
     const v = dlg.returnValue;
     if (v === 'toggle') await toggleMove(edge, label);
     else if (v === 'resub') await reactivateSub(edge, label);
+    else if (v === 'add') {
+      // se place après ce coup et invite à jouer le coup à ajouter (échiquier ou explorateur)
+      E.path = [...line]; E.k = line.length; E.addHere = curEpd(); render();
+      const tab = $('#rt-exp'); if (tab) tab.click();
+      window.scrollTo({ top: 0 });
+    }
     else if (v === 'delete') await deleteNode(n);
     else if (v === 'train') location.hash = '#/openings/train/rep/' + encodeURIComponent(E.rep.id);
     else if (v === 'note') {
@@ -1181,7 +1188,7 @@ function render() {
   const atFocus = E.focus && curEpd() === E.focus.epd;
   drawBoard();
   const sg = $('#rep-suggest');
-  const alertHtml = (title, text, btn) => `<span class="sg-ic" aria-hidden="true">!</span><span class="sg-txt"><b>${title}</b> — ${text}</span><button type="button" class="sg-go">${btn}</button>`;
+  const alertHtml = (title, text, btn, ic = '!') => `<span class="sg-ic" aria-hidden="true">${ic}</span><span class="sg-txt"><b>${title}</b> — ${text}</span><button type="button" class="sg-go">${btn}</button>`;
   if (atFocus && !childrenOf(E.rep, curEpd()).length) {
     const played = [...new Set(E.focus.errors.map((e) => frSan(e.san)))].join(', ');
     sg.innerHTML = alertHtml('À enrichir', `${plural(E.focus.errors.length, 'faute')} ici (joué : ${esc(played)})`
@@ -1192,6 +1199,11 @@ function render() {
     const cur = E.k ? E.path[E.k - 1] : null;
     sg.innerHTML = alertHtml('Trou du répertoire', `aucun coup prévu${cur ? ` après ${esc(moveLabel(cur, E.k - 1) + frSan(cur.san))}` : ''} (${pct(E.gap.p)} de vos parties passent ici)`, 'Combler');
     sg.title = 'Jouez votre réponse sur l\'échiquier, ou choisissez-la dans l\'explorateur.';
+    sg.classList.remove('hidden');
+  } else if (E.addHere && curEpd() === E.addHere) {
+    const have = childrenOf(E.rep, curEpd()).length;
+    sg.innerHTML = alertHtml('Ajouter un coup', `jouez-le sur l'échiquier, ou choisissez-le dans l'explorateur${have ? ` (${plural(have, 'coup')} déjà prévu${have > 1 ? 's' : ''} ici)` : ''}`, 'Explorateur', '+');
+    sg.title = 'Le coup joué sur l\'échiquier est ajouté au répertoire à cette position.';
     sg.classList.remove('hidden');
   } else {
     if (E.focus && !atFocus && E.k > 0 && childrenOf(E.rep, E.focus.epd).length) E.focus = null; // coup ajouté : suggestion traitée
