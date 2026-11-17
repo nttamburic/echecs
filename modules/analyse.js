@@ -254,9 +254,14 @@ function renderBatch() {
   el.classList.toggle('hidden', !b);
   if (!b) return;
   const c = b.cur;
-  el.textContent = S.g && S.g !== c
-    ? `Analyse multiple en pause pendant que vous consultez une partie (${b.done}/${b.total} terminées).`
-    : `Analyse multiple (${b.label}, profondeur ${b.depth}${b.movetime ? `, ${b.movetime / 1000} s max` : ''}) : ${b.done}/${b.total} terminées${c ? ` — en cours : ${c.game.white.name} – ${c.game.black.name} (${c.positions.filter(Boolean).length}/${c.moves.length} coups)` : ''}.`;
+  const paused = S.g && S.g !== c;
+  const eta = b.done >= 1 ? Math.max(1, Math.round(((Date.now() - b.t0) / b.done) * (b.total - b.done) / 60000)) : 0;
+  const detail = paused ? 'en pause pendant que vous consultez une partie'
+    : `${b.label}, profondeur ${b.depth}${b.movetime ? `, ${b.movetime / 1000} s max` : ''}${c ? ` · en cours : ${c.game.white.name} – ${c.game.black.name} (${c.positions.filter(Boolean).length}/${c.moves.length} coups)` : ''}`;
+  el.innerHTML = `<span class="bs-main"><strong>Analyse ${b.done} / ${b.total}</strong>${eta && !paused ? ` <span class="muted">· ≈ ${eta} min</span>` : ''}
+    <span class="bs-bar" aria-hidden="true"><span style="width:${(100 * b.done / Math.max(1, b.total)).toFixed(1)}%"></span></span>
+    <span class="muted bs-detail">${esc(detail)}</span></span><button type="button" id="batch-stop" class="btn small">Arrêter</button>`;
+  $('#batch-stop').onclick = openMultiDialog;
 }
 
 // Fenêtre de choix : période (menu déroulant) et réglages du moteur (les mêmes que la roue dentée).
@@ -300,7 +305,7 @@ async function analyzeMany(period, depth, movetime, label, shownDepth) {
   if (S.loading) await S.loading;
   const queue = new Set(S.games.filter((x) => inPeriod(x, period) && needsAnalysis(x)).map((x) => x.id));
   if (!queue.size) return;
-  const b = (S.batch = { stop: false, done: 0, total: queue.size, cur: null, failed: new Set(), label, depth: shownDepth, movetime });
+  const b = (S.batch = { stop: false, done: 0, total: queue.size, cur: null, failed: new Set(), label, depth: shownDepth, movetime, t0: Date.now() });
   renderBatch();
   try {
     while (!b.stop) {
@@ -908,6 +913,16 @@ function renderFoot(g) {
   const review = isComplete(g);
   const prog = $('#progress');
   const btn = $('#analyze');
+  const strip = $('#astrip');
+  if (strip) {
+    strip.classList.toggle('hidden', !g.analyzing);
+    if (g.analyzing) {
+      const pct = Math.round(100 * done / Math.max(1, total));
+      strip.querySelector('.as-txt').innerHTML = `<strong>Coup ${done} / ${total}</strong> · ${pct} %`;
+      strip.querySelector('.as-fill').style.width = pct + '%';
+      strip.querySelector('button').classList.toggle('hidden', S.batch && S.batch.cur === g);
+    }
+  }
   $('#pfoot').classList.toggle('hidden', (review || g.free) && !g.analyzing);
   if (g.analyzing) {
     prog.classList.remove('hidden');
@@ -1287,6 +1302,7 @@ export async function init() {
       if (n && n.dataset.id) { e.preventDefault(); n.focus(); }
     }
   };
+  $('#astrip-stop').onclick = () => $('#stop').click();
   $('#back').onclick = $('#tb-back').onclick = () => { location.hash = S.g && S.g.free ? '#/free' : '#/games'; };
   $('#first').onclick = nav(() => setPly(0));
   $('#prev').onclick = nav(() => step(-1));
