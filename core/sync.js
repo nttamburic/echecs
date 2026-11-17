@@ -14,7 +14,7 @@ export const cfg = {
   get configured() { return !!(this.owner && this.repo && this.token); },
 };
 
-export const state = { running: false, lastSync: Number(local.get('lastSync', 0)) || 0, error: null, listeners: new Set() };
+export const state = { running: false, lastSync: Number(local.get('lastSync', 0)) || 0, error: null, conflicts: [], listeners: new Set() };
 function notify() { for (const f of state.listeners) { try { f(state); } catch { /* */ } } }
 export function onSync(f) { state.listeners.add(f); f(state); return () => state.listeners.delete(f); }
 
@@ -77,24 +77,70 @@ function parseFile(text) {
   } catch { return []; }
 }
 
+// Seuls les répertoires peuvent entrer en conflit (notes comprises : elles sont dans les arêtes).
+// Parties et analyses sont en ajout seul : la version la plus récente gagne sans discussion.
+const CONFLICT_COLS = new Set(['openingRepertoire']);
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+// Union de deux répertoires : toutes les arêtes des deux côtés ; pour une arête présente des deux
+// côtés, la version de cet appareil gagne, sauf si elle n'a pas de note.
+export function mergeRepertoires(mine, theirs) {
+  const key = (e) => `${e.fenBefore}|${e.uci}`;
+  const byKey = new Map(mine.edges.map((e) => [key(e), e]));
+  const edges = mine.edges.map((e) => {
+    const o = theirs.edges.find((x) => key(x) === key(e));
+    return o && !e.note && o.note ? { ...e, note: o.note } : e;
+  });
+  for (const e of theirs.edges) if (!byKey.has(key(e))) edges.push(e);
+  return { ...theirs, ...mine, edges };
+}
+
 // Fusionne des enregistrements distants dans la base locale. Renvoie true si la version locale
-// contient des données plus récentes (le fichier doit alors être réécrit).
-async function mergeRemote(file, remoteRecs) {
+// contient des données plus récentes (le fichier doit alors être réécrit). Un répertoire modifié
+// des deux côtés depuis la dernière synchronisation n'est pas écrasé : il part en conflit.
+async function mergeRemote(file, remoteRecs, since = 0) {
   const localRecs = await store.recordsOfFile(file);
   const byKey = new Map(localRecs.map((r) => [r.key, r]));
   const toWrite = [];
   let localNewer = false;
   const seen = new Set();
+  const conflicts = (await store.metaGet('conflicts')) || {};
+  let held = false;
   for (const rr of remoteRecs) {
     const key = `${rr.col}/${rr.id}`;
     seen.add(key);
     const lr = byKey.get(key) || await store.rawGet(key);
-    if (!lr || (rr.updatedAt || 0) > (lr.updatedAt || 0)) toWrite.push({ key, col: rr.col, id: rr.id, data: rr.data ?? null, deleted: !!rr.deleted, updatedAt: rr.updatedAt || 0, file });
-    else if ((lr.updatedAt || 0) > (rr.updatedAt || 0)) localNewer = true;
+    const rt = rr.updatedAt || 0, lt = lr ? lr.updatedAt || 0 : 0;
+    const open = conflicts[key];
+    const clash = lr && !lr.deleted && !rr.deleted && CONFLICT_COLS.has(rr.col) && !same(lr.data, rr.data)
+      && (open || (since > 0 && lt > since && rt > since));
+    if (clash) {
+      conflicts[key] = { key, col: rr.col, id: rr.id, local: lr.data, remote: rr.data, remoteAt: rt, localAt: lt, file };
+      held = true; localNewer = true;
+    } else if (!lr || rt > lt) toWrite.push({ key, col: rr.col, id: rr.id, data: rr.data ?? null, deleted: !!rr.deleted, updatedAt: rt, file });
+    else if (lt > rt) localNewer = true;
   }
   for (const lr of localRecs) if (!seen.has(lr.key)) localNewer = true;
   await store.rawPutMany(toWrite);
+  if (held) { await store.metaSet('conflicts', conflicts); state.conflicts = Object.values(conflicts); }
   return localNewer;
+}
+
+// Résolution d'un conflit : 'local' (garder cet appareil), 'remote' (garder l'autre) ou 'merge'.
+export async function resolveConflict(key, choice) {
+  const conflicts = (await store.metaGet('conflicts')) || {};
+  const c = conflicts[key];
+  if (!c) return;
+  const data = choice === 'remote' ? c.remote : choice === 'merge' && CONFLICT_COLS.has(c.col) ? mergeRepertoires(c.local, c.remote) : c.local;
+  delete conflicts[key];
+  await store.metaSet('conflicts', conflicts);
+  state.conflicts = Object.values(conflicts);
+  await store.put(c.col, c.id, data, { file: c.file }); // date de maintenant : cette version gagne partout
+  notify();
+}
+export async function loadConflicts() {
+  state.conflicts = Object.values((await store.metaGet('conflicts')) || {});
+  notify();
 }
 
 async function buildFile(file) {
@@ -119,8 +165,9 @@ export function syncNow() {
 }
 
 async function doSync() {
-  state.running = true; state.error = null; notify();
+  state.running = true; state.error = null; state.offline = false; notify();
   try {
+    const since = state.lastSync;
     const shas = (await store.metaGet('shas')) || {};
     const dirty = new Set((await store.metaGet('dirty')) || []);
 
@@ -135,7 +182,7 @@ async function doSync() {
     for (const [file, sha] of Object.entries(remote)) {
       if (shas[file] === sha) continue;
       const recs = parseFile(await fetchBlob(sha));
-      if (await mergeRemote(file, recs)) dirty.add(file);
+      if (await mergeRemote(file, recs, since)) dirty.add(file);
       shas[file] = sha;
       await store.metaSet('shas', shas);
     }
@@ -143,7 +190,10 @@ async function doSync() {
     for (const r of await store.allRecords()) if (!remote[r.file]) dirty.add(r.file);
 
     // 2) Envoi des fichiers modifiés localement (un à la fois : chaque envoi est un commit).
+    const held = new Set(Object.values((await store.metaGet('conflicts')) || {}).map((c) => c.file));
+    state.conflicts = Object.values((await store.metaGet('conflicts')) || {});
     for (const file of [...dirty]) {
+      if (held.has(file)) continue; // en attente de la décision de l'utilisateur : on n'écrase pas l'autre appareil
       for (let attempt = 0; attempt < 3; attempt++) {
         const content = await buildFile(file);
         const body = { message: `Sync ${file}`, content: b64encode(content) };
@@ -154,7 +204,7 @@ async function doSync() {
           // Le fichier a changé sur GitHub entre-temps (autre appareil) : on relit, fusionne et réessaie.
           const cur = await gh(`${repoPath()}/contents/${file.split('/').map(encodeURIComponent).join('/')}`);
           if (cur.ok) {
-            await mergeRemote(file, parseFile(await fetchBlob(cur.body.sha)));
+            await mergeRemote(file, parseFile(await fetchBlob(cur.body.sha)), since);
             shas[file] = cur.body.sha;
           } else delete shas[file];
           continue;
@@ -169,7 +219,8 @@ async function doSync() {
     local.set('lastSync', String(state.lastSync));
     return true;
   } catch (e) {
-    state.error = e.message || String(e);
+    state.error = navigator.onLine === false || e instanceof TypeError ? 'Pas de connexion Internet.' : (e.message || String(e));
+    state.offline = state.error === 'Pas de connexion Internet.';
     return false;
   } finally {
     state.running = false; notify();

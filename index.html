@@ -48,6 +48,10 @@
 </aside>
 
 <div id="content" tabindex="-1">
+<div id="offline" role="status" hidden>
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><path d="M4 4l16 16"/></svg>
+  <span>Vous êtes hors ligne. Vos modifications restent sur cet appareil et seront synchronisées au retour de la connexion.</span>
+</div>
 <main id="home-view" class="view page">
   <section class="card">
     <div class="row between">
@@ -169,6 +173,19 @@
   </aside>
 </main>
 
+<dialog id="conflict-dlg" class="dlg" aria-labelledby="cf-title">
+  <form method="dialog">
+    <h2 id="cf-title">Conflit de synchronisation</h2>
+    <p class="muted small">Ces répertoires ont été modifiés sur cet appareil et sur un autre depuis la dernière synchronisation. Vos parties et vos analyses ne sont jamais concernées. Rien n’est écrasé tant que vous n’avez pas choisi.</p>
+    <div id="cf-list"></div>
+    <div class="row end">
+      <button value="cancel" class="btn">Plus tard</button>
+      <button type="button" id="cf-apply" class="btn">Appliquer mes choix</button>
+      <button type="button" id="cf-merge" class="btn primary">Tout fusionner</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="eng-dlg" class="dlg">
   <form method="dialog">
     <h2>Réglages du moteur</h2>
@@ -264,7 +281,7 @@
 <main id="settings-view" class="view hidden page"></main>
 </div>
 
-<div id="toast" role="status" aria-live="polite"></div>
+<div id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
 <script type="module" src="main.js"></script>
 </body>
 </html>

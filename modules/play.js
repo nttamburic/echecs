@@ -124,7 +124,7 @@ async function botMove() {
     if (P.clock) { const mt = P.chess.turn(); P.clock[mt] = Math.max(1000, P.clock[mt] - Math.min(Date.now() - t0, 3000)); }
     if (r.uci) push(r.uci);
   } catch (e) {
-    if (token === P.token) toast('Maia : ' + esc(e.message), 6000);
+    if (token === P.token) toast('Maia : ' + esc(e.message), { type: 'err' });
   } finally {
     if (token === P.token) { P.thinking = false; setMaiaProgress(null); render(); }
   }

@@ -145,7 +145,7 @@ function connection(el) {
   $('#gh-sync').onclick = async () => {
     if (!cfg.configured) { msg.className = 'err'; msg.textContent = 'Configurez d\'abord le dépôt et le jeton.'; return; }
     const ok = await syncNow();
-    toast(ok ? 'Synchronisation terminée.' : 'Synchronisation impossible : ' + esc(state.error));
+    toast(ok ? 'Synchronisation terminée.' : (state.offline ? 'Hors ligne : la synchronisation reprendra au retour de la connexion.' : 'Synchronisation impossible : ' + esc(state.error)), { type: ok ? 'ok' : state.offline ? 'info' : 'err' });
   };
   $('#gh-forget').onclick = () => {
     if (!confirm('Supprimer le jeton de cet appareil ? Vos données restent sur l\'appareil et sur GitHub.')) return;
@@ -153,7 +153,9 @@ function connection(el) {
   };
   unsub = onSync((st) => {
     if (!document.body.contains(msg)) return;
-    if (st.running) { msg.className = 'muted'; msg.textContent = 'Synchronisation en cours…'; }
+    if (st.conflicts && st.conflicts.length) { msg.className = 'err'; msg.innerHTML = 'Conflit : ' + st.conflicts.length + ' répertoire(s) modifié(s) sur deux appareils. <button type="button" class="btn" id="gh-conflict">Résoudre</button>'; $('#gh-conflict').onclick = () => window.dispatchEvent(new Event('cj:conflicts')); }
+    else if (st.running) { msg.className = 'muted'; msg.textContent = 'Synchronisation en cours…'; }
+    else if (st.error && st.offline) { msg.className = 'err'; msg.textContent = 'Hors ligne : la synchronisation reprendra au retour de la connexion.'; }
     else if (st.error) { msg.className = 'err'; msg.textContent = st.error; }
     else if (st.lastSync && cfg.configured) { msg.className = 'muted'; msg.textContent = 'Dernière synchronisation : ' + fmtAgo(new Date(st.lastSync)); msg.title = new Date(st.lastSync).toLocaleString('fr-FR'); }
   });

@@ -14,12 +14,34 @@ export const local = {
   set(k, v) { try { if (v == null || v === '') localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* stockage indisponible */ } },
 };
 
-export function toast(msg, ms = 3500) {
-  const t = $('#toast');
-  t.innerHTML = msg;
-  t.classList.add('show');
-  clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => t.classList.remove('show'), ms);
+// Notification passagère. toast(msg, { type: 'ok' | 'err' | 'info', action: { label, fn }, ms }).
+// Un nombre en second argument vaut { ms } (ancien appel). Cinq secondes, deux lignes au plus ;
+// les erreurs et les toasts à action restent plus longtemps et se mettent en pause au survol ou au focus.
+const GLYPH = { ok: '✓', err: '!', info: 'i' };
+export function toast(msg, o = {}) {
+  if (typeof o === 'number') o = { ms: o };
+  const type = o.type || (/impossible|erreur|introuvable|échou|refusé/i.test(msg) ? 'err' : 'ok');
+  const box = $('#toasts');
+  while (box.children.length >= 3) box.firstElementChild.remove();
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.innerHTML = `<span class="tg" aria-hidden="true">${GLYPH[type]}</span><span class="tm">${msg}</span>`;
+  t.title = t.querySelector('.tm').textContent;
+  let timer;
+  const close = () => { clearTimeout(timer); t.classList.remove('in'); setTimeout(() => t.remove(), 220); };
+  if (o.action) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'ta'; b.textContent = o.action.label;
+    b.onclick = () => { close(); o.action.fn(); };
+    t.append(b);
+  }
+  const arm = () => { clearTimeout(timer); timer = setTimeout(close, o.ms || (type === 'err' || o.action ? 8000 : 5000)); };
+  t.addEventListener('mouseenter', () => clearTimeout(timer)); t.addEventListener('mouseleave', arm);
+  t.addEventListener('focusin', () => clearTimeout(timer)); t.addEventListener('focusout', arm);
+  box.append(t);
+  requestAnimationFrame(() => t.classList.add('in'));
+  arm();
+  return close;
 }
 
 // Rend un élément cliquable (span, div) utilisable au clavier : Entrée ou Espace le « clique ».

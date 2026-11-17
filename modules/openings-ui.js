@@ -649,7 +649,8 @@ async function deleteNode(n) {
   const gone = deleteMove({ ...E.rep, edges: [...E.rep.edges] }, edge.fenBefore, edge.uci); // essai à blanc, pour compter
   const label = moveLabel(edge, line.length - 1) + frSan(edge.san);
   const more = gone.length - 1;
-  if (!confirm(more ? `Supprimer ${label} et ${plural(more, 'coup')} qui en ${more > 1 ? 'dépendent' : 'dépend'} ?` : `Supprimer ${label} ?`)) return;
+  if (more && !confirm(`Supprimer ${label} et ${plural(more, 'coup')} qui en ${more > 1 ? 'dépendent' : 'dépend'} ?`)) return;
+  const before = { edges: [...E.rep.edges], path: [...E.path], k: E.k };
   deleteMove(E.rep, edge.fenBefore, edge.uci);
   const left = new Set(E.rep.edges);
   const cut = E.path.findIndex((e) => !left.has(e));
@@ -657,7 +658,15 @@ async function deleteNode(n) {
   await saveRepertoire(E.rep);
   render();
   rescanSoon();
-  toast(more ? `${label} et ${plural(more, 'coup')} supprimés.` : `${label} supprimé.`);
+  toast(more ? `${label} et ${plural(more, 'coup')} supprimés.` : `${label} supprimé.`, {
+    type: 'info',
+    action: { label: 'Annuler', fn: async () => {
+      if (!E.rep) return;
+      E.rep.edges = before.edges; E.path = before.path; E.k = before.k;
+      await saveRepertoire(E.rep); render(); rescanSoon();
+      toast('Suppression annulée.', { type: 'ok' });
+    } },
+  });
 }
 
 // ------------------------------------------------------------------ note du coup affiché
