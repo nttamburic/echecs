@@ -651,7 +651,6 @@ button.link { background: none; border: 0; padding: 0; font: inherit; color: var
 .mbar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--panel2); margin-top: 6px; gap: 1px; }
 .mbar i { display: block; min-width: 3px; }
 .rep-info .mst-row { margin-top: 4px; }
-.rsugg { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tsum { padding-top: 8px; }
 .resizer { display: none; }
 @media (min-width: 1280px) {
@@ -1172,3 +1171,11 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .mv-help { margin: 0; padding: 0 12px 8px; }
 #mv-dlg .row.end { padding: 0 8px; }
 @media (max-width: 760px) { #mv-dlg { padding: 22px 8px calc(16px + env(safe-area-inset-bottom)); } #mv-dlg .row.end .btn { min-height: 52px; } }
+
+/* ---- Phase 9 : alerte « Trou du répertoire » / « À enrichir » ---- */
+.rsugg { display: flex; align-items: center; gap: 10px; margin: 10px 14px 0; padding: 6px 6px 6px 10px; background: #3b3318; border: 0; border-radius: var(--r); font-size: 13px; white-space: normal; overflow: visible; }
+.rsugg.hidden { display: none; }
+.rsugg .sg-ic { flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--warn); color: #241a02; font-weight: 800; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+.rsugg .sg-txt { flex: 1; min-width: 0; }
+.rsugg .sg-go { flex: none; min-height: 32px; padding: 0 10px; border: 0; border-radius: var(--r-sm); background: var(--warn); color: #241a02; font-weight: 700; font-size: 13px; cursor: pointer; }
+@media (max-width: 760px) { .rsugg .sg-go { min-height: 44px; padding: 0 14px; } }

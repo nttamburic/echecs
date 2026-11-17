@@ -452,7 +452,7 @@ function buildEditor(el) {
     </div>
     <div class="popening" id="rep-opening"></div>
     <div class="rperf small muted" id="rep-perf"></div>
-    <div id="rep-suggest" class="rsugg hidden"></div>
+    <div id="rep-suggest" class="rsugg hidden" role="status"></div>
     <div id="rep-mastery"></div>
     <div class="tree-head"><h2>Arbre des coups</h2><button type="button" id="tree-fold" class="linkbtn">Tout replier</button></div>
     <div class="pmoves rtree" id="rep-moves"></div>
@@ -504,6 +504,10 @@ function buildEditor(el) {
 
   E.board = new Board($('#rep-board', el), { onMove: (from, to, promo) => playMove(from + to + (promo || '')) });
   $('#rep-flip', el).onclick = () => { E.board.flip(); render(); };
+  $('#rep-suggest', el).onclick = (e) => {
+    if (!e.target.closest('.sg-go')) return;
+    const t = $('#rt-exp', el); if (t) { t.click(); t.scrollIntoView({ block: 'nearest' }); t.focus(); }
+  };
   $('#rep-play', el).onclick = () => {
     if (!E.rep) return;
     stashPlay({ fen: E.rep.root, ucis: E.path.slice(0, E.k).map((e) => e.uci), user: E.rep.color, label: E.rep.name });
@@ -1038,14 +1042,16 @@ function render() {
   const atFocus = E.focus && curEpd() === E.focus.epd;
   drawBoard();
   const sg = $('#rep-suggest');
+  const alertHtml = (title, text, btn) => `<span class="sg-ic" aria-hidden="true">!</span><span class="sg-txt"><b>${title}</b> — ${text}</span><button type="button" class="sg-go">${btn}</button>`;
   if (atFocus && !childrenOf(E.rep, curEpd()).length) {
     const played = [...new Set(E.focus.errors.map((e) => frSan(e.san)))].join(', ');
-    sg.innerHTML = `<span aria-hidden="true">💡</span> <b>À enrichir</b> · ${plural(E.focus.errors.length, 'faute')} ici (joué : ${esc(played)})`
-      + `${E.focus.best ? ` · meilleur coup : <b>${esc(frSan(uciToSan(curEpd(), E.focus.best)))}</b>` : ''}`;
+    sg.innerHTML = alertHtml('À enrichir', `${plural(E.focus.errors.length, 'faute')} ici (joué : ${esc(played)})`
+      + `${E.focus.best ? ` · meilleur coup : <b>${esc(frSan(uciToSan(curEpd(), E.focus.best)))}</b>` : ''}`, 'Ajouter');
     sg.title = 'Jouez sur l\'échiquier le coup à ajouter, ou choisissez-le dans l\'explorateur.';
     sg.classList.remove('hidden');
   } else if (E.gap && curEpd() === E.gap.epd && !childrenOf(E.rep, curEpd()).length) {
-    sg.innerHTML = `<span aria-hidden="true">🕳️</span> <b>Trou</b> · ${pct(E.gap.p)} de vos parties passent ici, sans coup de votre part`;
+    const cur = E.k ? E.path[E.k - 1] : null;
+    sg.innerHTML = alertHtml('Trou du répertoire', `aucun coup prévu${cur ? ` après ${esc(moveLabel(cur, E.k - 1) + frSan(cur.san))}` : ''} (${pct(E.gap.p)} de vos parties passent ici)`, 'Combler');
     sg.title = 'Jouez votre réponse sur l\'échiquier, ou choisissez-la dans l\'explorateur.';
     sg.classList.remove('hidden');
   } else {
