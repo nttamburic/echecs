@@ -1080,3 +1080,28 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   #gpanel .ptabs { padding: 0 8px; border-bottom: 1px solid var(--line); }
   #gpanel .ptabs button { flex: 1; min-height: 44px; }
 }
+
+/* ---- Phase 9 : feuilles mobiles (boîtes de dialogue) ---- */
+@media (max-width: 760px) {
+  .dlg { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; max-width: none; max-height: 92dvh; border: 0; border-radius: 16px 16px 0 0; background: var(--surface-1);
+    padding: 22px 16px calc(16px + env(safe-area-inset-bottom)); box-shadow: 0 -12px 32px rgba(0,0,0,.5); overflow-y: auto; }
+  .dlg::before { content: ""; position: absolute; top: 8px; left: 50%; width: 40px; height: 5px; margin-left: -20px; border-radius: 999px; background: #6a6761; }
+  .dlg::backdrop { background: rgba(0,0,0,.7); }
+  .dlg h2 { font-size: 19px; font-weight: 700; margin-bottom: 14px; }
+  .dlg input:not([type="checkbox"]):not([type="radio"]), .dlg select, .dlg textarea { min-height: 48px; box-sizing: border-box; font-size: 16px; border-radius: var(--r); }
+  .dlg fieldset { border: 0; padding: 0; margin: 0 0 14px; }
+  .dlg legend { padding: 0; margin-bottom: 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .dlg .row.end { flex-direction: column-reverse; align-items: stretch; gap: 8px; }
+  .dlg .row.end .btn { min-height: 52px; justify-content: center; font-size: 17px; }
+  .dlg .row.end .btn.primary { font-weight: 800; box-shadow: 0 3px 0 var(--accent-press); }
+  .dlg .row.end .btn.danger { font-weight: 800; }
+  /* plein écran : analyse multiple, import PGN, réglages de l'éditeur */
+  #multi-dlg, #pgn-dlg, #exp-dlg { inset: 0; height: 100dvh; max-height: none; border-radius: 0; background: var(--bg); padding-top: 28px; }
+  #multi-dlg::before, #pgn-dlg::before, #exp-dlg::before { display: none; }
+  #multi-dlg h2, #pgn-dlg h2, #exp-dlg h2 { text-align: center; font-size: 17px; margin: 0 0 18px; }
+  #multi-dlg form, #pgn-dlg form, #exp-dlg form { min-height: calc(100dvh - 28px - 16px - env(safe-area-inset-bottom) - 2px); display: flex; flex-direction: column; }
+  #multi-dlg .row.end, #pgn-dlg .row.end { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+}
+@media (max-width: 760px) {
+  #multi-dlg .row.end, #pgn-dlg .row.end { position: sticky; bottom: calc(-16px - env(safe-area-inset-bottom)); background: var(--bg); padding-bottom: calc(16px + env(safe-area-inset-bottom)); margin-inline: -16px; padding-inline: 16px; }
+}
