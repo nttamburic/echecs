@@ -115,6 +115,7 @@ export function soon(el, key) {
       <h2>${h}</h2><p class="muted">${p}</p></article>`).join('')}</section>
   </div>
   <div class="soon-m">
+    <h1 class="sr-only">${t.title}</h1>
     <div class="soon-m-body">
       <span class="soon-badge">Bientôt</span>
       <h2>${t.title}</h2>

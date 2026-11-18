@@ -172,7 +172,7 @@ function renderBoard() {
 function renderSide() {
   document.querySelectorAll('.palette [data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === E.tool));
   $('#setup-turn').value = E.turn;
-  document.querySelectorAll('#setup-turn-seg [data-turn]').forEach((b) => { const on = b.dataset.turn === E.turn; b.setAttribute('aria-checked', String(on)); b.setAttribute('aria-pressed', String(on)); });
+  document.querySelectorAll('#setup-turn-seg [data-turn]').forEach((b) => { const on = b.dataset.turn === E.turn; b.setAttribute('aria-checked', String(on)); });
   for (const k of Object.keys(E.castle)) {
     const cb = $('#setup-c' + k);
     const ok = castleOk(k);
@@ -234,7 +234,7 @@ export function renderEditor(el) {
       <div class="palette">${pal('w')}<button type="button" data-tool="erase" title="Gomme : retirer une pièce" aria-label="Gomme : retirer une pièce" class="erase"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 20h12M5 15l9-9 5 5-8 9H8zM10 10l5 5"/></svg></button></div>
       <p class="muted small">Choisissez une pièce puis cliquez sur les cases pour la poser. Glissez une pièce pour la déplacer, ou hors de l'échiquier pour la retirer (clic droit : retirer).</p>
     </div>
-    <aside class="card setup-side">
+    <aside class="card setup-side" aria-label="Réglages de la position">
       <h1>Définir la position</h1>
       <div class="setup-sec"><span class="lbl-up" id="lbl-turn">Trait</span>
         <div class="segctl" id="setup-turn-seg" role="radiogroup" aria-labelledby="lbl-turn">

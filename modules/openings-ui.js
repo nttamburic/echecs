@@ -138,7 +138,7 @@ export async function renderHome(el) {
   ${reps.length ? '<h2 class="op-h2">Mes répertoires</h2>' : ''}
   <div class="rep-list">${reps.length ? reps.map((r) => `
     <div class="card rep-card">
-      <a class="rep-open" href="#/openings/${esc(r.id)}" aria-label="${esc(r.name)}, ${colorFr(r.color)}">
+      <a class="rep-open" href="#/openings/${esc(r.id)}">
         <span class="avatar-sm ${r.color}"><img src="pieces/${r.color}K.svg" alt=""></span>
         <span class="rep-info"><b title="${esc(r.name)}">${esc(r.name)}</b><span class="muted small">${colorFr(r.color)} · ${plural(reachableEdges(r).length, 'coup')}${dueLabel(r, events, reps)}${homePerf(r)}<span class="cov-mini" data-cov="${esc(r.id)}"></span></span>
           ${masteryBar(masterySummary(computeMastery(r, events, reps)))}</span>
@@ -502,6 +502,7 @@ function trainBox(reps, events) {
 // ------------------------------------------------------------------ éditeur
 function buildEditor(el) {
   el.innerHTML = `
+  <h1 class="sr-only">Éditeur de répertoire</h1>
   <div class="left">
     <div class="board-wrap"><div id="rep-evalbar" class="evalbar hidden"><div class="white"></div><span class="label"></span></div><div id="rep-board"></div></div>
     <div class="board-opts"><button id="rep-flip" class="btn small" title="Retourner l'échiquier (F)">⇅ Retourner</button>
@@ -510,7 +511,7 @@ function buildEditor(el) {
       <span class="muted small">Clic droit sur un coup (appui long de 2 s sur téléphone) pour le désactiver ou le supprimer. Votre note sur le coup affiché : sous la liste des coups.</span></div>
   </div>
   <div id="rep-resize" class="resizer" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Largeur du panneau" aria-valuemin="420" aria-valuemax="720" title="Glisser pour redimensionner le panneau"></div>
-  <aside class="panel" id="rep-panel">
+  <aside class="panel" id="rep-panel" aria-label="Répertoire">
     <div class="phead">
       <a href="#/openings" class="icon-btn" title="Retour aux répertoires" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
       <span class="ptitle" id="rep-title"></span>
@@ -1041,7 +1042,7 @@ function renderTree() {
       const hole = E.gap && E.gap.epd === last.fenAfter && !hasKids && !trans ? '<span class="thole">● trou</span>' : '';
       const tr = trans ? '<span class="rtrans" title="Cette position est déjà dans le répertoire par un autre ordre de coups">⇄ transposition</span>' : '';
       const chev = hasKids ? `<button type="button" class="tchev" data-fold="${key}" aria-expanded="${!folded}" aria-label="${folded ? 'Déplier' : 'Replier'} la suite">${folded ? '▸' : '▾'}</button>` : '<span class="tchev"></span>';
-      html += `<div class="trow${sel ? ' sel' : ''}${onpath ? ' onpath' : ''}${allOff ? ' off' : ''}" style="--d:${depth}">${chev}${mk}<span class="tmoves">${moves}</span>${tr}${hole}</div>`;
+      html += `<div role="listitem" class="trow${sel ? ' sel' : ''}${onpath ? ' onpath' : ''}${allOff ? ' off' : ''}" style="--d:${depth}">${chev}${mk}<span class="tmoves">${moves}</span>${tr}${hole}</div>`;
       if (hasKids && !folded) html += rows(last.fenAfter, pl, pre, depth + 1, true);
     }
     return html;
