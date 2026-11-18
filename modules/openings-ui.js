@@ -288,7 +288,7 @@ function bindImport(el, reps) {
     } catch (x) { if (my === seq) { err.textContent = x.message + '.'; err.dataset.kind = 'pv'; } return; }
     if (my !== seq) return;
     err.textContent = ''; err.dataset.kind = '';
-    if (!r.text.trim()) return;
+    if (!r.text.trim()) { if (!r.empty && src !== 'text') { err.textContent = src === 'file' ? 'Ce fichier est vide.' : 'Cette étude ne contient aucun coup.'; err.dataset.kind = 'pv'; } return; }
     const fresh = importPgn(newRepertoire({ name: 'x', color: 'w' }), r.text);
     if (!fresh.added) { err.textContent = fresh.errors.length ? `Aucun coup d'échecs reconnu (premier coup refusé : « ${fresh.errors[0]} »).` : 'Aucun coup trouvé dans ce PGN.'; err.dataset.kind = 'pv'; return; }
     const adds = {};
@@ -333,14 +333,14 @@ function bindImport(el, reps) {
     e.preventDefault();
     const err = $('#pgn-err', el);
     err.dataset.kind = '';
-    let text = '', studyName = '', fileName = '';
+    let text = '', studyName = '', fileName = '', r0empty = false;
     goBtn.disabled = true;
     try {
       const r = await getSource();
       if (r.empty) { err.textContent = r.empty; return; }
-      ({ text, studyName = '', fileName = '' } = r);
+      ({ text, studyName = '', fileName = '' } = r); r0empty = !!fileName;
     } catch (x) { err.textContent = x.message + '.'; return; } finally { renderPv(); }
-    if (!text.trim()) { err.textContent = src === 'file' ? 'Choisissez un fichier PGN.' : src === 'study' ? 'Collez le lien d’une étude Lichess.' : 'Collez le texte du PGN.'; return; }
+    if (!text.trim()) { err.textContent = src === 'file' ? (r0empty ? 'Ce fichier est vide.' : 'Choisissez un fichier PGN.') : src === 'study' ? 'Collez le lien d’une étude Lichess.' : 'Collez le texte du PGN.'; return; }
     let rep = targetId() ? await getRepertoire(targetId()) : null;
     const isNew = !rep;
     if (isNew) rep = newRepertoire({ name: $('#pgn-name', el).value.trim() || (fileName ? fileName.replace(/\.[^.]+$/, '') : studyName || `Répertoire ${colorFr(color)}`), color });
