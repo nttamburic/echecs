@@ -932,7 +932,7 @@ function renderCoverage() {
 
 // ------------------------------------------------------------------ remplissage automatique (🪄)
 const styleText = () => fillStyle().map((v, i) => `${CRITERIA[i][1]} ${v}`).join(' · ');
-const fillText = () => E.filling ? `🪄 Remplissage en cours : ${plural(E.filling.positions, 'position')} étudiée${E.filling.positions > 1 ? 's' : ''}, ${plural(E.filling.added, 'coup')} ajouté${E.filling.added > 1 ? 's' : ''}… (environ 5 à 20 secondes par position)` : '';
+const fillText = () => E.filling ? `Remplissage en cours : ${plural(E.filling.positions, 'position')} étudiée${E.filling.positions > 1 ? 's' : ''}, ${plural(E.filling.added, 'coup')} ajouté${E.filling.added > 1 ? 's' : ''}… (environ 5 à 20 secondes par position)` : '';
 
 async function runFill() {
   if (!E.rep || !E.gap || E.filling) return;
@@ -1331,18 +1331,18 @@ function render() {
     if (E.filling) sg.innerHTML = `<span class="sg-ic" aria-hidden="true">🪄</span><span class="sg-txt" id="fill-prog">${fillText()}</span><button type="button" class="sg-alt" id="fill-stop">Arrêter</button>`;
     else {
       sg.innerHTML = alertHtml('Trou du répertoire', `aucun coup prévu${cur ? ` après ${esc(moveLabel(cur, E.k - 1) + frSan(cur.san))}` : ''} (${pct(E.gap.p)} de vos parties passent ici)`, 'Combler');
-      if (lichessCfg.connected) sg.insertAdjacentHTML('beforeend', `<button type="button" class="sg-alt" id="gap-fill" title="Remplir automatiquement selon votre style (${styleText()})">🪄 Remplir</button><button type="button" class="sg-alt sg-icon" id="gap-style" title="Style de remplissage : ${styleText()}" aria-label="Style de remplissage">⚙</button>`);
+      if (lichessCfg.connected) sg.insertAdjacentHTML('beforeend', `<div class="sg-acts"><button type="button" class="sg-alt" id="gap-fill" title="Remplir automatiquement selon votre style (${styleText()})">🪄 Remplir</button><button type="button" class="sg-alt sg-icon" id="gap-style" title="Style de remplissage : ${styleText()}" aria-label="Style de remplissage">⚙</button></div>`);
     }
     sg.title = 'Jouez votre réponse sur l\'échiquier, ou choisissez-la dans l\'explorateur.';
     sg.classList.remove('hidden');
+    const gf = $('#gap-fill', sg); if (gf) gf.onclick = () => runFill();
+    const gs = $('#gap-style', sg); if (gs) gs.onclick = () => openStyle();
+    const fs = $('#fill-stop', sg); if (fs) fs.onclick = () => { if (E.filling) E.filling.cancel = true; };
   } else if (E.addHere && curEpd() === E.addHere) {
     const have = childrenOf(E.rep, curEpd()).length;
     sg.innerHTML = alertHtml('Ajouter un coup', `jouez-le sur l'échiquier, ou choisissez-le dans l'explorateur${have ? ` (${plural(have, 'coup')} déjà prévu${have > 1 ? 's' : ''} ici)` : ''}`, 'Explorateur', '+');
     sg.title = 'Le coup joué sur l\'échiquier est ajouté au répertoire à cette position.';
     sg.classList.remove('hidden');
-    const gf = $('#gap-fill', sg); if (gf) gf.onclick = () => runFill();
-    const gs = $('#gap-style', sg); if (gs) gs.onclick = () => openStyle();
-    const fs = $('#fill-stop', sg); if (fs) fs.onclick = () => { if (E.filling) E.filling.cancel = true; };
   } else {
     if (E.focus && !atFocus && E.k > 0 && childrenOf(E.rep, E.focus.epd).length) E.focus = null; // coup ajouté : suggestion traitée
     if (E.gap && childrenOf(E.rep, E.gap.epd).length) E.gap = null; // trou bouché

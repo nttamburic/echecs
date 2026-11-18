@@ -1412,5 +1412,6 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .rsugg { flex-wrap: wrap; }
 .rsugg .sg-alt { flex: none; min-height: 32px; padding: 0 10px; border: 1px solid var(--warn); border-radius: var(--r-sm); background: transparent; color: var(--warn); font-weight: 700; font-size: 13px; cursor: pointer; }
 .rsugg .sg-alt.sg-icon { padding: 0 8px; }
+.rsugg .sg-acts { flex-basis: 100%; display: flex; justify-content: flex-end; gap: 8px; }
 .rsugg .sg-alt:focus-visible, .rsugg .sg-go:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 @media (max-width: 760px) { .rsugg .sg-alt { min-height: 44px; padding: 0 14px; } }
