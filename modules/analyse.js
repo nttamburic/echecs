@@ -258,12 +258,14 @@ function renderBatch() {
   const c = b.cur;
   const paused = b.paused || (S.g && S.g !== c);
   const eta = b.done >= 1 ? Math.max(1, Math.round(((Date.now() - b.t0) / b.done) * (b.total - b.done) / 60000)) : 0;
+  const me = (S.user || '').toLowerCase();
+  const opp = c ? (c.game.white.name.toLowerCase() === me ? c.game.black.name : c.game.white.name) : '';
   const detail = b.paused ? 'en pause — touchez « Reprendre » pour continuer'
     : paused ? 'en pause pendant que vous consultez une partie'
-    : `${b.label}, profondeur ${b.depth}${b.movetime ? `, ${b.movetime / 1000} s max` : ''}${c ? ` · en cours : ${c.game.white.name} – ${c.game.black.name} (${c.positions.filter(Boolean).length}/${c.moves.length} coups)` : ''}`;
-  el.innerHTML = `<span class="bs-main"><strong>Analyse ${b.done} / ${b.total}</strong>${eta && !paused ? ` <span class="muted">· ≈ ${eta} min</span>` : ''}
-    <span class="bs-bar" aria-hidden="true"><span style="width:${(100 * b.done / Math.max(1, b.total)).toFixed(1)}%"></span></span>
-    <span class="muted bs-detail">${esc(detail)}</span></span><button type="button" id="batch-pause" class="btn small" aria-pressed="${!!b.paused}">${b.paused ? 'Reprendre' : 'Pause'}</button><button type="button" id="batch-stop" class="btn small">Arrêter</button>`;
+    : `${c ? `en cours : contre ${opp}, coup ${c.positions.filter(Boolean).length}` : 'préparation…'}${eta ? ` · reste ≈ ${eta} min` : ''}`;
+  el.title = `${b.label}, profondeur ${b.depth}${b.movetime ? `, ${b.movetime / 1000} s max` : ''}`;
+  el.innerHTML = `<span class="bs-spin" aria-hidden="true"></span><span class="bs-main"><span class="bs-line"><strong>Analyse multiple · ${b.done} / ${b.total} parties</strong> <span class="muted bs-detail">— ${esc(detail)}</span></span>
+    <span class="bs-bar" aria-hidden="true"><span style="width:${(100 * b.done / Math.max(1, b.total)).toFixed(1)}%"></span></span></span><button type="button" id="batch-pause" class="btn small" aria-pressed="${!!b.paused}">${b.paused ? 'Reprendre' : 'Pause'}</button><button type="button" id="batch-stop" class="btn small">Arrêter</button>`;
   $('#batch-pause').onclick = () => {
     b.paused = !b.paused;
     // en pause, la partie en cours s'arrête là (ce qui est analysé est conservé) ; à la reprise elle repart de ces coups
@@ -937,14 +939,22 @@ function renderFoot(g) {
   if (g.analyzing) {
     prog.classList.remove('hidden');
     btn.classList.add('hidden');
-    prog.querySelector('.fill').style.width = (100 * done / Math.max(1, total)) + '%';
+    const pct = Math.round(100 * done / Math.max(1, total));
+    prog.querySelector('.fill').style.width = pct + '%';
     const batch = S.batch && S.batch.cur === g;
-    prog.querySelector('.txt').textContent = `${batch ? 'Analyse multiple' : 'Analyse'} : ${done}/${total} coups…`;
+    prog.querySelector('.txt').textContent = `${batch ? 'Analyse multiple' : 'Analyse'} · coup ${done} / ${total}`;
+    prog.querySelector('.pct').textContent = `${pct} %`;
+    // temps restant : cadence mesurée depuis le début de cette analyse
+    if (!g.pT) g.pT = { t0: Date.now(), d0: done };
+    const rate = done > g.pT.d0 ? (Date.now() - g.pT.t0) / (done - g.pT.d0) : 0;
+    const secs = rate ? Math.max(1, Math.round(rate * (total - done) / 1000)) : 0;
+    prog.querySelector('.eta').textContent = secs ? `≈ ${secs >= 90 ? Math.round(secs / 60) + ' min' : secs + ' s'} restantes` : '';
     $('#stop').classList.toggle('hidden', batch);
     // la partie bascule en « Bilan » dès qu'elle est complète
     if (review && !$('#gpanel').classList.contains('review')) renderGame();
     return;
   }
+  g.pT = null;
   prog.classList.add('hidden');
   btn.classList.remove('hidden');
   btn.textContent = done ? `Reprendre l'analyse (${done}/${total})` : 'Analyser';

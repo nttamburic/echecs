@@ -69,6 +69,7 @@
   </header>
   <p id="hist-nouser" class="hidden">Indiquez d'abord votre pseudo chess.com dans <a href="#/settings/profile">Paramètres → Profil chess.com</a>.</p>
   <p id="load-progress" class="muted small">Seules les parties terminées sont récupérées (jamais une partie en cours).</p>
+  <p id="batch-progress" class="small hidden" role="status"></p>
   <section class="card hist-filters" aria-label="Filtres">
     <div class="fcol grow"><label for="filter" class="lbl-up">Adversaire</label>
       <input id="filter" type="search" placeholder="Rechercher un pseudo" autocomplete="off"></div>
@@ -85,7 +86,6 @@
     <span id="count" class="muted fcount" role="status" aria-live="polite"></span>
   </section>
   <section class="card hist-table">
-    <p id="batch-progress" class="small hidden" role="status"></p>
     <div class="table-wrap">
     <table id="games" role="table" aria-label="Historique des parties">
       <thead><tr role="row"><th role="columnheader" scope="col" class="c-date">Date</th><th role="columnheader" scope="col" class="c-tc">Cadence</th><th role="columnheader" scope="col" class="c-me">Moi</th><th role="columnheader" scope="col" class="c-opp">Adversaire</th><th role="columnheader" scope="col" class="c-res">Résultat</th><th role="columnheader" scope="col" class="c-acc">Précision</th></tr></thead>
@@ -136,7 +136,7 @@
     <div id="coach" class="hidden"></div>
     <div id="next-wrap" class="hidden"><button id="suivant" class="btn big primary">Suivant</button></div>
     <div id="pfoot">
-      <div id="progress" class="hidden"><div class="bar"><div class="fill"></div></div><div class="row between"><span class="txt"></span><button id="stop" class="btn small">Arrêter</button></div></div>
+      <div id="progress" class="hidden" role="status"><div class="prow"><strong class="txt"></strong><span class="pct"></span></div><div class="bar"><div class="fill"></div></div><div class="row between"><span class="eta"></span><button id="stop" class="btn small">Arrêter</button></div></div>
       <button id="analyze" class="btn big primary">Analyser</button>
     </div>
     <div id="opening"></div>
