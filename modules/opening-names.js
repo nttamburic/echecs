@@ -74,6 +74,10 @@ const ADJ = {
   with: ['avec'], and: ['et'], without: ['sans'], the: ['le'], of: ['de'],
   Standard: ['standard'], Improved: ['améliorée', 'amélioré'], Fast: ['rapide'], Slow: ['lente', 'lent'],
   Anti: ['anti'], Reti: ['Réti'], Giuoco: ['Giuoco'],
+  "Bishop's": ['du fou'], Scandinavian: ['scandinave'], Yugoslav: ['yougoslave'], Pterodactyl: ['Ptérodactyle'],
+  Eastern: ['orientale', 'oriental'], Western: ['occidentale', 'occidental'], Rare: ['rares'], Defenses: ['défenses'],
+  Neo: ['néo'], Semi: ['semi'], Invitation: ['invitation'], Simple: ['simple'], Hybrid: ['hybride'], Unusual: ['inhabituelle', 'inhabituel'],
+  Gambits: ['gambits'], Variations: ['variantes'], Lines: ['lignes'],
 };
 
 // Expressions à remplacer avant le mot à mot.
