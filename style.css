@@ -1392,3 +1392,4 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 #batch-progress { margin: 12px 0; }
 @media (max-width: 760px) { #batch-progress .bs-spin { display: none; } }
 
+@media (max-width: 760px), (max-width: 1279px) and (orientation: portrait) { #pfoot:has(#progress:not(.hidden)) { display: none; } } /* mobile : le bandeau du haut suffit */
