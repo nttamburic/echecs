@@ -1391,3 +1391,4 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 #progress .btn.small { min-height: 36px; height: 36px; padding: 0 12px; background: var(--surface-1); border: 1px solid #55524d; color: var(--text); font-weight: 600; }
 #batch-progress { margin: 12px 0; }
 @media (max-width: 760px) { #batch-progress .bs-spin { display: none; } }
+

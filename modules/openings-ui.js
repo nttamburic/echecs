@@ -752,7 +752,7 @@ function moveMenu(n) {
       ${act('note', '✎', edge.note ? 'Modifier la note' : 'Ajouter une note')}
       ${act('toggle', edge.disabled ? '↺' : '⊘', edge.disabled ? 'Réactiver la ligne' : 'Désactiver la ligne')}
       ${subOff.length ? act('resub', '↻', `Réactiver les sous-lignes (${subOff.length})`) : ''}
-      ${act('train', '▶', 'S’entraîner sur ce répertoire')}
+      ${act('train', '▶', 'S’entraîner sur cette ligne')}
       <span class="mv-sep" role="separator"></span>
       ${act('delete', '✕', 'Supprimer à partir d’ici', 'danger')}
     </div>
@@ -771,7 +771,7 @@ function moveMenu(n) {
       window.scrollTo({ top: 0 });
     }
     else if (v === 'delete') await deleteNode(n);
-    else if (v === 'train') location.hash = '#/openings/train/rep/' + encodeURIComponent(E.rep.id);
+    else if (v === 'train') location.hash = '#/openings/train/rep/' + encodeURIComponent(E.rep.id) + '/' + encodeURIComponent(edge.fenAfter);
     else if (v === 'note') {
       E.path = [...line]; E.k = line.length; render();
       const tab = $('#rt-note'); if (tab) tab.click();
