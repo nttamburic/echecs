@@ -45,11 +45,29 @@ export function addMove(rep, fenBefore, move) {
   if (!m) return null;
   const uci = m.from + m.to + (m.promotion || '');
   const k = keyOf(fenBefore, uci);
-  const old = rep.edges.find((e) => keyOf(e.fenBefore, e.uci) === k);
+  const idx = edgeIndex(rep);
+  const old = idx.get(k);
   if (old) return old;
   const edge = { fenBefore: epd(fenBefore), uci, san: m.san, fenAfter: epd(c.fen()) };
   rep.edges.push(edge);
+  idx.set(k, edge); edgeLens.get(rep).n = rep.edges.length;
   return edge;
+}
+
+// Index « position|coup → arête » d'un répertoire : sans lui, chaque ajout parcourait toutes les arêtes
+// (un import de 20 000 coups prenait près d'une minute). Il est reconstruit si le tableau des arêtes a
+// été remplacé ou si sa taille a changé ailleurs (suppression…).
+const edgeIdx = new WeakMap();
+const edgeLens = new WeakMap();
+function edgeIndex(rep) {
+  const c = edgeLens.get(rep);
+  if (!c || c.arr !== rep.edges || c.n !== rep.edges.length) {
+    const m = new Map();
+    for (const e of rep.edges) m.set(keyOf(e.fenBefore, e.uci), e);
+    edgeIdx.set(rep, m);
+    edgeLens.set(rep, { arr: rep.edges, n: rep.edges.length });
+  }
+  return edgeIdx.get(rep);
 }
 
 // Ajoute une suite de coups (SAN ou UCI) depuis fen (par défaut la racine). Renvoie les arêtes, ou
@@ -114,7 +132,19 @@ export function importPgn(rep, text) {
 export const isActive = (e) => !e.disabled;
 
 // Coups enregistrés depuis une position (EPD ou FEN).
-export const childrenOf = (rep, fen) => { const p = epd(fen); return rep.edges.filter((e) => e.fenBefore === p); };
+// Index par position de départ, reconstruit si le tableau d'arêtes a été remplacé ou a changé de taille
+// (l'arbre de l'éditeur appelle childrenOf pour chaque nœud : un filter() à chaque fois coûtait plusieurs secondes).
+const childIdx = new WeakMap();
+export const childrenOf = (rep, fen) => {
+  let c = childIdx.get(rep);
+  if (!c || c.arr !== rep.edges || c.n !== rep.edges.length) {
+    const map = new Map();
+    for (const e of rep.edges) { const l = map.get(e.fenBefore); if (l) l.push(e); else map.set(e.fenBefore, [e]); }
+    c = { arr: rep.edges, n: rep.edges.length, map };
+    childIdx.set(rep, c);
+  }
+  return c.map.get(epd(fen)) || [];
+};
 
 // Arêtes atteignables depuis la racine (parcours en largeur). Sert à la suppression et à l'entraînement.
 // activeOnly : ne suit pas les coups désactivés (leur suite n'est alors atteinte que par transposition).
