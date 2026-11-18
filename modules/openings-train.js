@@ -136,7 +136,7 @@ function build(el) {
 }
 
 // mode : 'all' | 'rep' | 'targeted' ; id : répertoire (mode 'rep', ou mode ciblé limité à un répertoire)
-export async function start(el, mode, id) {
+export async function start(el, mode, id, from) {
   if (!el.dataset.built) { build(el); el.dataset.built = '1'; }
   leave();
   const seq = T.seq;
@@ -147,6 +147,7 @@ export async function start(el, mode, id) {
   T.requeued = new Set();
   T.missed = new Map();
   T.target = null;
+  T.from = mode === 'rep' && from ? from : null; // « S'entraîner sur cette ligne » : on part de cette position
   T.before = null;
   const all = await listRepertoires();
   if (seq !== T.seq) return;
@@ -155,7 +156,7 @@ export async function start(el, mode, id) {
     const r = await getRepertoire(id);
     T.reps = r && userPositions(r).size ? [r] : [];
   }
-  $('#train-title').textContent = MODES[T.mode] + (TARGET_MODES.includes(T.mode) ? ` · ${trainStyle() === 'lines' ? 'lignes complètes' : 'coups isolés'}` : '');
+  $('#train-title').textContent = MODES[T.mode] + (T.from ? ' · cette ligne' : '') + (TARGET_MODES.includes(T.mode) ? ` · ${trainStyle() === 'lines' ? 'lignes complètes' : 'coups isolés'}` : '');
   if (TARGET_MODES.includes(T.mode)) {
     const events = await listEvents();
     if (seq !== T.seq) return;
@@ -215,8 +216,8 @@ function nextLine() {
   T.board.interactive = true;
   if (T.board.orientation !== T.rep.color) T.board.setOrientation(T.rep.color);
   // coups isolés : on joue d'un coup tout le chemin jusqu'à la position cible
-  const path = T.target && trainStyle() === 'isolated' ? pathTo(T.rep, T.cur, T.target.epd, true) : null;
-  if (path) { T.line = [...path]; T.cur = T.target.epd; }
+  const path = T.target && trainStyle() === 'isolated' ? pathTo(T.rep, T.cur, T.target.epd, true) : T.from ? pathTo(T.rep, T.cur, T.from, true) : null;
+  if (path) { T.line = [...path]; T.cur = T.target ? T.target.epd : T.from; }
   const last = T.line.at(-1);
   T.board.setPosition(fenOf(T.cur), { lastMove: last ? [last.uci.slice(0, 2), last.uci.slice(2, 4)] : null });
   $('#train-sub').innerHTML = `<span class="avatar-sm ${T.rep.color}"><img src="pieces/${T.rep.color}K.svg" alt=""></span> ${esc(T.rep.name)}`

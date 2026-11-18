@@ -39,8 +39,8 @@ function route() {
   }
   if (name === 'openings') {
     if (sub.startsWith('train')) {
-      const [, mode, id] = sub.split('/');
-      showView('train', 'openings'); train.start($('#train-view'), mode, id && decodeURIComponent(id)); return;
+      const [, mode, id, from] = sub.split('/');
+      showView('train', 'openings'); train.start($('#train-view'), mode, id && decodeURIComponent(id), from && decodeURIComponent(from)); return;
     }
     if (sub) { showView('rep', 'openings'); openingsUi.openRepertoire($('#rep-view'), decodeURIComponent(sub)); return; }
     showView('openings'); openingsUi.renderHome($('#openings-view')); return;
