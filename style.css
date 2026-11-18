@@ -484,6 +484,7 @@ a.btn { text-decoration: none; }
 .rm.pressing { background: var(--cur); transition: background 2s linear; }
 .rm.off { opacity: .45; }
 .rm.off.mine { border-bottom-color: transparent; }
+.rm.auto { font-style: italic; }
 .rvar { margin: 2px 0 2px 6px; padding-left: 10px; border-left: 2px solid var(--border); font-size: 13.5px; }
 .rtrans { color: var(--link); font-size: 12.5px; white-space: nowrap; }
 .exp { border-top: 1px solid var(--line); }
@@ -1402,3 +1403,14 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 @media (max-width: 760px) { #batch-progress .bs-spin { display: none; } }
 
 @media (max-width: 760px), (max-width: 1279px) and (orientation: portrait) { #pfoot:has(#progress:not(.hidden)) { display: none; } } /* mobile : le bandeau du haut suffit */
+/* remplissage automatique et scores */
+.cov-extra { margin-top: 6px; color: var(--muted); }
+.style-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.style-ctl { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.style-v { min-width: 1.2em; text-align: center; font-size: 18px; }
+.cov-row .btn + .btn { margin-left: 0; }
+.rsugg { flex-wrap: wrap; }
+.rsugg .sg-alt { flex: none; min-height: 32px; padding: 0 10px; border: 1px solid var(--warn); border-radius: var(--r-sm); background: transparent; color: var(--warn); font-weight: 700; font-size: 13px; cursor: pointer; }
+.rsugg .sg-alt.sg-icon { padding: 0 8px; }
+.rsugg .sg-alt:focus-visible, .rsugg .sg-go:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+@media (max-width: 760px) { .rsugg .sg-alt { min-height: 44px; padding: 0 14px; } }

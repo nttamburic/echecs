@@ -17,11 +17,12 @@ import {
   findSuggestions, applySuggestion, pathTo, SUGGEST_MIN, importPgn, computePerformance,
 } from './openings.js';
 import { Chess } from '../vendor/chess.js';
-import { coverageOf, cachedCoverage, covN, THRESHOLDS, pct } from './openings-coverage.js';
+import { coverageOf, cachedCoverage, covN, THRESHOLDS, pct, coverageKey } from './openings-coverage.js';
 import { classifyGame, CLASSES, fmtScore, winPct } from '../analysis.js';
 import { stashPlay } from './play.js';
 import { miniBoard } from './setup.js';
 import { frOpening } from './opening-names.js';
+import { fillGap, fillStyle, setFillStyle, CRITERIA, STYLE_POINTS, autoEdges, repertoireScores } from './openings-autofill.js';
 
 const SVG_GEAR = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
 const RATINGS = [0, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500];
@@ -451,6 +452,10 @@ async function homeCoverage(el, reps) {
     if (span && res && !res.unavailable) span.innerHTML = ` · <span class="cov-bar"><i style="width:${Math.round(res.coverage * 100)}%"></i></span> ${pct(res.coverage)} couvert${res.gaps.length ? `, ${plural(res.gaps.length, 'trou')}` : ''}`;
   };
   for (const r of reps) show(r, cachedCoverage(r));
+  for (const r of reps) loadScores(r).then((sc) => {
+    const span = el.querySelector(`[data-cov="${CSS.escape(r.id)}"]`);
+    if (sc && span && el.isConnected) span.insertAdjacentHTML('afterend', `<span class="sc-mini" title="Efficacité · Solidité · Facilité"> · E ${sc.eff == null ? '—' : pct(sc.eff)} · S ${sc.sound == null ? '—' : pct(sc.sound)} · F ${sc.learn == null ? '—' : pct(sc.learn)}</span>`);
+  });
   for (const r of reps) {
     if (cachedCoverage(r)) continue;
     const span = el.querySelector(`[data-cov="${CSS.escape(r.id)}"]`);
@@ -747,8 +752,9 @@ function moveMenu(n) {
   const act = (v, ic, txt, cls = '') => `<button value="${v}" class="mv-act ${cls}" role="menuitem"><span aria-hidden="true">${ic}</span>${txt}</button>`;
   dlg.innerHTML = `<form method="dialog" class="mv-menu">
     <div class="mv-head">${miniBoard(edge.fenAfter.split(' ')[0], 64)}
-      <span class="mv-title"><b id="mv-t">${esc(label)}</b><span class="muted small">${esc(E.rep.name)}${edge.disabled ? ' · coup désactivé' : ''}</span></span></div>
+      <span class="mv-title"><b id="mv-t">${esc(label)}</b><span class="muted small">${esc(E.rep.name)}${edge.disabled ? ' · coup désactivé' : ''}${edge.auto ? ' · 🪄 ajouté automatiquement' : ''}</span></span></div>
     <div role="menu" aria-labelledby="mv-t" class="mv-list">
+      ${edge.auto ? act('keep', '🪄', 'Garder ce coup (ne plus le marquer comme automatique)') : ''}
       ${act('add', '+', 'Ajouter un coup ici')}
       ${act('note', '✎', edge.note ? 'Modifier la note' : 'Ajouter une note')}
       ${act('toggle', edge.disabled ? '↺' : '⊘', edge.disabled ? 'Réactiver la ligne' : 'Désactiver la ligne')}
@@ -763,7 +769,8 @@ function moveMenu(n) {
     <div class="row end"><button value="cancel" class="btn">Fermer</button></div></form>`;
   dlg.onclose = async () => {
     const v = dlg.returnValue;
-    if (v === 'toggle') await toggleMove(edge, label);
+    if (v === 'keep') { delete edge.auto; await saveRepertoire(E.rep); render(); toast(`${label} gardé.`); }
+    else if (v === 'toggle') await toggleMove(edge, label);
     else if (v === 'resub') await reactivateSub(edge, label);
     else if (v === 'add') {
       // se place après ce coup et invite à jouer le coup à ajouter (échiquier ou explorateur)
@@ -910,11 +917,131 @@ function renderCoverage() {
   };
   box.innerHTML = `<div class="cov-row"><span class="cov-bar"><i style="width:${Math.round(res.coverage * 100)}%"></i></span>
       <b>${pct(res.coverage)}</b> <span class="muted small">couvert (positions vues dans 1 partie sur ${res.n})</span>
-      ${gaps.length ? '<button type="button" class="btn small" id="cov-go">Aller au plus gros trou</button>' : ''}</div>
+      ${gaps.length ? '<button type="button" class="btn small" id="cov-go">Aller au plus gros trou</button><button type="button" class="btn small" id="cov-fill" title="Aller au plus gros trou et le remplir selon votre style">🪄 Le remplir</button>' : ''}</div>
     ${gaps.length ? `<details class="cov-gaps"><summary class="small">${plural(res.gaps.length, 'trou')}, les plus fréquents</summary><ol>${gaps.map((g, i) => `<li><button type="button" class="link" data-gap="${i}">${gapLine(g)}</button></li>`).join('')}</ol></details>` : '<div class="muted small">Aucun trou au-dessus du seuil.</div>'}`;
   const goBtn = $('#cov-go', box);
   if (goBtn) goBtn.onclick = () => goToGap(gaps[0]);
+  const fillBtn = $('#cov-fill', box);
+  if (fillBtn) fillBtn.onclick = async () => { await goToGap(gaps[0]); if (E.gap) runFill(); };
+  const autos = autoEdges(E.rep).length;
+  box.insertAdjacentHTML('beforeend', `<div class="cov-extra small">${scoresHtml(E.rep)}${autos ? ` · <button type="button" class="link" id="auto-del">Retirer les ${plural(autos, 'coup')} ajouté${autos > 1 ? 's' : ''} automatiquement</button>` : ''}</div>`);
+  const ad = $('#auto-del', box); if (ad) ad.onclick = removeAuto;
+  const sb = $('#scores-go', box); if (sb) sb.onclick = () => runScores(E.rep);
   box.querySelectorAll('[data-gap]').forEach((b) => { b.onclick = () => goToGap(gaps[+b.dataset.gap]); });
+}
+
+// ------------------------------------------------------------------ remplissage automatique (🪄)
+const styleText = () => fillStyle().map((v, i) => `${CRITERIA[i][1]} ${v}`).join(' · ');
+const fillText = () => E.filling ? `🪄 Remplissage en cours : ${plural(E.filling.positions, 'position')} étudiée${E.filling.positions > 1 ? 's' : ''}, ${plural(E.filling.added, 'coup')} ajouté${E.filling.added > 1 ? 's' : ''}… (environ 5 à 20 secondes par position)` : '';
+
+async function runFill() {
+  if (!E.rep || !E.gap || E.filling) return;
+  const rep = E.rep, gap = E.gap;
+  const job = (E.filling = { cancel: false, positions: 0, added: 0 });
+  render();
+  let res = null, err = null;
+  try {
+    // sur une copie : le répertoire affiché ne change qu'à la fin (le bandeau reste visible)
+    const work = { ...rep, edges: [...rep.edges] };
+    res = await fillGap(work, gap.epd, gap.p, {
+      onProgress: ({ positions, added }) => { job.positions = positions; job.added = added; const t = $('#fill-prog'); if (t) t.textContent = fillText(); },
+      isCancelled: () => job.cancel || E.rep !== rep,
+    });
+  } catch (e) { err = e; }
+  E.filling = null;
+  if (res && res.added.length) {
+    const have = new Set(rep.edges.map((e) => e.fenBefore + '|' + e.uci));
+    for (const e of res.added) if (!have.has(e.fenBefore + '|' + e.uci)) rep.edges.push(e);
+    await saveRepertoire(rep);
+    rescanSoon();
+  }
+  if (E.rep !== rep) return;
+  if (err) { toast('Remplissage impossible : ' + esc(err.message), 6000); render(); return; }
+  E.gap = null;
+  render();
+  const n = res.added.length;
+  toast(n ? `🪄 ${plural(n, 'coup')} ajouté${n > 1 ? 's' : ''} (en italique dans la liste)${res.stopped ? ' ; arrêté avant la fin : relancez sur le trou suivant pour continuer' : ''}.`
+    : 'Aucun coup ajouté : pas assez de parties dans cette position.', 6000);
+}
+
+function openStyle() {
+  let dlg = $('#style-dlg');
+  if (!dlg) { dlg = document.createElement('dialog'); dlg.id = 'style-dlg'; dlg.className = 'dlg'; document.body.appendChild(dlg); }
+  const v = fillStyle();
+  const draw = () => {
+    const left = STYLE_POINTS - v.reduce((a, b) => a + b, 0);
+    dlg.innerHTML = `<form method="dialog">
+      <h2>Style de remplissage</h2>
+      <p class="muted small">Répartissez ${STYLE_POINTS} points entre les trois critères. Le remplissage choisit, dans chaque position, le coup qui obtient la meilleure note avec ces poids.</p>
+      ${CRITERIA.map(([k, name, help], i) => `<div class="style-row"><span><b>${name}</b><br><span class="muted small">${help}</span></span>
+        <span class="style-ctl"><button type="button" class="btn small" data-i="${i}" data-d="-1" aria-label="Moins de ${name}" ${v[i] ? '' : 'disabled'}>−</button>
+        <b class="style-v" aria-live="polite">${v[i]}</b>
+        <button type="button" class="btn small" data-i="${i}" data-d="1" aria-label="Plus de ${name}" ${left ? '' : 'disabled'}>+</button></span></div>`).join('')}
+      <p class="small ${left ? 'err' : 'muted'}">${left ? `Reste ${plural(left, 'point')} à répartir.` : 'Tous les points sont répartis.'}</p>
+      <div class="row end"><button value="cancel" class="btn">Annuler</button><button value="ok" class="btn primary" ${left ? 'disabled' : ''}>Enregistrer</button></div></form>`;
+    dlg.querySelectorAll('[data-d]').forEach((b) => {
+      b.onclick = () => { const i = +b.dataset.i; v[i] = Math.max(0, v[i] + +b.dataset.d); draw(); const nb = dlg.querySelector(`[data-i="${i}"][data-d="${b.dataset.d}"]`); if (nb && !nb.disabled) nb.focus(); };
+    });
+  };
+  draw();
+  dlg.onclose = () => { if (dlg.returnValue === 'ok') { setFillStyle(v); render(); } };
+  dlg.returnValue = '';
+  dlg.showModal();
+}
+
+async function removeAuto() {
+  const rep = E.rep;
+  const list = autoEdges(rep);
+  if (!list.length) return;
+  const trial = { ...rep, edges: [...rep.edges] };
+  let gone = 0;
+  for (const e of list) gone += deleteMove(trial, e.fenBefore, e.uci).length;
+  const extra = gone - list.length;
+  if (!confirm(`Retirer les ${plural(list.length, 'coup')} ajouté${list.length > 1 ? 's' : ''} automatiquement${extra > 0 ? ` et ${plural(extra, 'coup')} que vous avez ajouté${extra > 1 ? 's' : ''} à leur suite` : ''} ?`)) return;
+  for (const e of list) if (rep.edges.includes(e)) deleteMove(rep, e.fenBefore, e.uci);
+  const left = new Set(rep.edges);
+  const cut = E.path.findIndex((e) => !left.has(e));
+  if (cut >= 0) { E.path = E.path.slice(0, cut); E.k = Math.min(E.k, cut); }
+  await saveRepertoire(rep);
+  render();
+  rescanSoon();
+  toast(`${plural(gone, 'coup')} retiré${gone > 1 ? 's' : ''}.`);
+}
+
+// ------------------------------------------------------------------ scores du répertoire
+// Calculés à la demande (cloud Lichess et explorateur), gardés sur l'appareil tant que le
+// répertoire, le seuil et les filtres ne changent pas.
+const scoreMemo = new Map(); // id → { key, res } | { key, running, done, total }
+async function loadScores(rep) {
+  const m = scoreMemo.get(rep.id);
+  if (m) return m.key === coverageKey(rep) && m.res ? m.res : null;
+  try { const c = await store.cacheGet('scores|' + rep.id); if (c) scoreMemo.set(rep.id, c); return c && c.key === coverageKey(rep) ? c.res : null; } catch { return null; }
+}
+function scoresHtml(rep) {
+  const m = scoreMemo.get(rep.id);
+  const key = coverageKey(rep);
+  if (m && m.key === key && m.running) return `Scores : calcul… (${m.done}/${m.total || '?'})`;
+  if (m && m.key === key && m.res) {
+    const r = m.res, f = (x) => (x == null ? '—' : pct(x));
+    return `<span title="Moyennes pondérées par la fréquence des positions, de 0 à 100 %">Efficacité <b>${f(r.eff)}</b> · Solidité <b>${f(r.sound)}</b> · Facilité <b>${f(r.learn)}</b></span> <button type="button" class="link" id="scores-go">recalculer</button>`;
+  }
+  if (!m) loadScores(rep).then((r) => { if (r && E.rep === rep) renderCoverage(); });
+  return '<button type="button" class="link" id="scores-go">Calculer les scores (efficacité, solidité, facilité)</button>';
+}
+async function runScores(rep) {
+  const key = coverageKey(rep);
+  const job = { key, running: true, done: 0, total: 0 };
+  scoreMemo.set(rep.id, job);
+  renderCoverage();
+  const res = await repertoireScores(rep, {
+    onProgress: (done, total) => { job.done = done; job.total = total; if (E.rep === rep) renderCoverage(); },
+    isCancelled: () => scoreMemo.get(rep.id) !== job,
+  }).catch(() => null);
+  if (scoreMemo.get(rep.id) !== job) return;
+  if (!res) { scoreMemo.delete(rep.id); toast('Scores indisponibles (jeton Lichess requis, ou connexion).'); }
+  else { const v = { key, res }; scoreMemo.set(rep.id, v); store.cacheSet('scores|' + rep.id, v).catch(() => {}); }
+  if (E.rep === rep) renderCoverage();
+  if (document.body.dataset.view === 'openings') renderHome($('#openings-view'));
 }
 
 // Se place sur un trou : on suit le chemin du répertoire, puis on joue le coup adverse manquant
@@ -1006,8 +1133,10 @@ function renderTree() {
     let cls = m && !off ? ` mine st-${m.status}` : off && mine(e) ? ' mine' : '';
     if (off) cls += ' off';
     if (e === cur) cls += ' cur';
+    if (e.auto) cls += ' auto';
     const pf = perf.get(e.fenAfter);
     const tipTxt = [off ? `${e.disabled ? 'Coup désactivé' : 'Suite d’un coup désactivé'} : ni entraîné ni compté dans la maîtrise` : m ? masteryTip(m) : '',
+      e.auto ? 'Ajouté automatiquement (🪄)' : '',
       pf ? `Vos parties après ce coup : ${perfShort(pf)} (+${pf.w} =${pf.d} −${pf.l})` : ''].filter(Boolean).join('\n');
     const tip = tipTxt ? ` title="${esc(tipTxt)}"` : '';
     const note = e.note ? `<span class="rnote" title="${esc(e.note)}" aria-label="Note">✎</span>` : '';
@@ -1199,7 +1328,11 @@ function render() {
     sg.classList.remove('hidden');
   } else if (E.gap && curEpd() === E.gap.epd && !childrenOf(E.rep, curEpd()).length) {
     const cur = E.k ? E.path[E.k - 1] : null;
-    sg.innerHTML = alertHtml('Trou du répertoire', `aucun coup prévu${cur ? ` après ${esc(moveLabel(cur, E.k - 1) + frSan(cur.san))}` : ''} (${pct(E.gap.p)} de vos parties passent ici)`, 'Combler');
+    if (E.filling) sg.innerHTML = `<span class="sg-ic" aria-hidden="true">🪄</span><span class="sg-txt" id="fill-prog">${fillText()}</span><button type="button" class="sg-alt" id="fill-stop">Arrêter</button>`;
+    else {
+      sg.innerHTML = alertHtml('Trou du répertoire', `aucun coup prévu${cur ? ` après ${esc(moveLabel(cur, E.k - 1) + frSan(cur.san))}` : ''} (${pct(E.gap.p)} de vos parties passent ici)`, 'Combler');
+      if (lichessCfg.connected) sg.insertAdjacentHTML('beforeend', `<button type="button" class="sg-alt" id="gap-fill" title="Remplir automatiquement selon votre style (${styleText()})">🪄 Remplir</button><button type="button" class="sg-alt sg-icon" id="gap-style" title="Style de remplissage : ${styleText()}" aria-label="Style de remplissage">⚙</button>`);
+    }
     sg.title = 'Jouez votre réponse sur l\'échiquier, ou choisissez-la dans l\'explorateur.';
     sg.classList.remove('hidden');
   } else if (E.addHere && curEpd() === E.addHere) {
@@ -1207,6 +1340,9 @@ function render() {
     sg.innerHTML = alertHtml('Ajouter un coup', `jouez-le sur l'échiquier, ou choisissez-le dans l'explorateur${have ? ` (${plural(have, 'coup')} déjà prévu${have > 1 ? 's' : ''} ici)` : ''}`, 'Explorateur', '+');
     sg.title = 'Le coup joué sur l\'échiquier est ajouté au répertoire à cette position.';
     sg.classList.remove('hidden');
+    const gf = $('#gap-fill', sg); if (gf) gf.onclick = () => runFill();
+    const gs = $('#gap-style', sg); if (gs) gs.onclick = () => openStyle();
+    const fs = $('#fill-stop', sg); if (fs) fs.onclick = () => { if (E.filling) E.filling.cancel = true; };
   } else {
     if (E.focus && !atFocus && E.k > 0 && childrenOf(E.rep, E.focus.epd).length) E.focus = null; // coup ajouté : suggestion traitée
     if (E.gap && childrenOf(E.rep, E.gap.epd).length) E.gap = null; // trou bouché
