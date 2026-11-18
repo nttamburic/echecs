@@ -192,10 +192,24 @@ export function userPositions(rep, activeOnly = true) {
 }
 
 // ------------------------------------------------------------------ stockage
-export async function listRepertoires() {
-  return (await store.all(REP)).map((r) => ({ ...r.data, id: r.id })).sort((a, b) => a.createdAt - b.createdAt);
+// Les enregistrements viennent aussi de la synchronisation (autre appareil, dépôt GitHub) : on ne leur
+// fait pas confiance. Un répertoire mal formé est ignoré au lieu de bloquer tout le module, et les
+// arêtes illisibles sont écartées.
+const UCI_RE = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
+const EPD_RE = /^\S+ [wb] (?:-|[KQkq]+) (?:-|[a-h][36])$/;
+function sane(id, d) {
+  if (!d || typeof d !== 'object' || !Array.isArray(d.edges)) return null;
+  const str = (x) => typeof x === 'string';
+  const root = str(d.root) && EPD_RE.test(d.root.split(' ').slice(0, 4).join(' ')) ? d.root : null;
+  if (!root) return null;
+  const edges = d.edges.filter((e) => e && str(e.fenBefore) && str(e.fenAfter) && EPD_RE.test(e.fenBefore) && EPD_RE.test(e.fenAfter)
+    && str(e.uci) && UCI_RE.test(e.uci) && str(e.san) && (e.note == null || str(e.note)));
+  return { ...d, id, name: str(d.name) && d.name.trim() ? d.name : 'Répertoire', color: d.color === 'b' ? 'b' : 'w', root, edges, createdAt: Number(d.createdAt) || 0 };
 }
-export async function getRepertoire(id) { const d = await store.get(REP, id); return d ? { ...d, id } : null; }
+export async function listRepertoires() {
+  return (await store.all(REP)).map((r) => sane(r.id, r.data)).filter(Boolean).sort((a, b) => a.createdAt - b.createdAt);
+}
+export async function getRepertoire(id) { return sane(id, await store.get(REP, id)); }
 export async function saveRepertoire(rep) {
   const { id, ...data } = rep;
   await store.put(REP, id, data, { file: REP_FILE });
