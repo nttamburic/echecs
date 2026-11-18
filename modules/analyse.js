@@ -932,10 +932,10 @@ function renderFoot(g) {
       const pct = Math.round(100 * done / Math.max(1, total));
       strip.querySelector('.as-txt').innerHTML = `<strong>Coup ${done} / ${total}</strong> · ${pct} %`;
       strip.querySelector('.as-fill').style.width = pct + '%';
-      strip.querySelector('button').classList.toggle('hidden', S.batch && S.batch.cur === g);
+      strip.querySelector('button').classList.toggle('hidden', !!(S.batch && S.batch.cur === g));
     }
   }
-  $('#pfoot').classList.toggle('hidden', (review || g.free) && !g.analyzing);
+  $('#pfoot').classList.toggle('hidden', !!((review || g.free) && !g.analyzing));
   if (g.analyzing) {
     prog.classList.remove('hidden');
     btn.classList.add('hidden');
