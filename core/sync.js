@@ -52,6 +52,7 @@ async function gh(path, { method = 'GET', body } = {}) {
 const repoPath = () => `/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}`;
 
 function explain(status, body) {
+  if ((status === 403 || status === 429) && (status === 429 || /rate limit|abuse|secondary/i.test((body && body.message) || ''))) return 'GitHub limite temporairement les requêtes : la synchronisation reprendra d\'elle-même dans quelques minutes.';
   if (status === 401) return 'Jeton GitHub refusé (expiré ou mal copié).';
   if (status === 403) return 'Jeton GitHub sans droit d\'écriture sur ce dépôt (« Contents : Read and write »).';
   if (status === 404) return `Dépôt ${cfg.owner}/${cfg.repo} introuvable (ou jeton sans accès à ce dépôt).`;
@@ -195,14 +196,14 @@ async function doSync() {
     const heldFiles = async () => new Set(Object.values((await store.metaGet('conflicts')) || {}).map((c) => c.file));
     state.conflicts = Object.values((await store.metaGet('conflicts')) || {});
     for (const file of [...dirty]) {
-      let skip = false;
+      let skip = false, pushed = false;
       for (let attempt = 0; attempt < 3; attempt++) {
         if ((await heldFiles()).has(file)) { skip = true; break; } // en attente de la décision de l'utilisateur : on n'écrase pas l'autre appareil
         const content = await buildFile(file);
         const body = { message: `Sync ${file}`, content: b64encode(content) };
         if (shas[file]) body.sha = shas[file];
         const r = await gh(`${repoPath()}/contents/${file.split('/').map(encodeURIComponent).join('/')}`, { method: 'PUT', body });
-        if (r.ok) { shas[file] = r.body.content.sha; break; }
+        if (r.ok) { shas[file] = r.body.content.sha; pushed = true; break; }
         if (r.status === 409 || r.status === 422) {
           // Le fichier a changé sur GitHub entre-temps (autre appareil) : on relit, fusionne et réessaie.
           const cur = await gh(`${repoPath()}/contents/${file.split('/').map(encodeURIComponent).join('/')}`);
@@ -215,6 +216,7 @@ async function doSync() {
         throw new Error(explain(r.status, r.body));
       }
       if (skip) { state.conflicts = Object.values((await store.metaGet('conflicts')) || {}); continue; }
+      if (!pushed) { await store.metaSet('shas', shas); throw new Error('GitHub a refusé l\'envoi de ' + file + ' (le fichier change sans cesse). Nouvel essai à la prochaine synchronisation.'); }
       dirty.delete(file);
       await store.metaSet('shas', shas);
       await store.metaSet('dirty', [...dirty]);
