@@ -888,8 +888,10 @@ function renderGame() {
     const oppN = g.free ? '' : (g.game.white.name.toLowerCase() === (S.user || '').toLowerCase() ? g.game.black.name : g.game.white.name);
     tt.innerHTML = (g.free ? 'Analyse libre' : review ? 'Bilan' : 'Analyse') + (oppN ? ` <span class="tt-opp">· vs ${esc(oppN)}</span>` : '');
   }
-  $('#cc-link').href = g.game.url || '#';
-  $('#cc-link').classList.toggle('hidden', !!g.free);
+  // Seule une adresse https:// est acceptée (les données peuvent venir de la synchronisation : jamais de javascript: ni data:).
+  const ccUrl = /^https:\/\/[^\s]+$/i.test(g.game.url || '') ? g.game.url : '';
+  if (ccUrl) $('#cc-link').href = ccUrl; else $('#cc-link').removeAttribute('href');
+  $('#cc-link').classList.toggle('hidden', !!g.free || !ccUrl);
   $('#back').title = g.free ? 'Retour à l\'analyse libre' : 'Retour à l\'historique des parties';
   $('#reanalyze').parentElement.classList.toggle('hidden', !!g.free);
   const k = g.var ? g.var.basePly : g.ply;
