@@ -15,7 +15,7 @@
 <a href="#content" class="skip" id="skip">Aller au contenu</a>
 <div id="sr-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 <!-- Téléphone : barre du haut avec le bouton du menu -->
-<div id="topbar">
+<header id="topbar">
   <button id="menu-btn" class="icon-btn" aria-label="Menu" aria-controls="sidebar" aria-expanded="false">
     <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
   </button>
@@ -23,12 +23,12 @@
   <a href="#/games" class="brand"><img src="pieces/wN.svg" alt=""><span>Chess Journey</span></a>
   <h1 id="topbar-title"></h1>
   <span id="topbar-soon" aria-hidden="true"></span>
-</div>
+</header>
 <div id="scrim"></div>
 
-<aside id="sidebar">
+<aside id="sidebar" aria-label="Navigation">
   <a href="#/games" class="brand"><img src="pieces/wN.svg" alt=""><span>Chess Journey</span></a>
-  <nav id="tabs">
+  <nav id="tabs" aria-label="Modules">
     <a href="#/play" data-tab="play" title="Jouer" aria-label="Jouer">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path class="fill" d="M10 8.2l6 3.8-6 3.8z"/></svg><span>Jouer</span></a>
     <a href="#/free" data-tab="free" title="Analyse libre" aria-label="Analyse libre">
@@ -44,7 +44,7 @@
     <a href="#/games" data-tab="games" title="Historique des parties" aria-label="Historique des parties">
       <svg viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4v4.5H8"/><path d="M12 7.5V12l3 2"/></svg><span>Historique des parties</span></a>
   </nav>
-  <nav id="tabs-bottom">
+  <nav id="tabs-bottom" aria-label="Paramètres">
     <a href="#/settings" data-tab="settings" title="Paramètres" aria-label="Paramètres">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/><circle cx="12" cy="12" r="6.5"/></svg><span>Paramètres</span></a>
   </nav>
@@ -114,6 +114,7 @@
 </dialog>
 
 <main id="game-view" class="view hidden">
+  <h1 class="sr-only">Analyse de la partie</h1>
   <div id="astrip" class="astrip hidden" role="status"><span class="as-body"><span class="as-txt"></span><span class="as-bar"><span class="as-fill"></span></span></span><button type="button" class="btn small" id="astrip-stop">Arrêter</button></div>
   <div class="left">
     <div class="player" id="player-top"></div>
@@ -126,7 +127,7 @@
       <button id="flip" class="btn small" title="Retourner l'échiquier (F)">⇅ Retourner</button>
     </div>
   </div>
-  <aside class="panel" id="gpanel" data-detent="mid">
+  <aside class="panel" id="gpanel" aria-label="Analyse" data-detent="mid">
     <button id="grab" class="grab" type="button" aria-label="Agrandir ou réduire le panneau" aria-expanded="true"><span></span></button>
     <div class="phead">
       <button id="back" class="icon-btn" title="Retour à l'historique des parties" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
@@ -147,7 +148,7 @@
       <button type="button" role="tab" id="t-engine" data-tab="engine" aria-selected="false" aria-controls="tab-engine" tabindex="-1">Moteur</button>
     </div>
     <div class="tabpane" id="tab-moves" role="tabpanel" aria-labelledby="t-moves">
-      <div id="moves"></div>
+      <div id="moves" tabindex="0" role="region" aria-label="Coups de la partie"></div>
       <div id="game-meta" class="muted small"></div>
     </div>
     <div class="tabpane hidden" id="tab-review" role="tabpanel" aria-labelledby="t-review">
@@ -164,7 +165,7 @@
       <div id="eng-desc" class="muted small pad"></div>
       <div id="lines" class="hidden"></div>
       <section class="areg" aria-labelledby="areg-h">
-        <h3 id="areg-h">Réglages de l'analyse</h3>
+        <h2 id="areg-h">Réglages de l'analyse</h2>
         <div class="frow"><label for="ar-lines">Lignes affichées</label><select id="ar-lines"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></div>
         <div class="frow"><label for="ui-arrows">Flèche du meilleur coup</label><select id="ui-arrows"><option value="best">Oui</option><option value="none">Non</option></select></div>
         <div class="frow"><label for="ui-keys">Marquer les coups clés</label><select id="ui-keys"><option value="1">Oui</option><option value="0">Non</option></select></div>
@@ -196,6 +197,7 @@
 </dialog>
 
 <main id="play-view" class="view hidden">
+  <h1 class="sr-only">Jouer contre Maia</h1>
   <div class="left">
     <div class="player" id="play-top"></div>
     <div class="board-wrap">
@@ -207,7 +209,7 @@
       <button id="play-flip" class="btn small" title="Retourner l'échiquier (F)">⇅ Retourner</button>
     </div>
   </div>
-  <aside class="panel" id="play-panel">
+  <aside class="panel" id="play-panel" aria-label="Partie">
     <div class="phead">
       <span class="ptitle">Jouer contre Maia</span>
       <button id="play-gear" class="icon-btn" title="Paramètres de la partie" aria-label="Paramètres de la partie"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
@@ -234,7 +236,7 @@
     </div>
     <div id="play-game" class="pgame hidden">
       <div class="pactions">
-        <button id="play-undo" class="btn" title="Annuler votre dernier coup pour le rejouer" aria-label="Rejouer le coup">↶ <span class="lg">Rejouer le coup</span><span class="sh">Reprendre</span></button>
+        <button id="play-undo" class="btn" title="Annuler votre dernier coup pour le rejouer"><span aria-hidden="true">↶</span> <span class="lg">Rejouer le coup</span><span class="sh">Reprendre</span></button>
         <button id="play-hint" class="btn" title="Demander à Stockfish le meilleur coup" aria-label="Aide">💡 <span>Aide</span></button>
         <button id="play-resign" class="btn" title="Abandonner la partie" aria-label="Abandonner">⚑ <span>Abandonner</span></button>
         <button id="play-new" class="btn" title="Commencer une nouvelle partie" aria-label="Nouvelle partie">⟳ <span class="lg">Rejouer la partie</span><span class="sh">Nouvelle</span></button>

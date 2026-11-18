@@ -63,7 +63,7 @@ input[type=checkbox] { padding: 0; vertical-align: middle; }
 a.btn { text-decoration: none; }
 @media (hover: hover) { .btn:hover { background: var(--surface-3); } }
 .btn:disabled { opacity: .5; cursor: default; }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-strong); font-weight: 600; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
 @media (hover: hover) { .btn.primary:hover { background: var(--accent-hover); } }
 .btn.danger { color: var(--danger-text); border-color: #6b3a33; }
 @media (hover: hover) { .btn.danger:hover { background: var(--danger-bg); } }
@@ -162,6 +162,7 @@ a.btn { text-decoration: none; }
 .board .dot { position: absolute; left: 34%; top: 34%; width: 32%; height: 32%; border-radius: 50%; background: var(--sq-dot); }
 .board .ring { position: absolute; inset: 3%; border-radius: 50%; border: .9cqw solid var(--sq-dot); box-shadow: 0 0 0 .3cqw var(--sq-ring) inset; }
 .board .coord { position: absolute; font-size: 11px; font-weight: 700; pointer-events: none; z-index: 1; }
+.board .coord::before { content: attr(data-t); } /* coordonnées dessinées en CSS : elles ne comptent pas dans le nom accessible des cases */
 .no-coords .board .coord { display: none; }
 .board .coord.rank { left: 3px; top: 2px; } .board .coord.file { right: 4px; bottom: 1px; }
 .board .sq.light .coord { color: var(--dark); } .board .sq.dark .coord { color: var(--light); }
@@ -259,7 +260,7 @@ a.btn { text-decoration: none; }
 #graph { flex: none; height: 90px; margin: 10px 12px 0; cursor: pointer; border-radius: 4px; overflow: hidden; }
 #graph svg { width: 100%; height: 100%; display: block; }
 #stats { margin: 10px 12px 0; }
-#stats h3, .areg h3 { margin: 0 0 8px; font-size: 15px; }
+#stats h3, .areg h2, .areg h3 { margin: 0 0 8px; font-size: 15px; }
 #stats p { margin: 8px 0 0; }
 
 .badge { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 4px; border-radius: 11px; color: var(--text-strong); font-weight: 800; font-size: 12px; vertical-align: middle; }

@@ -106,10 +106,11 @@ const TARGET_LABEL = { due: 'à revoir', fresh: 'nouvelle', weak: 'non maîtris�
 // ------------------------------------------------------------------ vue
 function build(el) {
   el.innerHTML = `
+  <h1 class="sr-only">Entraînement aux ouvertures</h1>
   <div class="left">
     <div class="board-wrap"><div id="train-board"></div></div>
   </div>
-  <aside class="panel" id="train-panel">
+  <aside class="panel" id="train-panel" aria-label="Entraînement">
     <div class="phead">
       <a href="#/openings" class="icon-btn" title="Arrêter et revenir aux répertoires" aria-label="Arrêter"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
       <span class="ptitle" id="train-title"></span>

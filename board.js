@@ -43,7 +43,7 @@ export class Board {
     el.setAttribute('role', 'grid');
     el.setAttribute('aria-label', 'Échiquier');
     el.tabIndex = 0;
-    el.innerHTML = '<div class="squares"></div><div class="pieces"></div><svg class="arrows" viewBox="0 0 8 8"></svg><div class="promo hidden"></div>';
+    el.innerHTML = '<div class="squares" role="presentation"></div><div class="pieces" aria-hidden="true"></div><svg class="arrows" viewBox="0 0 8 8" aria-hidden="true"></svg><div class="promo hidden"></div>';
     this.sqLayer = el.querySelector('.squares');
     this.pcLayer = el.querySelector('.pieces');
     this.svg = el.querySelector('.arrows');
@@ -121,8 +121,8 @@ export class Board {
         if (onLast && this.mark) inner += `<span class="tint" style="background:${this.mark.color}"></span>`;
         if (legalTargets.has(name)) inner += '<span class="dot"></span>';
         if (legalTargets.has(name + 'x')) inner += '<span class="ring"></span>';
-        if (x === 0) inner += `<span class="coord rank">${name[1]}</span>`;
-        if (y === 7) inner += `<span class="coord file">${name[0]}</span>`;
+        if (x === 0) inner += `<span class="coord rank" aria-hidden="true" data-t="${name[1]}"></span>`;
+        if (y === 7) inner += `<span class="coord file" aria-hidden="true" data-t="${name[0]}"></span>`;
         sq += `<div role="gridcell" id="${this.uid}-${name}" aria-label="${label}" aria-selected="${this.selected === name}" class="${cls.join(' ')}" style="left:${x * 12.5}%;top:${y * 12.5}%">${inner}</div>`;
       }
       sq += '</div>';
@@ -134,7 +134,7 @@ export class Board {
       for (const p of row) {
         if (!p) continue;
         const { x, y } = this.coords(p.square);
-        pc += `<img class="piece" data-sq="${p.square}" draggable="false" src="pieces/${p.color}${p.type.toUpperCase()}.svg" style="left:${x * 12.5}%;top:${y * 12.5}%">`;
+        pc += `<img class="piece" alt="" data-sq="${p.square}" draggable="false" src="pieces/${p.color}${p.type.toUpperCase()}.svg" style="left:${x * 12.5}%;top:${y * 12.5}%">`;
       }
     }
     if (this.mark) {
