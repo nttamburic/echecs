@@ -101,7 +101,7 @@ export function buildDueTargets(reps, events, onlyRep = null, now = Date.now()) 
   return [...due, ...fresh.slice(0, Math.max(0, NEW_PER_DAY() - newToday))];
 }
 function dayStart(now) { const d = new Date(now); d.setHours(4, 0, 0, 0); return d.getTime() > now ? d.getTime() - 86400000 : d.getTime(); }
-const TARGET_LABEL = { due: 'à revoir', fresh: 'nouvelle', weak: STATUS.weak.label, new: STATUS.new.label };
+const TARGET_LABEL = { due: 'à revoir', fresh: 'nouvelle', weak: 'non maîtrisée', new: 'jamais revue' };
 
 // ------------------------------------------------------------------ vue
 function build(el) {
@@ -267,7 +267,7 @@ function finishTargets() {
   setMsg('end', `<div class="tend"><span class="tend-ic" aria-hidden="true">✓</span>
     <b class="tend-t">${T.mode === 'due' ? 'Révision terminée' : 'Cibles revues'}</b>
     <span class="muted">${plural(n, 'position')} · ${dur}</span>
-    <div class="tend-stats"><span><b class="g">${s.ok}</b>bonnes</span><span><b class="r">${s.ko}</b>erreurs</span><span><b>${pct}</b>réussite</span></div>
+    <div class="tend-stats"><span><b class="g">${s.ok}</b>bonne${s.ok > 1 ? 's' : ''}</span><span><b class="r">${s.ko}</b>erreur${s.ko > 1 ? 's' : ''}</span><span><b>${pct}</b>réussite</span></div>
     <span class="muted small">${T.mode === 'due' ? 'Les prochaines révisions sont planifiées.' : 'La maîtrise est mise à jour : relancez l\'entraînement ciblé pour la suite.'}</span>
     <span id="tsum-slot"></span>${list}
     <div class="tend-foot${miss.length ? '' : ' one'}">${miss.length ? `<button type="button" class="btn big" id="tend-retry">Retravailler (${miss.length})</button>` : ''}<a class="btn primary big" href="#/openings">Terminer</a></div></div>`);
