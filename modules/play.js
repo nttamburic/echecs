@@ -298,7 +298,8 @@ function render() {
     bar.classList.toggle('flipped', flipped);
     bar.querySelector('.white').style.height = wp + '%';
     const lab = bar.querySelector('.label');
-    lab.textContent = label;
+    lab.textContent = label.length > 4 ? label.replace(/,\d$/, '') : label; // la barre est étroite : « +11,4 » → « +11 »
+    lab.title = label;
     lab.className = 'label ' + (wp >= 50 ? 'on-white' : 'on-black');
   }
 
