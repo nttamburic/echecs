@@ -513,6 +513,7 @@ function buildEditor(el) {
     <div class="board-opts"><button id="rep-flip" class="btn small" title="Retourner l'échiquier (F)">⇅ Retourner</button>
       <a id="rep-train" class="btn small primary" title="S'entraîner sur ce répertoire">▶ S'entraîner sur cette ligne</a>
       <button id="rep-play" class="btn small" title="Jouer une partie contre Maia à partir de la position affichée, avec la couleur du répertoire">♟ Jouer contre Maia d'ici</button>
+      <a id="rep-model" class="btn small" title="Rejouer une partie de maître qui passe par cette ligne, en devinant vos coups">📖 Parties modèles</a>
       <span class="muted small">Clic droit sur un coup (appui long de 2 s sur téléphone) pour le désactiver ou le supprimer. Votre note sur le coup affiché : sous la liste des coups.</span></div>
   </div>
   <div id="rep-resize" class="resizer" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Largeur du panneau" aria-valuemin="420" aria-valuemax="720" title="Glisser pour redimensionner le panneau"></div>
@@ -1349,6 +1350,7 @@ function render() {
     sg.classList.add('hidden');
   }
   $('#rep-train').href = '#/openings/train/rep/' + encodeURIComponent(E.rep.id);
+  $('#rep-model').href = '#/openings/model/' + encodeURIComponent(E.rep.id) + (E.k ? '/' + encodeURIComponent('p:' + curEpd()) : '');
   $('#rep-title').innerHTML =`<span class="avatar-sm ${E.rep.color}"><img src="pieces/${E.rep.color}K.svg" alt=""></span><span class="ell" title="${esc(E.rep.name)}">${esc(E.rep.name)}</span>`;
   $('#rep-opening').textContent = openingHead();
   $('#rep-perf').innerHTML = perfLine(perfOf(E.rep).get(curEpd()));

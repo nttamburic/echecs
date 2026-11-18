@@ -77,10 +77,11 @@ export const explorerPaused = () => Math.max(0, queue.pauseUntil - Date.now());
 // Explorateur. db : 'masters' ou 'lichess'. opts (base Lichess) : { ratings: [1600, 1800], speeds: ['blitz', 'rapid'] }.
 // background : requête de fond (passe après les requêtes interactives ; après un 429 elle attend la
 // fin de la pause et réessaie une fois au lieu d'échouer).
-// Renvoie { white, draws, black, moves: [{ uci, san, white, draws, black, averageRating }], opening }.
-export async function explore(db, fen, { ratings, speeds, moves = 12, background = false } = {}) {
+// topGames : nombre de parties de référence demandées (base Masters).
+// Renvoie { white, draws, black, moves: [{ uci, san, white, draws, black, averageRating }], opening, topGames }.
+export async function explore(db, fen, { ratings, speeds, moves = 12, topGames = 0, background = false } = {}) {
   if (!lichessCfg.connected) { const e = new Error('Jeton Lichess requis (Paramètres → Connexion)'); e.code = 'auth'; throw e; }
-  const q = new URLSearchParams({ fen, moves: String(moves), topGames: '0', recentGames: '0' });
+  const q = new URLSearchParams({ fen, moves: String(moves), topGames: String(topGames), recentGames: '0' });
   if (db === 'lichess') {
     if (ratings && ratings.length) q.set('ratings', ratings.join(','));
     if (speeds && speeds.length) q.set('speeds', speeds.join(','));
@@ -190,4 +191,20 @@ export async function studyPgn(link) {
   if (r.status === 404 || r.status === 403 || r.status === 401) throw new Error('Étude introuvable ou privée (seules les études publiques ou non répertoriées sont lisibles)');
   if (!r.ok) throw new Error('Lichess : erreur ' + r.status);
   return r.text();
+}
+
+// ------------------------------------------------------------------ parties de maîtres
+// PGN d'une partie de la base Masters (id donné par topGames), gardé sur l'appareil.
+export async function masterPgn(id) {
+  if (!/^[A-Za-z0-9]{4,16}$/.test(id)) throw new Error('Identifiant de partie invalide');
+  const key = 'mpgn|' + id;
+  try { const hit = await store.cacheGet(key); if (hit) return hit; } catch { /* stockage indisponible */ }
+  if (!lichessCfg.connected) { const e = new Error('Jeton Lichess requis (Paramètres → Connexion)'); e.code = 'auth'; throw e; }
+  const r = await schedule(() => fetch(`${EXPLORER}/masters/pgn/${id}`, { headers: { Authorization: 'Bearer ' + lichessCfg.token } }), false);
+  if (r.status === 404) throw new Error('Partie introuvable dans la base Masters');
+  if (r.status === 429) { queue.pauseUntil = Date.now() + PAUSE; throw new Error('trop de requêtes, réessayez dans une minute'); }
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const pgn = await r.text();
+  store.cacheSet(key, pgn).catch(() => {});
+  return pgn;
 }

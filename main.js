@@ -11,8 +11,9 @@ import * as play from './modules/play.js';
 import * as setup from './modules/setup.js';
 import * as openingsUi from './modules/openings-ui.js';
 import * as train from './modules/openings-train.js';
+import * as model from './modules/openings-model.js';
 
-const VIEWS = ['home', 'game', 'play', 'free', 'setup', 'openings', 'rep', 'train', 'puzzles', 'strategy', 'endgames', 'settings'];
+const VIEWS = ['home', 'game', 'play', 'free', 'setup', 'openings', 'rep', 'train', 'model', 'puzzles', 'strategy', 'endgames', 'settings'];
 const MODULES = ['puzzles', 'strategy', 'endgames']; // modules pas encore livrés
 
 export function showView(v, tab = v === 'home' || v === 'game' ? 'games' : v === 'setup' ? 'free' : v) {
@@ -27,7 +28,8 @@ function route() {
   const h = location.hash || '#/games';
   const m = /^#\/game\/(.+)$/.exec(h);
   if (!m) analyse.leave();
-  if (!/^#\/openings\/./.test(h) || /^#\/openings\/train/.test(h)) openingsUi.leaveRepertoire();
+  if (!/^#\/openings\/./.test(h) || /^#\/openings\/(train|model)/.test(h)) openingsUi.leaveRepertoire();
+  if (!/^#\/openings\/model/.test(h)) model.leave();
   if (!/^#\/openings\/train/.test(h)) train.leave();
   if (m) { showView('game'); analyse.openGame(decodeURIComponent(m[1])); return; }
   const [, name, sub] = /^#\/([^/]*)\/?(.*)$/.exec(h) || [];
@@ -41,6 +43,10 @@ function route() {
     if (sub.startsWith('train')) {
       const [, mode, id, from] = sub.split('/');
       showView('train', 'openings'); train.start($('#train-view'), mode, id && decodeURIComponent(id), from && decodeURIComponent(from)); return;
+    }
+    if (sub.startsWith('model/')) {
+      const [, id, from] = sub.split('/');
+      showView('model', 'openings'); model.start($('#model-view'), decodeURIComponent(id), from && decodeURIComponent(from)); return;
     }
     if (sub) { showView('rep', 'openings'); openingsUi.openRepertoire($('#rep-view'), decodeURIComponent(sub)); return; }
     showView('openings'); openingsUi.renderHome($('#openings-view')); return;
