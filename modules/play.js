@@ -65,6 +65,7 @@ let playStash = null;
 export function stashPlay(x) { playStash = x; }
 
 async function startGame(from = null) {
+  P.botErr = null;
   if (from) P.user = from.user === 'b' ? 'b' : 'w';
   else {
     const side = local.get('playSide', 'w');
@@ -117,6 +118,7 @@ function onBoardMove(from, to, promo) {
 }
 
 async function botMove() {
+  P.botErr = null;
   const token = P.token;
   P.thinking = true;
   render();
@@ -129,7 +131,12 @@ async function botMove() {
     if (P.clock) { const mt = P.chess.turn(); P.clock[mt] = Math.max(1000, P.clock[mt] - Math.min(Date.now() - t0, 3000)); }
     if (r.uci) push(r.uci);
   } catch (e) {
-    if (token === P.token) toast('Maia : ' + esc(e.message), { type: 'err' });
+    if (token === P.token) {
+      // Sans réseau, un modèle jamais téléchargé ne peut pas se charger : message clair et bouton « Réessayer ».
+      const net = navigator.onLine === false || /Failed to fetch|NetworkError|Load failed|Failed to load/i.test(e.message || '');
+      P.botErr = net ? 'Le modèle Maia n’est pas encore téléchargé : connectez-vous à Internet une première fois.' : 'Maia : ' + (e.message || 'erreur inconnue');
+      toast(esc(P.botErr), { type: 'err' });
+    }
   } finally {
     if (token === P.token) { P.thinking = false; setMaiaProgress(null); render(); }
   }
@@ -345,6 +352,8 @@ function render() {
       : '<div class="hint muted">Stockfish cherche le meilleur coup…</div>';
   } else if (P.thinking) {
     html = `<div class="hint muted" id="play-think">Maia réfléchit…</div>`;
+  } else if (P.phase === 'play' && P.botErr && atLatest() && P.chess.turn() !== P.user) {
+    html = `<div class="hint err" role="alert">${esc(P.botErr)} <button id="play-retry" class="btn small" type="button">Réessayer</button></div>`;
   } else if (P.phase === 'play') {
     html = `<div class="hint muted">${atLatest() ? (P.chess.turn() === P.user ? 'À vous de jouer.' : '') : 'Revenez à la dernière position pour jouer (→ ou ⏭).'}</div>`;
     if (P.label) html =`<div class="hint muted small">Partie depuis votre répertoire « ${esc(P.label)} ».</div>` + html;
@@ -356,6 +365,7 @@ function render() {
   const fin = $('#play-final'); if (fin) fin.onclick = () => setPly(P.moves.length);
   const an = $('#play-analyse');
   if (an) an.onclick = analyseGame;
+  const retry = $('#play-retry'); if (retry) retry.onclick = botMove;
 
   // ouverture
   let op = null;

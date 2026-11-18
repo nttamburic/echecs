@@ -14,12 +14,17 @@ export const lichessCfg = {
 };
 
 // Enregistre le jeton et le vérifie : renvoie { ok, msg }.
+// fetch qui, sans réseau, renvoie un message français plutôt que « Failed to fetch ».
+async function lfetch(url, init) {
+  try { return await fetch(url, init); } catch { const e = new Error('Pas de connexion Internet'); e.code = 'offline'; throw e; }
+}
+
 export async function setToken(token) {
   local.set('lichessToken', (token || '').trim());
   local.set('lichessUser', '');
   if (!lichessCfg.token) return { ok: false, msg: 'Collez d\'abord un jeton.' };
   try {
-    const a = await fetch(`${LICHESS}/api/account`, { headers: { Authorization: 'Bearer ' + lichessCfg.token } });
+    const a = await lfetch(`${LICHESS}/api/account`, { headers: { Authorization: 'Bearer ' + lichessCfg.token } });
     if (a.status === 401) return { ok: false, msg: 'Jeton refusé par Lichess (invalide ou expiré).' };
     if (a.ok) local.set('lichessUser', (await a.json()).username || '');
     cache.clear();
@@ -89,7 +94,7 @@ export async function explore(db, fen, { ratings, speeds, moves = 12, background
       if (hit && hit.t > Date.now() - TTL) { cache.set(url, hit.j); return hit.j; }
     } catch { /* stockage indisponible : on interroge le réseau */ }
     const get = () => schedule(async () => {
-      const r = await fetch(url, { headers: { Authorization: 'Bearer ' + lichessCfg.token } });
+      const r = await lfetch(url, { headers: { Authorization: 'Bearer ' + lichessCfg.token } });
       if (r.status === 429) queue.pauseUntil = Date.now() + PAUSE;
       return r;
     }, background);
@@ -157,7 +162,7 @@ export async function lichessGames(user = lichessCfg.user, { days = 90, force = 
     perfType: 'ultraBullet,bullet,blitz,rapid,classical,correspondence' });
   const headers = { Accept: 'application/x-ndjson' };
   if (lichessCfg.token) headers.Authorization = 'Bearer ' + lichessCfg.token;
-  const r = await fetch(`${LICHESS}/api/games/user/${encodeURIComponent(user)}?${q}`, { headers });
+  const r = await lfetch(`${LICHESS}/api/games/user/${encodeURIComponent(user)}?${q}`, { headers });
   if (r.status === 404) throw new Error(`Compte Lichess « ${user} » introuvable`);
   if (r.status === 429) throw new Error('Lichess limite les requêtes : réessayez dans une minute');
   if (!r.ok) throw new Error('Lichess : erreur ' + r.status);
@@ -181,7 +186,7 @@ export async function studyPgn(link) {
   if (!ids) throw new Error('Lien d\'étude Lichess non reconnu (ex. https://lichess.org/study/AbCdEfGh)');
   const url = ids.chapter ? `${LICHESS}/api/study/${ids.study}/${ids.chapter}.pgn` : `${LICHESS}/api/study/${ids.study}.pgn`;
   const headers = lichessCfg.token ? { Authorization: 'Bearer ' + lichessCfg.token } : {};
-  const r = await fetch(url + '?comments=true&variations=true', { headers });
+  const r = await lfetch(url + '?comments=true&variations=true', { headers });
   if (r.status === 404 || r.status === 403 || r.status === 401) throw new Error('Étude introuvable ou privée (seules les études publiques ou non répertoriées sont lisibles)');
   if (!r.ok) throw new Error('Lichess : erreur ' + r.status);
   return r.text();
