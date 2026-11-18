@@ -21,6 +21,29 @@ export function miniBoard(placementStr, size = 150) {
   return `<span class="mini-board" style="width:${size}px;height:${size}px" aria-hidden="true">${html}</span>`;
 }
 
+// Messages de validation de chess.js (en anglais) → français.
+const FEN_ERR = [
+  [/six space-delimited fields/, 'il faut six champs séparés par des espaces'],
+  [/move number/, 'le numéro de coup doit être un entier positif'],
+  [/half move counter/, 'le compteur de demi-coups doit être un entier positif ou nul'],
+  [/illegal en-passant/, 'prise en passant impossible'],
+  [/en-passant square/, 'case de prise en passant invalide'],
+  [/castling availability/, 'droits de roque invalides'],
+  [/side-to-move/, 'trait invalide (w ou b attendu)'],
+  [/8 '\/'-delimited rows/, 'il faut 8 rangées séparées par « / »'],
+  [/consecutive number/, 'deux chiffres consécutifs dans une rangée'],
+  [/invalid piece/, 'pièce inconnue'],
+  [/too many squares/, 'rangée trop longue'],
+  [/missing (white|black) king/, (m) => `roi ${m[1] === 'white' ? 'blanc' : 'noir'} manquant`],
+  [/too many (white|black) kings/, (m) => `trop de rois ${m[1] === 'white' ? 'blancs' : 'noirs'}`],
+  [/pawns are on the edge/, 'des pions sont sur la 1re ou la 8e rangée'],
+];
+export function fenError(msg) {
+  const e = String(msg || '').replace(/^Invalid FEN:\s*/, '');
+  for (const [re, fr] of FEN_ERR) { const m = re.exec(e); if (m) return typeof fr === 'function' ? fr(m) : fr; }
+  return e;
+}
+
 export function renderHome(el) {
   el.innerHTML = `<header class="free-head"><h1 class="page-title">Analyse libre</h1>
       <p class="muted">Explorez une position avec Stockfish, sans partie associée.</p></header>
@@ -45,7 +68,7 @@ export function renderHome(el) {
     const v = $('#free-fen').value.trim();
     const full = v.split(/\s+/).length === 1 ? v + ' w - - 0 1' : v;
     const r = validateFen(full);
-    if (!r.ok) { $('#free-fen-err').textContent = 'FEN invalide : ' + r.error; return; }
+    if (!r.ok) { $('#free-fen-err').textContent = 'FEN invalide : ' + fenError(r.error) + '.'; return; }
     stashFree({ fen: full, orient: full.split(' ')[1] === 'b' ? 'b' : 'w' });
     location.hash = '#/free/new';
   };
@@ -109,7 +132,7 @@ function problem() {
   }
   const f = fen();
   const v = validateFen(f);
-  if (!v.ok) return 'Position impossible : ' + v.error;
+  if (!v.ok) return 'Position impossible : ' + fenError(v.error) + '.';
   // le camp qui n'a pas le trait ne peut pas être en échec
   const other = f.replace(/ [wb] /, ` ${E.turn === 'w' ? 'b' : 'w'} `);
   try { if (new Chess(other).inCheck()) return `Le roi ${E.turn === 'w' ? 'noir' : 'blanc'} est en échec alors que ce sont les ${E.turn === 'w' ? 'Blancs' : 'Noirs'} qui ont le trait : position impossible.`; } catch { /* */ }
