@@ -1204,6 +1204,14 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   #game-view:has(#astrip:not(.hidden)) #gpanel[data-detent="mid"] { height: max(150px, calc(100dvh - var(--topbar) - env(safe-area-inset-top) - var(--nav-h) - min(var(--board), 100vw) - 2 * 40px - 50px - 58px)); }
 }
 
+/* téléphone en portrait : l'échiquier doit tenir au-dessus de la feuille à mi-hauteur (176 px mini), sinon les rangées 1-2 et la barre du joueur sont masquées sur les écrans courts (iPhone dans Safari : ~660 px) */
+@media (max-width: 760px) {
+  #game-view { --board: clamp(240px, min(100dvh - var(--topbar) - env(safe-area-inset-top) - var(--nav-h) - 130px - 176px, 100vw - var(--chrome-h)), 840px); }
+  #game-view:has(#astrip:not(.hidden)) { --board: clamp(240px, min(100dvh - var(--topbar) - env(safe-area-inset-top) - var(--nav-h) - 130px - 150px - 58px, 100vw - var(--chrome-h)), 840px); }
+  /* sur un écran vraiment trop court, le contenu reste défilable jusqu'au-dessus de la feuille */
+  body[data-view="game"] #content { padding-bottom: calc(68px + env(safe-area-inset-bottom) + 184px); }
+}
+
 /* ---- Phase 9 : lignes « Meilleure suite / Après ce coup » ---- */
 .bubble .line { display: flex; align-items: center; gap: 10px; }
 .bubble .lhead { flex: 0 0 auto; margin: 0; display: block; }
