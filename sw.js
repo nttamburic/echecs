@@ -1,7 +1,7 @@
 // Service worker : permet d'installer l'appli et de l'ouvrir hors connexion.
 // - code de l'appli : réseau d'abord (toujours la dernière version), cache si hors ligne ;
 // - gros fichiers qui ne changent pas (moteur, pièces, ouvertures) : cache d'abord.
-const VERSION = 'v88';
+const VERSION = 'v89';
 const CACHE = 'echecs-' + VERSION;
 const SHELL = [
   './', 'index.html', 'tokens.css', 'style.css', 'main.js', 'manifest.webmanifest',
@@ -16,6 +16,10 @@ const SHELL = [
 ];
 // Les modèles Maia (10 et 44 Mo) ne sont pas préchargés : mis en cache au premier usage.
 const STATIC = /\/(vendor\/stockfish|vendor\/maia3|vendor\/onnxruntime|pieces|icons|puzzles)\/|openings\.json$/;
+// Origines des données hébergées hors GitHub Pages (bucket Cloudflare R2, morceaux de puzzles).
+// Vide tant que le domaine n'est pas choisi : aucune requête n'est alors interceptée.
+// Ex. : const DATA_ORIGINS = ['https://data.exemple.fr'];
+const DATA_ORIGINS = [];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
@@ -29,6 +33,14 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   const url = new URL(req.url);
+  // Données distantes immuables (morceaux versionnés) : cache d'abord, comme les fichiers STATIC.
+  if (req.method === 'GET' && DATA_ORIGINS.includes(url.origin)) {
+    e.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((res) => {
+      if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
+      return res;
+    })));
+    return;
+  }
   if (req.method !== 'GET' || url.origin !== location.origin || url.pathname.includes('/api/')) return;
   if (STATIC.test(url.pathname)) {
     e.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((res) => {

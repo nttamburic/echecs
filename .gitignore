@@ -1,0 +1,7 @@
+# Données lourdes : hébergées hors dépôt (Cloudflare R2), jamais commitées.
+*.zst
+*.csv
+*.sqlite
+*.db
+build/
+node_modules/
