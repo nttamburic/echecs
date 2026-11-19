@@ -133,10 +133,9 @@ Légende : ✅ livré · 🚧 page « bientôt » (présentation seulement)
 
 ---
 
-## 7. Modules annoncés 🚧 (pages de présentation seulement)
+## 7. Modules annoncés 🚧 (Puzzles est livré : rush, thèmes, recommandés)
 
 Carte avec titre, « Ce module arrive bientôt. Au programme : » et liste.
-- **Puzzles** : puzzles Lichess par thème avec classement ; puzzles tirés de ses propres erreurs.
 - **Étude stratégique** : « Trouve le plan », idées de milieu de jeu avec Leela Chess Zero.
 - **Finales** : cours des finales théoriques (opposition, Lucena, Philidor, mat Fou + Cavalier…) ; entraînement contre la défense parfaite des tables ; finales ratées transformées en exercices.
 
@@ -148,4 +147,4 @@ Carte avec titre, « Ce module arrive bientôt. Au programme : » et liste.
 - Le panneau de la vue partie est très dense (10 zones empilées) ; l'éditeur de répertoire l'est encore plus.
 - Les réglages sont dispersés dans des roues dentées par module, avec des champs moteur répétés.
 - Les confirmations utilisent les boîtes natives du navigateur ; les états vides et d'erreur sont de simples lignes de texte.
-- Trois sections du menu (Puzzles, Étude stratégique, Finales) n'ont pas encore de contenu.
+- Deux sections du menu (Étude stratégique, Finales) n'ont pas encore de contenu.

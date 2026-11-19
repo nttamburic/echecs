@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.chess.com https://api.github.com https://lichess.org https://explorer.lichess.ovh https://tablebase.lichess.ovh http://127.0.0.1:8765 http://localhost:8765; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.chess.com https://api.github.com https://lichess.org https://explorer.lichess.ovh https://tablebase.lichess.ovh https://huggingface.co https://*.hf.co http://127.0.0.1:8765 http://localhost:8765; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1f1e1c">
 <title>Chess Journey</title>
@@ -277,6 +277,9 @@
 <main id="train-view" class="view hidden"></main>
 <main id="model-view" class="view hidden"></main>
 <main id="puzzles-view" class="view hidden page"></main>
+<main id="puzzle-view" class="view hidden"></main>
+<main id="puzzletheme-view" class="view hidden"></main>
+<main id="puzzlerec-view" class="view hidden"></main>
 <main id="strategy-view" class="view hidden page"></main>
 <main id="endgames-view" class="view hidden page"></main>
 <main id="settings-view" class="view hidden page"></main>
