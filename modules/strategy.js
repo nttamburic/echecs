@@ -1,5 +1,5 @@
 import * as store from '../core/store.js';
-import { $, badge, esc, local } from '../core/ui.js';
+import { $, badge, esc, local, toast } from '../core/ui.js';
 import { CLASSES } from '../analysis.js';
 import { fmtGameDate } from '../core/format.js';
 import { erreursReglages } from '../core/manu/erreurs.js';
@@ -64,6 +64,8 @@ function afficherDetails(el, e) {
         <p id="${el.id}-analyse" class="small muted">Retrouvez le coup dans l’analyse de la partie.</p></div>
       <div><button type="button" class="btn primary" data-rejouer aria-describedby="${el.id}-rejouer">Rejouer la partie</button>
         <p id="${el.id}-rejouer" class="small muted">Repartez de la position avant l’erreur contre Maia3.</p></div>
+      <div><button type="button" class="btn" data-archiver aria-describedby="${el.id}-archiver">Archiver l’erreur</button>
+        <p id="${el.id}-archiver" class="small muted">Retire l’erreur de la liste.</p></div>
     </div>
   </div>`;
   $('[data-analyser]', el).onclick = () => {
@@ -76,6 +78,18 @@ function afficherDetails(el, e) {
     } });
     location.hash = '#/play';
   };
+  $('[data-archiver]', el).onclick = () => archiver(e);
+}
+
+// Archiver retire l’erreur de la liste ; le suivi est synchronisé comme les erreurs travaillées.
+async function archiver(e) {
+  const avant = await store.get('strategyWork', e.id).catch(() => null);
+  const ecrire = data => data ? store.put('strategyWork', e.id, data, { file: 'strategyWork.json' })
+    : store.remove('strategyWork', e.id);
+  try {
+    await ecrire({ ...(avant || {}), archivee: true, dateArchive: Date.now() });
+    toast('Erreur archivée.', { type: 'ok', action: { label: 'Annuler', fn: () => ecrire(avant).catch(() => toast('Annulation impossible.')) } });
+  } catch { toast('Archivage impossible.'); }
 }
 
 function afficher(modele) {
