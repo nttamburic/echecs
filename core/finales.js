@@ -78,7 +78,8 @@ export function creerSonde(requete) {
 // Un essai sur une position. États : « jeu » (à vous ou à l'adversaire), « faute » (le dernier coup
 // a dégradé le résultat : on peut le rejouer), « fini ».
 export class Exercice {
-  static async creer({ fen, camp, sonde, limite = COUPS_POUR_ANNULER }) {
+  // noter(resultat) est appelé une seule fois par essai : dès qu'il est raté, sinon à sa réussite.
+  static async creer({ fen, camp, sonde, limite = COUPS_POUR_ANNULER, noter = null }) {
     const chess = new Chess(fen);
     const fin = finDePartie(chess);
     if (fin) throw new Error(`Rien à jouer : la partie est déjà terminée (${NOM_FIN[fin].toLowerCase()}).`);
@@ -87,11 +88,11 @@ export class Exercice {
     const pourMoi = chess.turn() === camp ? auTrait : inverse(auTrait);
     if (pourMoi === null) throw new Error('La table de finales ne connaît pas le résultat exact de cette position.');
     if (pourMoi < 0) throw new Error(`Position perdante pour les ${camp === 'w' ? 'Blancs' : 'Noirs'} : il n’y a rien à réussir. Changez de camp ou de position.`);
-    return new Exercice({ fen: chess.fen(), camp, sonde, limite, objectif: pourMoi });
+    return new Exercice({ fen: chess.fen(), camp, sonde, limite, objectif: pourMoi, noter });
   }
 
-  constructor({ fen, camp, sonde, limite, objectif }) {
-    Object.assign(this, { depart: fen, camp, sonde, limite, objectif });
+  constructor({ fen, camp, sonde, limite, objectif, noter = null }) {
+    Object.assign(this, { depart: fen, camp, sonde, limite, objectif, noter });
     this.version = 0;
     this.recommencer();
   }
@@ -108,6 +109,13 @@ export class Exercice {
     this.fin = null;
     this.niveauIndice = 0;
     this.occupe = false;
+    this.note = null;
+  }
+
+  signaler(resultatEssai) {
+    if (this.note || !resultatEssai) return;
+    this.note = resultatEssai;
+    this.noter?.(resultatEssai);
   }
 
   get aMoi() { return this.etat === 'jeu' && this.chess.turn() === this.camp; }
@@ -146,6 +154,7 @@ export class Exercice {
         this.rate = true;
         this.etat = 'faute';
         this.faute = { avant: this.objectif, apres, fin, san: this.coups.at(-1).san };
+        this.signaler('rate');
       } else if (fin) this.terminer(this.objectif === 0, fin);
       else if (this.objectif === 0 && this.mesCoups >= this.limite) this.terminer(true, 'tenu');
       return true;
@@ -210,6 +219,7 @@ export class Exercice {
     if (!atteint) this.rate = true;
     this.etat = 'fini';
     this.fin = { atteint, raison };
+    this.signaler(this.verdict);
   }
 
   // « reussi » (sans aide), « aide » (réussi avec une aide) ou « rate ».

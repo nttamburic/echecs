@@ -1534,3 +1534,29 @@ a.pz-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px;
 .setup-side .castles[hidden] { display: none; }
 #setup-turn-seg .chip[aria-checked="true"] { background: #45423e; color: var(--text-strong); font-weight: 700; }
 .setup-side .msg[hidden] { display: none; }
+
+.eg-familles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.page ul.eg-familles, .page ul.eg-lecons { list-style: none; padding: 0; margin: 0; }
+.page .eg-familles li { margin: 0; background: var(--surface-2); border-radius: var(--r); padding: 8px 12px; display: flex; flex-direction: column; }
+.eg-familles b { font-size: 18px; color: var(--text-strong); }
+.page .eg-lecons li { margin: 0; border-top: 1px solid var(--line-soft); }
+.eg-lecons a { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; min-height: var(--tap); padding: 4px; color: var(--text); text-decoration: none; }
+@media (hover: hover) { .eg-lecons a:hover { background: var(--surface-2); } }
+.eg-titre { flex: 1 1 200px; }
+.eg-etat { display: inline-block; width: 18px; text-align: center; font-weight: 800; }
+.eg-etat.decouvrir { color: var(--text-muted); } .eg-etat.encours { color: var(--mastery-wip); } .eg-etat.maitrisee { color: var(--mastery-ok); }
+.eg-steps[hidden], .eg-state[hidden], .eg-lesson[hidden], .eg-goal[hidden], .eg-correction[hidden], .pz-panel > .tmsg[hidden], .pz-panel .tactions.eg-actions[hidden] { display: none; }
+.eg-steps button { flex: 1; padding: 8px 4px; white-space: nowrap; }
+.eg-steps button[aria-pressed="true"] { color: var(--text-strong); border-bottom-color: var(--accent); }
+.eg-state { margin: 0; padding: 10px 14px 0; color: var(--text-muted); }
+.eg-lesson { padding: 10px 14px 14px; flex: none; }
+.eg-lesson p { margin: 0 0 12px; line-height: 22px; }
+.eg-but b { font-size: 20px; color: var(--text-strong); }
+.eg-suite { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.eg-suite .btn { flex: 1 1 140px; min-height: 48px; }
+.eg-ligne { padding: 12px 0 0; }
+.eg-ligne button.eg-coup { background: none; border: 0; border-radius: var(--r); color: var(--text); font: inherit; padding: 4px 6px; cursor: pointer; }
+.eg-ligne button.eg-coup.cur { background: var(--cur); }
+@media (max-width: 1279px) { .eg-ligne button.eg-coup { min-height: var(--tap); min-width: var(--tap); } }
+#eg-board .sq.light.hl { background: var(--sq-blue-light); }
+#eg-board .sq.dark.hl { background: var(--sq-blue-dark); }

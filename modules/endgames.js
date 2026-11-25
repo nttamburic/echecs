@@ -1,6 +1,9 @@
 // Module « Finales » : page d’accueil (trois onglets) et jeu d’une position contre la table de finales.
 import { Board, announce } from '../board.js';
-import { $, $$, esc, fetchJson, local, uciOf } from '../core/ui.js';
+import { $, $$, esc, fetchJson, local, toast, uciOf } from '../core/ui.js';
+import * as store from '../core/store.js';
+import { FAMILLES, LECONS, NIVEAUX, leconParId, leconSuivante } from '../core/finales-cours.js';
+import { progression, resumeFamilles, REUSSITES_POUR_MAITRISE } from '../core/finales-progres.js';
 import { creerSonde, Exercice, lireFen, NOM_FIN, NOM_RESULTAT, uciEnCoup } from '../core/finales.js';
 import { frSan } from '../explain.js';
 import { figSan } from './analyse.js';
@@ -12,12 +15,60 @@ const NOM_CAMP = { w: 'Blancs', b: 'Noirs' };
 const NOM_PIECE = { k: 'le Roi', q: 'la Dame', r: 'la Tour', b: 'le Fou', n: 'le Cavalier', p: 'le pion' };
 const sonde = creerSonde(fetchJson);
 
+const ESSAIS = 'endgameAttempts';
+const ETAPES = [['comprendre', '1. Comprendre'], ['voir', '2. Voir'], ['reussir', '3. Réussir']];
+const ETATS = { decouvrir: ['○', 'À découvrir'], encours: ['◐', 'En cours'], maitrisee: ['✓', 'Maîtrisée'] };
+const COULEUR_FLECHE = { best: 'var(--arrow-best)', alt: 'var(--arrow-alt)', threat: 'var(--arrow-threat)' };
 const ONGLETS = [['cours', 'Cours'], ['entrainement', 'Entraînement'], ['mes-finales', 'Mes finales']];
 let brouillon = { fen: '', camp: '' };
 
-// ex : essai en cours. message : { type, html }. indice : dernier indice demandé.
+// lecon : leçon ouverte (null en position libre) ; libre et essais gardent l’essai de chaque écran.
+// ex : essai affiché. message : { type, html }. indice : dernier indice demandé.
 // correction : { ply, coups, erreur } quand le résultat de chaque coup est affiché.
-const P = { ex: null, plateau: null, vue: null, message: null, indice: null, correction: null, erreur: null, minuteur: null };
+const P = { lecon: null, etape: 'comprendre', voirPly: 0, libre: null, essais: new Map(), creation: null, etats: null, ex: null, plateau: null, vue: null, message: null, indice: null, correction: null, erreur: null, minuteur: null };
+
+// ------------------------------------------------------------------ progression
+async function chargerEtats() {
+  const lignes = await store.all(ESSAIS);
+  P.etats = progression(LECONS, lignes.map((r) => r.data));
+}
+function noter(position) {
+  return (resultat) => {
+    const at = Date.now();
+    store.put(ESSAIS, `${position}-${at}-${Math.random().toString(36).slice(2, 8)}`, { position, at, resultat }, { file: 'endgames/attempts.json' })
+      .catch(() => toast('Enregistrement de l’essai impossible.', { type: 'err' }));
+  };
+}
+// essais faits ici ou reçus d’un autre appareil
+store.onChange(async (info) => {
+  if (info.col !== ESSAIS) return;
+  try { await chargerEtats(); } catch { return; }
+  const vue = document.body.dataset.view;
+  if (vue === 'endgames') listerCours();
+  else if (vue === 'endgame' && P.lecon) dessinerEtat();
+});
+
+const symbole = (etat) => `<span class="eg-etat ${etat}" aria-hidden="true">${ETATS[etat][0]}</span>`;
+function texteEtat(e) {
+  const nom = ETATS[e.etat][1];
+  return e.etat === 'encours' ? `${nom} · ${e.jours} jour${e.jours > 1 ? 's' : ''} réussi${e.jours > 1 ? 's' : ''} sur ${REUSSITES_POUR_MAITRISE}` : nom;
+}
+
+function listerCours() {
+  const el = $('#eg-cours');
+  if (!el || !P.etats) return;
+  const familles = resumeFamilles(LECONS, P.etats);
+  el.innerHTML = `<div class="card eg-card"><h2>Votre progression</h2>
+      <p class="muted small">Une position est maîtrisée après ${REUSSITES_POUR_MAITRISE} réussites sans aide, sur ${REUSSITES_POUR_MAITRISE} jours différents. Un échec remet le compte à zéro.</p>
+      <ul class="eg-familles">${Object.entries(FAMILLES).map(([k, nom]) => {
+        const f = familles.get(k);
+        return `<li><span>${nom}</span><b>${f.maitrisees} sur ${f.total}</b><span class="small muted">maîtrisée${f.maitrisees > 1 ? 's' : ''}</span></li>`;
+      }).join('')}</ul></div>
+    ${Object.entries(NIVEAUX).map(([n, nom]) => `<div class="card eg-card"><h2>Niveau ${n} · ${nom}</h2><ul class="eg-lecons">${LECONS.filter((l) => l.niveau === Number(n)).map((l) => {
+      const e = P.etats.get(l.id);
+      return `<li><a href="#/endgames/lecon/${l.id}">${symbole(e.etat)}<span class="eg-titre">${l.titre}</span><span class="small muted">${texteEtat(e)}</span></a></li>`;
+    }).join('')}</ul></div>`).join('')}`;
+}
 
 // ------------------------------------------------------------------ lancement d’un essai
 async function lancer(fen, camp) {
@@ -25,7 +76,7 @@ async function lancer(fen, camp) {
   const ex = await Exercice.creer({ fen, camp, sonde });
   if (location.hash !== depuis) return; // l’utilisateur a changé de page pendant la réponse de la table
   clearTimeout(P.minuteur);
-  Object.assign(P, { ex, message: null, indice: null, correction: null, erreur: null });
+  Object.assign(P, { lecon: null, libre: ex, ex, message: null, indice: null, correction: null, erreur: null });
   P.plateau?.setOrientation(camp);
   location.hash = '#/endgames/play';
 }
@@ -33,12 +84,12 @@ async function lancer(fen, camp) {
 // ------------------------------------------------------------------ page d’accueil
 export function show(el) {
   $('#topbar-soon').textContent = 'Finales';
-  const choisi = ONGLETS.some(([k]) => k === local.get('endgamesTab')) ? local.get('endgamesTab') : 'entrainement';
+  const choisi = ONGLETS.some(([k]) => k === local.get('endgamesTab')) ? local.get('endgamesTab') : 'cours';
   el.innerHTML = `<h1 class="page-title">Finales</h1>
     <div class="ptabs" role="tablist" aria-label="Parties du module">${ONGLETS.map(([k, nom]) =>
       `<button type="button" role="tab" id="eg-tab-${k}" aria-controls="eg-panel-${k}" data-k="${k}" aria-selected="${k === choisi}" tabindex="${k === choisi ? 0 : -1}">${nom}</button>`).join('')}</div>
     <section role="tabpanel" id="eg-panel-cours" aria-labelledby="eg-tab-cours">
-      <div class="card eg-card"><h2>Cours</h2><p class="muted">Les finales théoriques à connaître, de l’opposition au mat Fou + Cavalier. Cette partie arrive avec le lot 2.</p></div></section>
+      <div id="eg-cours"><p class="muted" role="status">Chargement de la progression…</p></div></section>
     <section role="tabpanel" id="eg-panel-entrainement" aria-labelledby="eg-tab-entrainement">
       <div class="card eg-card eg-libre">
         ${miniBoard('4k3/8/3K4/4P3/8/8/8/8', 160)}
@@ -54,7 +105,7 @@ export function show(el) {
           <button class="btn" type="submit" id="eg-jouer">Jouer</button></div>
         <p id="eg-err" class="small err" role="alert"></p>
       </form>
-      ${P.ex && P.ex.etat !== 'fini' ? '<p><a class="btn" href="#/endgames/play">Reprendre l’exercice en cours</a></p>' : ''}
+      ${P.libre && P.libre.etat !== 'fini' ? '<p><a class="btn" href="#/endgames/play">Reprendre l’exercice en cours</a></p>' : ''}
     </section>
     <section role="tabpanel" id="eg-panel-mes-finales" aria-labelledby="eg-tab-mes-finales">
       <div class="card eg-card"><h2>Mes finales</h2><p class="muted">Les finales ratées dans vos parties, à rejouer. Cette partie arrive avec le lot 5.</p></div></section>`;
@@ -79,6 +130,12 @@ export function show(el) {
     };
   });
   choisir(ONGLETS.findIndex(([k]) => k === choisi));
+
+  listerCours();
+  chargerEtats().then(listerCours).catch(() => {
+    const zone = $('#eg-cours', el);
+    if (zone) zone.innerHTML = '<p class="msg err" role="alert">Impossible de lire la progression sur cet appareil.</p>';
+  });
 
   $('#eg-camp', el).value = brouillon.camp;
   $('#eg-camp', el).onchange = (e) => { brouillon.camp = e.target.value; };
@@ -106,11 +163,14 @@ export function editeur(el) {
 
 // ------------------------------------------------------------------ écran de jeu
 function construire(el) {
-  el.innerHTML = `<h1 class="sr-only">Finales : position libre</h1>
+  el.innerHTML = `<h1 class="sr-only">Finales</h1>
     <div class="left"><div id="eg-board"></div>
       <div class="board-opts"><button type="button" id="eg-flip" class="btn small">⇅ Retourner</button></div></div>
     <aside class="panel pz-panel" id="eg-panel" aria-label="Exercice de finale">
-      <div class="phead"><a class="btn small" href="#/endgames">← Finales</a><span class="ptitle">Position libre</span></div>
+      <div class="phead"><a class="btn small" href="#/endgames">← Finales</a><span class="ptitle" id="eg-title"></span></div>
+      <div id="eg-steps" class="ptabs eg-steps" role="group" aria-label="Étapes de la leçon"></div>
+      <p id="eg-state" class="eg-state small"></p>
+      <div id="eg-lesson" class="eg-lesson"></div>
       <div id="eg-goal" class="eg-goal"></div>
       <div id="eg-msg" class="tmsg" role="status" aria-live="polite"></div>
       <div id="eg-actions" class="tactions eg-actions"></div>
@@ -129,10 +189,55 @@ function construire(el) {
 
 export function jouerVue(el) {
   $('#topbar-soon').textContent = 'Finales';
-  if (!P.ex) { location.replace('#/endgames'); return; }
-  if (P.vue !== el) { construire(el); P.plateau.setOrientation(P.ex.camp); }
+  if (!P.libre) { location.replace('#/endgames'); return; }
+  if (P.vue !== el) construire(el);
+  if (P.lecon || P.ex !== P.libre) Object.assign(P, { lecon: null, ex: P.libre, indice: null, correction: null, erreur: null });
+  P.plateau.setOrientation(P.ex.camp);
   dessiner();
   planifierReponse();
+}
+
+export function leconVue(el, id) {
+  $('#topbar-soon').textContent = 'Finales';
+  const lecon = leconParId(id);
+  if (!lecon) { location.replace('#/endgames'); return; }
+  if (P.vue !== el) construire(el);
+  if (P.lecon !== lecon) {
+    clearTimeout(P.minuteur);
+    Object.assign(P, { lecon, etape: 'comprendre', voirPly: 0, ex: P.essais.get(id) ?? null, indice: null, correction: null, erreur: null });
+  }
+  P.plateau.setOrientation(lecon.camp);
+  dessiner();
+  if (P.etape === 'reussir') preparerEssai();
+  planifierReponse();
+  chargerEtats().then(() => { if (P.lecon === lecon) dessinerEtat(); }).catch(() => {});
+}
+
+const enJeu = () => !P.lecon || P.etape === 'reussir';
+
+// Crée l’essai d’une leçon (la table n’est nécessaire qu’à l’étape « Réussir »).
+async function preparerEssai() {
+  const lecon = P.lecon;
+  if (!lecon || P.ex || P.creation === lecon.id) return;
+  P.creation = lecon.id;
+  P.erreur = null;
+  dessiner();
+  try {
+    const ex = await Exercice.creer({ fen: lecon.fen, camp: lecon.camp, sonde, limite: lecon.limite, noter: noter(lecon.id) });
+    P.essais.set(lecon.id, ex);
+    if (P.lecon === lecon) P.ex = ex;
+  } catch (err) {
+    if (P.lecon === lecon) P.erreur = err.message;
+  } finally {
+    if (P.creation === lecon.id) P.creation = null;
+  }
+  if (P.lecon === lecon && document.body.dataset.view === 'endgame') { dessiner(); planifierReponse(); }
+}
+
+// Positions de la ligne montrée à l’étape « Voir ».
+function ligneDe(lecon) {
+  const chess = new Chess(lecon.fen);
+  return lecon.ligne.split(' ').map((san) => chess.move(san));
 }
 
 const messageErreur = (err) => { P.erreur = err.message; dessiner(); };
@@ -140,7 +245,7 @@ const messageErreur = (err) => { P.erreur = err.message; dessiner(); };
 function planifierReponse() {
   clearTimeout(P.minuteur);
   const ex = P.ex;
-  if (!ex?.aLui || P.erreur) return;
+  if (!enJeu() || !ex?.aLui || P.erreur) return;
   P.minuteur = setTimeout(async () => {
     try {
       if (P.ex === ex && await ex.repondre()) dessiner();
@@ -150,7 +255,7 @@ function planifierReponse() {
 
 async function monCoup(uci) {
   const ex = P.ex;
-  if (!ex.aMoi || ex.occupe) { dessiner(); return; }
+  if (!enJeu() || !ex || !ex.aMoi || ex.occupe) { dessiner(); return; }
   P.erreur = null;
   P.indice = null;
   const attente = ex.jouer(uci);
@@ -167,6 +272,14 @@ async function monCoup(uci) {
 }
 
 const ACTIONS = {
+  etape(b) {
+    clearTimeout(P.minuteur);
+    Object.assign(P, { etape: b.dataset.etape, indice: null, correction: null, erreur: null });
+    dessiner();
+    if (P.etape === 'reussir') { preparerEssai(); planifierReponse(); }
+  },
+  aller(b) { allerA(Number(b.dataset.ply)); },
+  preparer() { preparerEssai(); },
   async indice() {
     const ex = P.ex;
     P.erreur = null;
@@ -263,7 +376,7 @@ function actions(ex) {
   if (ex.etat === 'fini') {
     return bouton('recommencer', 'Recommencer', { primaire: !P.correction })
       + (P.correction ? bouton('fermer', 'Fermer la correction') : bouton('correction', 'Voir le résultat de chaque coup'))
-      + '<a class="btn" href="#/endgames">Autre position</a>';
+      + suite();
   }
   if (ex.etat === 'faute') {
     return bouton('rejouer', 'Rejouer le coup', { primaire: true }) + bouton('recommencer', 'Recommencer') + bouton('abandonner', 'Terminer l’exercice');
@@ -271,6 +384,12 @@ function actions(ex) {
   return relance + bouton('indice', 'Indice', { inactif: !ex.aMoi || P.indice?.niveau === 2 })
     + bouton('rejouer', 'Rejouer le coup', { inactif: !ex.peutRejouer })
     + bouton('recommencer', 'Recommencer', { inactif: !ex.coups.length && !ex.aide && !ex.rate }) + bouton('abandonner', 'Abandonner');
+}
+
+function suite() {
+  if (!P.lecon) return '<a class="btn" href="#/endgames">Autre position</a>';
+  const apres = leconSuivante(P.lecon.id);
+  return apres ? `<a class="btn" href="#/endgames/lecon/${apres.id}">Leçon suivante</a>` : '<a class="btn" href="#/endgames">Tous les cours</a>';
 }
 
 function htmlCorrection(ex) {
@@ -296,25 +415,92 @@ function htmlCorrection(ex) {
     <p class="small muted">Résultat de chaque coup pour les ${NOM_CAMP[camp]}, au trait.</p>${corps}`;
 }
 
-function htmlCoups(ex) {
-  if (!ex.coups.length) return '';
+function allerA(ply) {
+  P.voirPly = Math.max(0, Math.min(ligneDe(P.lecon).length, ply));
+  dessiner();
+}
+
+// Liste de coups numérotée ; rendu(m, i) donne le contenu de chaque coup.
+function htmlListe(coups, rendu) {
+  if (!coups.length) return '';
   let html = '';
   let ouvert = false;
-  ex.coups.forEach((m, i) => {
+  coups.forEach((m, i) => {
     const numero = m.before.split(' ')[5];
     if (m.color === 'w' || i === 0) {
       if (ouvert) html += '</li>';
       html += `<li><span class="mno">${numero}${m.color === 'w' ? '.' : '…'}</span>`;
       ouvert = true;
     }
-    html += `<span class="eg-coup">${figSan(m.san, m.color)}</span>`;
+    html += rendu(m, i);
   });
   return `<ol>${html}</li></ol>`;
 }
+const htmlCoups = (ex) => htmlListe(ex.coups, (m) => `<span class="eg-coup">${figSan(m.san, m.color)}</span>`);
+
+function dessinerEtat() {
+  const zone = $('#eg-state', P.vue);
+  const e = P.lecon && P.etats?.get(P.lecon.id);
+  zone.hidden = !e;
+  zone.innerHTML = e ? `${symbole(e.etat)} ${texteEtat(e)}` : '';
+}
+
+// En-tête et étapes de la leçon ; renvoie false quand l’écran n’est pas un essai en cours.
+function dessinerLecon() {
+  const lecon = P.lecon;
+  $('#eg-title', P.vue).textContent = lecon ? lecon.titre : 'Position libre';
+  const etapes = $('#eg-steps', P.vue), zone = $('#eg-lesson', P.vue);
+  etapes.hidden = !lecon;
+  const actif = document.activeElement?.closest('#eg-steps button')?.dataset.etape;
+  etapes.innerHTML = lecon ? ETAPES.map(([k, nom]) => `<button type="button" data-action="etape" data-etape="${k}" aria-pressed="${P.etape === k}">${nom}</button>`).join('') : '';
+  if (actif) $(`[data-etape="${actif}"]`, etapes)?.focus({ preventScroll: true });
+  dessinerEtat();
+
+  const attente = Boolean(lecon) && P.etape === 'reussir' && !P.ex;
+  const jeu = enJeu() && !attente;
+  for (const id of ['#eg-goal', '#eg-msg', '#eg-actions', '#eg-correction']) $(id, P.vue).hidden = !jeu;
+  zone.hidden = jeu;
+  if (jeu) { zone.innerHTML = ''; return true; }
+  $('#eg-moves', P.vue).innerHTML = '';
+  P.plateau.interactive = false;
+
+  if (attente) {
+    P.plateau.setPosition(lecon.fen);
+    zone.innerHTML = P.erreur
+      ? `<p class="msg err" role="alert">${esc(P.erreur)}</p>${bouton('preparer', 'Réessayer', { primaire: true })}`
+      : '<p class="muted" role="status">Interrogation de la table de finales…</p>';
+    return false;
+  }
+
+  if (P.etape === 'comprendre') {
+    P.plateau.setPosition(lecon.fen, { arrows: lecon.fleches.map(([from, to, type]) => ({ from, to, color: COULEUR_FLECHE[type] })) });
+    for (const c of lecon.cases) P.plateau.hl.add(c);
+    P.plateau.render();
+    zone.innerHTML = `<p class="eg-but"><b>${lecon.objectif === 1 ? 'Gagnez' : 'Annulez'}</b> avec les ${NOM_CAMP[lecon.camp]}.</p>
+      ${lecon.idee.map((t) => `<p>${t}</p>`).join('')}
+      <div class="eg-suite">${bouton('etape', 'Voir la ligne', { primaire: true, attributs: 'data-etape="voir"' })}${bouton('etape', 'Jouer la position', { attributs: 'data-etape="reussir"' })}</div>`;
+    return false;
+  }
+
+  const ligne = ligneDe(lecon);
+  const ply = P.voirPly;
+  const dernier = ply > 0 ? ligne[ply - 1] : null;
+  P.plateau.setPosition(dernier ? dernier.after : lecon.fen, { lastMove: dernier ? [dernier.from, dernier.to] : null });
+  const focus = document.activeElement?.closest('#eg-lesson button')?.dataset.cle;
+  const nav = (cle, vers, texte, nom, inactif) => bouton('aller', texte, { inactif, attributs: `data-ply="${vers}" data-cle="${cle}" aria-label="${nom}"` });
+  zone.innerHTML = `<p class="muted small">La ligne principale, coup par coup. Les touches ← et → fonctionnent aussi.</p>
+    <div class="eg-nav">${nav('debut', 0, '⏮', 'Début', ply === 0)}${nav('prec', ply - 1, '‹', 'Coup précédent', ply === 0)}
+      <span>${ply} sur ${ligne.length}</span>${nav('suiv', ply + 1, '›', 'Coup suivant', ply === ligne.length)}${nav('fin', ligne.length, '⏭', 'Fin', ply === ligne.length)}</div>
+    <div class="eg-moves eg-ligne">${htmlListe(ligne, (m, i) => `<button type="button" class="eg-coup${i + 1 === ply ? ' cur' : ''}" data-action="aller" data-ply="${i + 1}" data-cle="coup${i}">${figSan(m.san, m.color)}</button>`)}</div>
+    <div class="eg-suite">${bouton('etape', 'Jouer la position', { primaire: ply === ligne.length, attributs: 'data-etape="reussir"' })}</div>`;
+  if (focus) ($(`[data-cle="${focus}"]:not(:disabled)`, zone) || $('.eg-nav .btn:not(:disabled)', zone))?.focus({ preventScroll: true });
+  return false;
+}
 
 function dessiner() {
+  if (!P.vue || !dessinerLecon()) return;
   const ex = P.ex;
-  if (!ex || !P.vue) return;
+  if (!ex) return;
 
   // échiquier : position jouée, ou position consultée dans la correction
   const ply = P.correction ? P.correction.ply : ex.coups.length;
@@ -328,7 +514,7 @@ function dessiner() {
   if (!P.correction && P.indice?.niveau === 1 && ex.aMoi) { P.plateau.hl.add(P.indice.coup.from); P.plateau.render(); }
 
   const objectif = ex.objectif === 1 ? 'Gagnez' : 'Annulez';
-  const detail = ex.objectif === 1 ? 'Allez jusqu’au mat.' : `Coups tenus : ${Math.min(ex.mesCoups, ex.limite)} sur ${ex.limite}.`;
+  const detail = ex.objectif === 1 ? 'Allez jusqu’au mat.' : `Coups tenus : ${Math.min(ex.mesCoups - (ex.faute ? 1 : 0), ex.limite)} sur ${ex.limite}.`;
   $('#eg-goal', P.vue).innerHTML = `<span class="avatar-sm ${ex.camp}"><img src="pieces/${ex.camp}K.svg" alt=""></span>
     <div><b>${objectif}</b><span class="muted">Vous jouez les ${NOM_CAMP[ex.camp]}. ${detail}</span></div>`;
 
@@ -348,3 +534,10 @@ function dessiner() {
   }
   if (ex.etat === 'fini' && !P.correction) announce(zone.textContent);
 }
+
+document.addEventListener('keydown', (e) => {
+  if (document.body.dataset.view !== 'endgame' || !P.lecon || P.etape !== 'voir' || document.querySelector('dialog[open]')) return;
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName) || e.ctrlKey || e.metaKey || e.altKey) return;
+  const pas = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
+  if (pas) { e.preventDefault(); allerA(P.voirPly + pas); }
+});
