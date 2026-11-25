@@ -284,7 +284,7 @@ function bilanEtude() {
     <dt>Évaluation de la position atteinte</dt><dd>${esc(e.evaluation)}</dd></dl>
     <p class="small muted" role="status">${e.enregistrement === 'ok' ? 'Erreur travaillée enregistrée.' :
     e.enregistrement === 'erreur' ? 'Enregistrement impossible.' : 'Enregistrement…'}</p>
-    <div class="row"><a class="btn primary" href="#/strategy">Retour à l’étude stratégique</a>
+    <div class="row"><a class="btn primary" href="#/strategy">Retour aux erreurs stratégiques</a>
     ${e.enregistrement === 'erreur' ? '<button class="btn" id="play-study-retry">Réessayer l’enregistrement</button>' : ''}</div></section>`;
 }
 
