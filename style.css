@@ -1560,3 +1560,11 @@ a.pz-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px;
 @media (max-width: 1279px) { .eg-ligne button.eg-coup { min-height: var(--tap); min-width: var(--tap); } }
 #eg-board .sq.light.hl { background: var(--sq-blue-light); }
 #eg-board .sq.dark.hl { background: var(--sq-blue-dark); }
+.eg-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+.page ul.eg-themes { list-style: none; padding: 0; margin: 0; }
+.page .eg-themes li { margin: 0; display: flex; }
+.eg-themes a { flex: 1; display: flex; flex-direction: column; gap: 2px; min-height: var(--tap); padding: 10px 12px; background: var(--surface-2); border-radius: var(--r); color: var(--text); text-decoration: none; }
+@media (hover: hover) { .eg-themes a:hover { box-shadow: inset 0 0 0 1px var(--accent); } }
+#eg-serie { margin: 0; padding: 10px 14px 0; }
+#eg-serie[hidden] { display: none; }
+#eg-serie:not([hidden]) + .eg-state { padding-top: 2px; }

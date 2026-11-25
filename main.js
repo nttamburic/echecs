@@ -73,6 +73,7 @@ function route() {
   if (name === 'endgames') {
     if (sub === 'setup') { showView('setup', 'endgames'); endgames.editeur($('#setup-view')); return; }
     if (sub === 'play') { showView('endgame', 'endgames'); endgames.jouerVue($('#endgame-view')); return; }
+    if (sub.startsWith('serie/')) { showView('endgame', 'endgames'); endgames.serieVue($('#endgame-view'), sub.slice(6)); return; }
     if (sub.startsWith('lecon/')) { showView('endgame', 'endgames'); endgames.leconVue($('#endgame-view'), sub.slice(6)); return; }
     showView('endgames'); endgames.show($('#endgames-view')); return;
   }

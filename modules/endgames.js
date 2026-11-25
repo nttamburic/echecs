@@ -3,7 +3,7 @@ import { Board, announce } from '../board.js';
 import { $, $$, esc, fetchJson, local, toast, uciOf } from '../core/ui.js';
 import * as store from '../core/store.js';
 import { FAMILLES, LECONS, NIVEAUX, leconParId, leconSuivante } from '../core/finales-cours.js';
-import { progression, resumeFamilles, REUSSITES_POUR_MAITRISE } from '../core/finales-progres.js';
+import { aRevoir, cartesDe, fileSerie, prochaineRevision, progression, quandRevoir, resumeFamilles, REUSSITES_POUR_MAITRISE } from '../core/finales-progres.js';
 import { creerSonde, Exercice, lireFen, NOM_FIN, NOM_RESULTAT, uciEnCoup } from '../core/finales.js';
 import { frSan } from '../explain.js';
 import { figSan } from './analyse.js';
@@ -22,16 +22,22 @@ const COULEUR_FLECHE = { best: 'var(--arrow-best)', alt: 'var(--arrow-alt)', thr
 const ONGLETS = [['cours', 'Cours'], ['entrainement', 'Entraînement'], ['mes-finales', 'Mes finales']];
 let brouillon = { fen: '', camp: '' };
 
-// lecon : leçon ouverte (null en position libre) ; libre et essais gardent l’essai de chaque écran.
+// lecon : leçon ouverte (sinon null) ; libre, essais et serie.ex gardent l’essai de chaque écran.
+// exo : position de la série en cours d’affichage (sinon null). serie : { cle, id, faites, ex }.
 // ex : essai affiché. message : { type, html }. indice : dernier indice demandé.
 // correction : { ply, coups, erreur } quand le résultat de chaque coup est affiché.
-const P = { lecon: null, etape: 'comprendre', voirPly: 0, libre: null, essais: new Map(), creation: null, etats: null, ex: null, plateau: null, vue: null, message: null, indice: null, correction: null, erreur: null, minuteur: null };
+const P = { lecon: null, exo: null, serie: null, cartes: null, etape: 'comprendre', voirPly: 0, libre: null, essais: new Map(), creation: null, etats: null, ex: null, plateau: null, vue: null, message: null, indice: null, correction: null, erreur: null, minuteur: null };
 
 // ------------------------------------------------------------------ progression
 async function chargerEtats() {
   const lignes = await store.all(ESSAIS);
-  P.etats = progression(LECONS, lignes.map((r) => r.data));
+  const essais = lignes.map((r) => r.data);
+  P.etats = progression(LECONS, essais);
+  P.cartes = cartesDe(LECONS, essais);
 }
+// Position du catalogue affichée : celle de la leçon ou de la série (null en position libre).
+const cible = () => P.lecon ?? P.exo;
+const listerTout = () => { listerCours(); listerEntrainement(); };
 function noter(position) {
   return (resultat) => {
     const at = Date.now();
@@ -44,8 +50,8 @@ store.onChange(async (info) => {
   if (info.col !== ESSAIS) return;
   try { await chargerEtats(); } catch { return; }
   const vue = document.body.dataset.view;
-  if (vue === 'endgames') listerCours();
-  else if (vue === 'endgame' && P.lecon) dessinerEtat();
+  if (vue === 'endgames') listerTout();
+  else if (vue === 'endgame' && cible()) dessinerEtat();
 });
 
 const symbole = (etat) => `<span class="eg-etat ${etat}" aria-hidden="true">${ETATS[etat][0]}</span>`;
@@ -70,13 +76,83 @@ function listerCours() {
     }).join('')}</ul></div>`).join('')}`;
 }
 
+// ------------------------------------------------------------------ choix des exercices
+const NOM_SERIE = { revoir: 'À revoir', tous: 'Tous les thèmes', ...FAMILLES };
+const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
+
+function listerEntrainement() {
+  const el = $('#eg-entrainement');
+  if (!el || !P.cartes) return;
+  const dues = aRevoir(LECONS, P.cartes);
+  const prochaine = prochaineRevision(P.cartes);
+  let revoir;
+  if (dues.length) {
+    const reste = dues.length - 4;
+    revoir = `<p><b>${pluriel(dues.length, 'position')} à revoir :</b> ${dues.slice(0, 4).map((l) => l.titre).join(' ; ')}${reste > 0 ? ` ; et ${pluriel(reste, 'autre')}` : ''}.</p>
+      <p><a class="btn primary" href="#/endgames/serie/revoir">Réviser</a></p>`;
+  } else if (P.cartes.size) {
+    revoir = `<p class="muted">Rien à revoir pour le moment.${prochaine ? ` Prochaine révision : ${quandRevoir(prochaine)}.` : ''}</p>`;
+  } else {
+    revoir = '<p class="muted">Les positions que vous avez essayées reviendront ici au moment de les revoir. Commencez par une leçon ou par un thème.</p>';
+  }
+  const familles = resumeFamilles(LECONS, P.etats);
+  const themes = [['tous', 'Tous les thèmes'], ...Object.entries(FAMILLES)].map(([cle, nom]) => {
+    const liste = cle === 'tous' ? LECONS : LECONS.filter((l) => l.famille === cle);
+    const maitrisees = cle === 'tous' ? [...familles.values()].reduce((s, f) => s + f.maitrisees, 0) : familles.get(cle).maitrisees;
+    const n = dues.filter((l) => liste.includes(l)).length;
+    return `<li><a href="#/endgames/serie/${cle}"><b>${nom}</b><span class="small muted">${maitrisees} sur ${liste.length} maîtrisée${maitrisees > 1 ? 's' : ''}${n ? ` · ${n} à revoir` : ''}</span></a></li>`;
+  }).join('');
+  el.innerHTML = `<div class="card eg-card"><h2>À revoir</h2>${revoir}</div>
+    <div class="card eg-card"><h2>Par thème</h2>
+      <p class="muted small">Les positions des cours, sans les explications : à vous de retrouver la méthode. Les positions à revoir passent en premier, puis celles que vous n’avez jamais essayées.</p>
+      <ul class="eg-themes">${themes}</ul></div>`;
+}
+
+// Positions de la série pas encore proposées.
+const restantes = () => fileSerie(P.serie.cle, LECONS, P.cartes).filter((l) => !P.serie.faites.has(l.id));
+
+function proposer(position) {
+  clearTimeout(P.minuteur);
+  Object.assign(P.serie, { id: position.id, ex: null });
+  P.serie.faites.add(position.id);
+  Object.assign(P, { lecon: null, exo: position, ex: null, indice: null, correction: null, erreur: null });
+  P.plateau.setOrientation(position.camp);
+  dessiner();
+  preparerEssai();
+}
+
+export async function serieVue(el, cle) {
+  $('#topbar-soon').textContent = 'Finales';
+  if (!Object.hasOwn(NOM_SERIE, cle)) { location.replace('#/endgames'); return; }
+  if (P.vue !== el) construire(el);
+  clearTimeout(P.minuteur);
+  P.plateau.interactive = false;
+  // on reprend l’exercice laissé en cours ; s’il est fini, une nouvelle série commence
+  if (P.serie?.cle === cle && P.serie.ex?.etat !== 'fini') {
+    const position = leconParId(P.serie.id);
+    Object.assign(P, { lecon: null, exo: position, ex: P.serie.ex, indice: null, correction: null, erreur: null });
+    P.plateau.setOrientation(position.camp);
+    dessiner();
+    if (P.ex) planifierReponse(); else preparerEssai();
+    return;
+  }
+  const depuis = location.hash;
+  try { await chargerEtats(); }
+  catch { toast('Impossible de lire la progression sur cet appareil.', { type: 'err' }); location.replace('#/endgames'); return; }
+  if (location.hash !== depuis) return;
+  P.serie = { cle, id: null, faites: new Set(), ex: null };
+  const [premiere] = restantes();
+  if (!premiere) { P.serie = null; location.replace('#/endgames'); return; }
+  proposer(premiere);
+}
+
 // ------------------------------------------------------------------ lancement d’un essai
 async function lancer(fen, camp) {
   const depuis = location.hash;
   const ex = await Exercice.creer({ fen, camp, sonde });
   if (location.hash !== depuis) return; // l’utilisateur a changé de page pendant la réponse de la table
   clearTimeout(P.minuteur);
-  Object.assign(P, { lecon: null, libre: ex, ex, message: null, indice: null, correction: null, erreur: null });
+  Object.assign(P, { lecon: null, exo: null, libre: ex, ex, message: null, indice: null, correction: null, erreur: null });
   P.plateau?.setOrientation(camp);
   location.hash = '#/endgames/play';
 }
@@ -91,6 +167,7 @@ export function show(el) {
     <section role="tabpanel" id="eg-panel-cours" aria-labelledby="eg-tab-cours">
       <div id="eg-cours"><p class="muted" role="status">Chargement de la progression…</p></div></section>
     <section role="tabpanel" id="eg-panel-entrainement" aria-labelledby="eg-tab-entrainement">
+      <div id="eg-entrainement"><p class="muted" role="status">Chargement des révisions…</p></div>
       <div class="card eg-card eg-libre">
         ${miniBoard('4k3/8/3K4/4P3/8/8/8/8', 160)}
         <div><h2>Position libre</h2>
@@ -131,10 +208,9 @@ export function show(el) {
   });
   choisir(ONGLETS.findIndex(([k]) => k === choisi));
 
-  listerCours();
-  chargerEtats().then(listerCours).catch(() => {
-    const zone = $('#eg-cours', el);
-    if (zone) zone.innerHTML = '<p class="msg err" role="alert">Impossible de lire la progression sur cet appareil.</p>';
+  listerTout();
+  chargerEtats().then(listerTout).catch(() => {
+    for (const zone of $$('#eg-cours, #eg-entrainement', el)) zone.innerHTML = '<p class="msg err" role="alert">Impossible de lire la progression sur cet appareil.</p>';
   });
 
   $('#eg-camp', el).value = brouillon.camp;
@@ -169,6 +245,7 @@ function construire(el) {
     <aside class="panel pz-panel" id="eg-panel" aria-label="Exercice de finale">
       <div class="phead"><a class="btn small" href="#/endgames">← Finales</a><span class="ptitle" id="eg-title"></span></div>
       <div id="eg-steps" class="ptabs eg-steps" role="group" aria-label="Étapes de la leçon"></div>
+      <p id="eg-serie" class="small muted"></p>
       <p id="eg-state" class="eg-state small"></p>
       <div id="eg-lesson" class="eg-lesson"></div>
       <div id="eg-goal" class="eg-goal"></div>
@@ -191,7 +268,7 @@ export function jouerVue(el) {
   $('#topbar-soon').textContent = 'Finales';
   if (!P.libre) { location.replace('#/endgames'); return; }
   if (P.vue !== el) construire(el);
-  if (P.lecon || P.ex !== P.libre) Object.assign(P, { lecon: null, ex: P.libre, indice: null, correction: null, erreur: null });
+  if (P.lecon || P.exo || P.ex !== P.libre) Object.assign(P, { lecon: null, exo: null, ex: P.libre, indice: null, correction: null, erreur: null });
   P.plateau.setOrientation(P.ex.camp);
   dessiner();
   planifierReponse();
@@ -204,7 +281,7 @@ export function leconVue(el, id) {
   if (P.vue !== el) construire(el);
   if (P.lecon !== lecon) {
     clearTimeout(P.minuteur);
-    Object.assign(P, { lecon, etape: 'comprendre', voirPly: 0, ex: P.essais.get(id) ?? null, indice: null, correction: null, erreur: null });
+    Object.assign(P, { lecon, exo: null, etape: 'comprendre', voirPly: 0, ex: P.essais.get(id) ?? null, indice: null, correction: null, erreur: null });
   }
   P.plateau.setOrientation(lecon.camp);
   dessiner();
@@ -215,23 +292,28 @@ export function leconVue(el, id) {
 
 const enJeu = () => !P.lecon || P.etape === 'reussir';
 
-// Crée l’essai d’une leçon (la table n’est nécessaire qu’à l’étape « Réussir »).
+// Crée l’essai d’une leçon ou d’une série (en leçon, la table n’est nécessaire qu’à l’étape « Réussir »).
 async function preparerEssai() {
-  const lecon = P.lecon;
-  if (!lecon || P.ex || P.creation === lecon.id) return;
-  P.creation = lecon.id;
+  const position = cible();
+  const serie = P.lecon ? null : P.serie;
+  const cle = `${serie ? 'serie' : 'lecon'}:${position?.id}`;
+  if (!position || P.ex || P.creation === cle) return;
+  P.creation = cle;
   P.erreur = null;
   dessiner();
+  // l’écran qui a demandé l’essai est-il toujours affiché ?
+  const toujours = () => cible() === position && (P.lecon ? null : P.serie) === serie;
   try {
-    const ex = await Exercice.creer({ fen: lecon.fen, camp: lecon.camp, sonde, limite: lecon.limite, noter: noter(lecon.id) });
-    P.essais.set(lecon.id, ex);
-    if (P.lecon === lecon) P.ex = ex;
+    const ex = await Exercice.creer({ fen: position.fen, camp: position.camp, sonde, limite: position.limite, noter: noter(position.id) });
+    if (!serie) P.essais.set(position.id, ex);
+    else if (serie.id === position.id) serie.ex = ex;
+    if (toujours()) P.ex = ex;
   } catch (err) {
-    if (P.lecon === lecon) P.erreur = err.message;
+    if (toujours()) P.erreur = err.message;
   } finally {
-    if (P.creation === lecon.id) P.creation = null;
+    if (P.creation === cle) P.creation = null;
   }
-  if (P.lecon === lecon && document.body.dataset.view === 'endgame') { dessiner(); planifierReponse(); }
+  if (toujours() && document.body.dataset.view === 'endgame') { dessiner(); planifierReponse(); }
 }
 
 // Positions de la ligne montrée à l’étape « Voir ».
@@ -318,6 +400,10 @@ const ACTIONS = {
   precedent() { voir(P.correction.ply - 1); },
   suivant() { voir(P.correction.ply + 1); },
   position(b) { voir(Number(b.dataset.ply)); },
+  suivante() {
+    const [apres] = restantes();
+    if (apres) proposer(apres); else location.hash = '#/endgames';
+  },
 };
 
 async function voir(ply) {
@@ -374,7 +460,8 @@ const bouton = (action, texte, { primaire = false, inactif = false, attributs = 
 function actions(ex) {
   const relance = P.erreur && ex.aLui ? bouton('reessayer', 'Réessayer', { primaire: true }) : '';
   if (ex.etat === 'fini') {
-    return bouton('recommencer', 'Recommencer', { primaire: !P.correction })
+    return (P.exo && restantes().length ? bouton('suivante', 'Exercice suivant', { primaire: !P.correction }) : '')
+      + bouton('recommencer', 'Recommencer', { primaire: !P.correction && !P.exo })
       + (P.correction ? bouton('fermer', 'Fermer la correction') : bouton('correction', 'Voir le résultat de chaque coup'))
       + suite();
   }
@@ -387,6 +474,10 @@ function actions(ex) {
 }
 
 function suite() {
+  if (P.exo) {
+    return `<a class="btn" href="#/endgames/lecon/${P.exo.id}">Voir la leçon</a>`
+      + (restantes().length ? '' : '<a class="btn" href="#/endgames">Terminer la série</a>');
+  }
   if (!P.lecon) return '<a class="btn" href="#/endgames">Autre position</a>';
   const apres = leconSuivante(P.lecon.id);
   return apres ? `<a class="btn" href="#/endgames/lecon/${apres.id}">Leçon suivante</a>` : '<a class="btn" href="#/endgames">Tous les cours</a>';
@@ -440,23 +531,34 @@ const htmlCoups = (ex) => htmlListe(ex.coups, (m) => `<span class="eg-coup">${fi
 
 function dessinerEtat() {
   const zone = $('#eg-state', P.vue);
-  const e = P.lecon && P.etats?.get(P.lecon.id);
+  const position = cible();
+  const e = position && P.etats?.get(position.id);
+  const carte = position && P.cartes?.get(position.id);
   zone.hidden = !e;
-  zone.innerHTML = e ? `${symbole(e.etat)} ${texteEtat(e)}` : '';
+  zone.innerHTML = e ? `${symbole(e.etat)} ${texteEtat(e)}${carte ? ` · à revoir ${quandRevoir(carte.due)}` : ''}` : '';
+}
+
+function dessinerSerie() {
+  const zone = $('#eg-serie', P.vue);
+  zone.hidden = !P.exo;
+  if (!P.exo) return;
+  const encore = restantes().length;
+  zone.textContent = `Série « ${NOM_SERIE[P.serie.cle]} » · exercice ${P.serie.faites.size} sur ${P.serie.faites.size + encore}`;
 }
 
 // En-tête et étapes de la leçon ; renvoie false quand l’écran n’est pas un essai en cours.
 function dessinerLecon() {
   const lecon = P.lecon;
-  $('#eg-title', P.vue).textContent = lecon ? lecon.titre : 'Position libre';
+  $('#eg-title', P.vue).textContent = cible()?.titre ?? 'Position libre';
   const etapes = $('#eg-steps', P.vue), zone = $('#eg-lesson', P.vue);
   etapes.hidden = !lecon;
   const actif = document.activeElement?.closest('#eg-steps button')?.dataset.etape;
   etapes.innerHTML = lecon ? ETAPES.map(([k, nom]) => `<button type="button" data-action="etape" data-etape="${k}" aria-pressed="${P.etape === k}">${nom}</button>`).join('') : '';
   if (actif) $(`[data-etape="${actif}"]`, etapes)?.focus({ preventScroll: true });
+  dessinerSerie();
   dessinerEtat();
 
-  const attente = Boolean(lecon) && P.etape === 'reussir' && !P.ex;
+  const attente = Boolean(cible()) && enJeu() && !P.ex;
   const jeu = enJeu() && !attente;
   for (const id of ['#eg-goal', '#eg-msg', '#eg-actions', '#eg-correction']) $(id, P.vue).hidden = !jeu;
   zone.hidden = jeu;
@@ -465,7 +567,7 @@ function dessinerLecon() {
   P.plateau.interactive = false;
 
   if (attente) {
-    P.plateau.setPosition(lecon.fen);
+    P.plateau.setPosition(cible().fen);
     zone.innerHTML = P.erreur
       ? `<p class="msg err" role="alert">${esc(P.erreur)}</p>${bouton('preparer', 'Réessayer', { primaire: true })}`
       : '<p class="muted" role="status">Interrogation de la table de finales…</p>';
