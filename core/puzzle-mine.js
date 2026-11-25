@@ -6,6 +6,7 @@
 // (1, 2 ou 3 coups du joueur). `alt` liste les autres premiers coups que le moteur jugeait équivalents.
 import { Chess } from '../vendor/chess.js';
 import { classifyGame, winPct } from '../analysis.js';
+import { estTactique } from './manu/erreurs.js';
 
 export const MISTAKE_CLASSES = ['blunder', 'mistake', 'miss'];
 export const CLASS_LABEL = { blunder: 'Gaffe', mistake: 'Erreur', miss: 'Occasion manquée' };
@@ -28,18 +29,18 @@ function playableLine(fen, pv, max = MAX_PLAYER_MOVES) {
 
 // a : enregistrement d'analyse { game: { id, pgn, white, black, end }, positions }. user : pseudo chess.com.
 // book : table des ouvertures (openings.json) pour ne pas compter les coups de théorie. Renvoie une liste de puzzles.
-export function mineGame(a, user, book = {}) {
-  if (!a || !a.game || !a.positions || !a.game.pgn) return [];
+function candidats(a, user, book) {
+  if (!a || !a.game || !a.positions || !a.game.pgn) return { out: [] };
   const u = String(user || '').toLowerCase();
   const g = a.game;
   const color = (g.white && g.white.name || '').toLowerCase() === u ? 'w' : (g.black && g.black.name || '').toLowerCase() === u ? 'b' : null;
-  if (!color) return [];
+  if (!color) return { out: [] };
   let mv;
   try {
     const c = new Chess();
     c.loadPgn(g.pgn);
     mv = c.history({ verbose: true });
-  } catch { return []; }
+  } catch { return { out: [] }; }
   const res = classifyGame(mv, a.positions.slice(0, mv.length), { w: g.white.rating, b: g.black.rating }, book);
   const mine = color === 'w' ? g.white : g.black;
   const opp = color === 'w' ? g.black : g.white;
@@ -56,7 +57,7 @@ export function mineGame(a, user, book = {}) {
     const alt = (pos.lines || []).slice(1)
       .filter((l) => l.pv && l.pv[0] && l.pv[0] !== line[0] && winPct(l.score, color) >= winBest - ALT_TOLERANCE)
       .map((l) => l.pv[0]);
-    out.push({
+    const puzzle = {
       id: `g:${g.id}:${i + 1}`,
       fen: mv[i - 1].before,
       moves: [uciOf(mv[i - 1]), ...line],
@@ -66,9 +67,23 @@ export function mineGame(a, user, book = {}) {
       openingTags: [],
       source: 'mistake',
       reason: { kind: 'mistake', cls: r.cls, gameId: g.id, move: Math.floor(i / 2) + 1, opponent: opp && opp.name || '', end: g.end || null },
-    });
+    };
+    out.push({ puzzle, i, best });
   });
-  return out;
+  return { mv, out };
+}
+
+// Effectif de l’ancien flux, utilisé par le banc de comparaison.
+export function compterAvantFiltre(a, user, book = {}) {
+  return candidats(a, user, book).out.length;
+}
+
+export function mineGame(a, user, book = {}) {
+  const { mv, out } = candidats(a, user, book);
+  return out.filter(({ i, best }) => {
+    const refutation = [uciOf(mv[i]), ...(a.positions[i + 1]?.lines?.[0]?.pv ?? [])];
+    return estTactique(mv[i].before, best.pv, refutation, mv[i - 1]).tactique;
+  }).map(({ puzzle }) => puzzle);
 }
 
 // Toutes les parties analysées. `rows` : résultat de store.all('analysis').

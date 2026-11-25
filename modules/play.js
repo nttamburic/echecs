@@ -9,6 +9,8 @@ import { maiaMove, loadMaia, maiaModel, setMaiaProgress, MAIA_MODELS } from '../
 import { fmtClock } from '../core/format.js';
 import { BOOK, figSan, material, capturedHtml, stashFree } from './analyse.js';
 import { frOpening } from './opening-names.js';
+import { put } from '../core/store.js';
+import { scoreJoueur } from '../core/manu/erreurs.js';
 
 const P = {
   phase: 'setup', // setup | play | over
@@ -23,6 +25,7 @@ const P = {
   thinking: false,
   token: 0, // change à chaque nouvelle partie / coup repris : les réponses en retard sont ignorées
   result: null, // { text, score, resigned }
+  etude: null,
   hint: null, // { fen, uci, san }
   evals: new Map(),
   evalPending: new Set(),
@@ -60,7 +63,7 @@ function renderSetup() {
   if (keep) { const b = document.querySelector(`#${keep.box} button[data-${keep.k}="${keep.v}"]`); if (b) b.focus(); } // le focus survit à la reconstruction
 }
 
-// Départ demandé par un autre module (ex. l'éditeur de répertoire) : { fen, ucis, user, label }.
+// Départ demandé par le répertoire ou l’étude stratégique : { fen, ucis, user, label, elo, etude }.
 let playStash = null;
 export function stashPlay(x) { playStash = x; }
 
@@ -71,8 +74,11 @@ async function startGame(from = null) {
     const side = local.get('playSide', 'w');
     P.user = side === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : side;
   }
-  P.elo = Number($('#play-elo').value) || Number(local.get('playElo')) || 1500;
-  local.set('playElo', String(P.elo));
+  const elo = Number(from?.elo);
+  P.elo = elo > 0 ? Math.max(ELO_MIN, Math.min(ELO_MAX, elo)) :
+    Number($('#play-elo').value) || Number(local.get('playElo')) || 1500;
+  if (!from?.etude) local.set('playElo', String(P.elo));
+  P.etude = from?.etude ? { ...from.etude } : null;
   P.chess = new Chess(from && from.fen ? from.fen : undefined);
   P.startFen = P.chess.fen();
   P.moves = [];
@@ -85,7 +91,7 @@ async function startGame(from = null) {
   P.result = null;
   P.hint = null;
   P.token++;
-  P.tc = Number(local.get('playTc')) || 0;
+  P.tc = P.etude ? 0 : Number(local.get('playTc')) || 0;
   P.clock = P.tc ? { w: P.tc * 1000, b: P.tc * 1000 } : null;
   P.last = Date.now();
   P.phase = 'play';
@@ -210,7 +216,8 @@ function undo() {
   P.last = Date.now();
   render();
 }
-const canUndo = () => P.phase !== 'setup' && !(P.result && (P.result.resigned || P.result.flag)) && P.moves.slice(P.base).some((m) => m.color === P.user);
+const canUndo = () => P.phase !== 'setup' && !(P.etude && P.phase === 'over') &&
+  !(P.result && (P.result.resigned || P.result.flag)) && P.moves.slice(P.base).some((m) => m.color === P.user);
 
 function resign() {
   if (P.phase !== 'play' || !confirm('Abandonner la partie ?')) return;
@@ -222,12 +229,63 @@ function resign() {
 }
 
 function newGame() {
+  if (P.etude && P.phase === 'play') { terminerEtude(); return; }
   if (P.phase === 'play' && P.moves.length && !confirm('Abandonner cette partie et en commencer une nouvelle ?')) return;
   P.token++;
   P.thinking = false;
   P.phase = 'setup';
+  P.etude = null;
   P.result = null;
   render();
+}
+
+function terminerEtude() {
+  if (!P.etude || P.phase !== 'play') return;
+  P.token++;
+  P.thinking = false;
+  P.phase = 'over';
+  P.result = { text: 'Séance terminée.' };
+  render();
+}
+
+function enregistrerEtude(etude) {
+  if (etude.enregistrement === 'en_cours' || etude.enregistrement === 'ok') return;
+  etude.enregistrement = 'en_cours';
+  put('strategyWork', etude.id, { travaillee: true, date: etude.date }, { file: 'strategyWork.json' })
+    .then(() => { etude.enregistrement = 'ok'; }, () => { etude.enregistrement = 'erreur'; })
+    .finally(() => { if (P.etude === etude && document.body.dataset.view === 'play') render(); });
+}
+
+function bilanEtude() {
+  const e = P.etude;
+  if (!e.date) {
+    e.date = Date.now();
+    e.session = P.moves.slice(P.base).find(m => m.color === P.user)?.san ?? 'Aucun coup joué';
+    e.evaluation = 'Indisponible';
+    if (P.chess.isCheckmate()) e.evaluation = P.chess.turn() === 'w' ? '0-1 · Mat' : '1-0 · Mat';
+    else if (P.chess.isDraw()) e.evaluation = '½-½ · Nulle';
+    else if (P.moves.length === P.base) e.evaluation = fmtScore(e.avant);
+    else {
+      e.evaluation = 'Évaluation en cours…';
+      const st = analysisSettings();
+      const color = P.user;
+      analyzePosition(P.chess.fen(), null, { priority: true, multipv: 1,
+        depth: st.fixed ? null : st.depth, movetime: maxTime() })
+        .then(r => { e.evaluation = r.lines?.[0]?.score ? fmtScore(scoreJoueur(r.lines[0].score, color)) : 'Indisponible'; })
+        .catch(() => { e.evaluation = 'Indisponible'; })
+        .finally(() => { if (P.etude === e && document.body.dataset.view === 'play') render(); });
+    }
+    enregistrerEtude(e);
+  }
+  return `<section class="card strategy-bilan"><h2>Bilan de séance</h2><p>${esc(P.result.text)}</p>
+    <dl><dt>Coup joué dans la partie</dt><dd>${esc(e.joue)}</dd>
+    <dt>Coup joué pendant la séance</dt><dd>${esc(e.session)}</dd>
+    <dt>Meilleur coup de Stockfish</dt><dd>${esc(e.meilleur)}</dd>
+    <dt>Évaluation de la position atteinte</dt><dd>${esc(e.evaluation)}</dd></dl>
+    <p class="small muted" role="status">${e.enregistrement === 'ok' ? 'Erreur travaillée enregistrée.' :
+    e.enregistrement === 'erreur' ? 'Enregistrement impossible.' : 'Enregistrement…'}</p>
+    <div class="row"><a class="btn primary" href="#/strategy">Retour à l’étude stratégique</a>
+    ${e.enregistrement === 'erreur' ? '<button class="btn" id="play-study-retry">Réessayer l’enregistrement</button>' : ''}</div></section>`;
 }
 
 function analyseGame() {
@@ -277,8 +335,8 @@ function render() {
   board.interactive = myTurn;
 
   // Stockfish (seulement si l'aide, les flèches ou la barre sont demandées)
-  const showEval = opt('playEval');
-  const showArrows = opt('playArrows');
+  const showEval = !P.etude && opt('playEval');
+  const showArrows = !P.etude && opt('playArrows');
   let res = null;
   if (P.phase !== 'setup' && (showEval || (showArrows && myTurn) || (P.hint && P.hint.fen === fen))) res = evalOf(fen, !!(P.hint && P.hint.pending));
   if (P.hint && P.hint.pending && P.hint.fen === fen && res) showHint(fen, res);
@@ -333,12 +391,16 @@ function render() {
   // boutons
   $('#play-undo').disabled = !canUndo();
   $('#play-hint').disabled = !myTurn;
+  $('#play-hint').classList.toggle('hidden', !!P.etude);
+  $('#play-study-end').classList.toggle('hidden', !P.etude || P.phase !== 'play');
   $('#play-resign').disabled = P.phase !== 'play';
 
   // état : réflexion, aide, résultat
   const st = $('#play-status');
   let html = '';
-  if (P.result) {
+  if (P.result && P.etude) {
+    html = bilanEtude();
+  } else if (P.result) {
     const sc = P.result.score, mine = P.user === 'w' ? '1-0' : '0-1';
     const out = sc === '½-½' ? 'draw' : sc === mine ? 'win' : 'loss';
     const head = { win: 'Victoire !', loss: 'Défaite', draw: 'Match nul' }[out];
@@ -359,6 +421,8 @@ function render() {
     if (P.label) html =`<div class="hint muted small">Partie depuis votre répertoire « ${esc(P.label)} ».</div>` + html;
   }
   st.innerHTML = html;
+  const save = $('#play-study-retry');
+  if (save) save.onclick = () => { enregistrerEtude(P.etude); render(); };
   const again = $('#play-again');
   if (again) again.onclick = newGame;
   const lvl = $('#play-level'); if (lvl) lvl.onclick = newGame;
@@ -416,7 +480,8 @@ export function show() {
   const from = playStash;
   playStash = null;
   if (from) {
-    if (P.phase === 'play' && P.moves.length && !confirm('Abandonner la partie en cours pour jouer depuis le répertoire ?')) { render(); return; }
+    if (P.phase === 'play' && P.moves.length && !confirm('Abandonner la partie en cours ?')) { render(); return; }
+    if (P.etude && P.phase === 'play') terminerEtude();
     P.thinking = false;
     startGame(from);
     return;
@@ -464,6 +529,7 @@ export function init() {
   $('#play-undo').onclick = undo;
   $('#play-hint').onclick = hint;
   $('#play-resign').onclick = resign;
+  $('#play-study-end').onclick = terminerEtude;
   $('#play-new').onclick = newGame;
   $('#play-gear').onclick = openGear;
   $('#play-gear2').onclick = openGear;

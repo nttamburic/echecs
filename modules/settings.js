@@ -8,6 +8,7 @@ import { fmtAgo } from '../core/format.js';
 import { engineFields } from './analyse.js';
 import { applyBoardPrefs } from '../board.js';
 import { MAIA_MODELS, maiaModel } from '../core/maia.js';
+import { erreursReglages, SEUILS_ERREURS } from '../core/manu/erreurs.js';
 
 const SECTIONS = [
   ['profile', 'Profil', 'Pseudo chess.com'],
@@ -173,6 +174,7 @@ function connection(el) {
 
 // ------------------------------------------------------------------ moteur
 function engine(el) {
+  const seuils = erreursReglages(local.get);
   el.innerHTML = `
   <section class="card">
     <h2>Stockfish</h2>
@@ -186,7 +188,23 @@ function engine(el) {
     <h2>Maia (partie contre le bot)</h2>
     <div class="frow"><label for="st-maia">Modèle Maia</label><select id="st-maia"></select></div>
     <p class="muted small">Le modèle 23M imite mieux le jeu humain ; le 5M est plus léger pour un téléphone. Chaque modèle n'est téléchargé qu'une fois.</p>
+  </section>
+  <section class="card">
+    <h2>Étude stratégique</h2>
+    <form id="st-strategy" class="form">
+      <label>Écart minimal (cp) <input name="seuilCp" type="number" min="1" step="1" required value="${seuils.seuilCp}"></label>
+      <label>Fourchette de l’évaluation avant le coup (± cp) <input name="fourchetteCp" type="number" min="1" step="1" required value="${seuils.fourchetteCp}"></label>
+      <div class="row"><button class="btn primary" type="submit">Enregistrer</button></div>
+      <p id="st-strategy-msg" class="small muted" role="status"></p>
+    </form>
   </section>`;
+  $('#st-strategy', el).onsubmit = e => {
+    e.preventDefault();
+    const valeurs = new FormData(e.currentTarget);
+    if (!Object.keys(SEUILS_ERREURS).every(k => Number.isSafeInteger(Number(valeurs.get(k))) && Number(valeurs.get(k)) > 0)) return;
+    for (const k of Object.keys(SEUILS_ERREURS)) local.set(k, valeurs.get(k));
+    $('#st-strategy-msg', el).textContent = 'Seuils enregistrés.';
+  };
   const f = engineFields($('#st-eng', el), 'st');
   $('#st-eng-save', el).onclick = async () => {
     await f.save();

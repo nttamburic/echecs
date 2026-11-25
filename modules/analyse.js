@@ -106,6 +106,7 @@ export async function loadGames() {
     if (token === S.loadToken) {
       S.busy = false;
       await backfillOpenings(); renderList(); renderBatch();
+      window.dispatchEvent(new Event('cj:games'));
       scanGames(S.games, user); // situations du module Ouvertures tirées des parties récentes
     }
   }
@@ -243,7 +244,7 @@ async function backfillOpenings() {
 // Les résultats sont enregistrés comme une analyse normale, donc synchronisés sur GitHub.
 // Pause quand on ouvre une autre partie, reprise au retour à la liste.
 const needsAnalysis = (game) => !S.index[game.id] || !S.index[game.id].complete;
-const PERIODS = [['all', 'Toutes les parties'], ['15', '15 derniers jours'], ['30', '30 derniers jours'], ['60', '60 derniers jours'], ['90', '90 derniers jours']];
+const PERIODS = [['all', 'Toutes les parties'], ['7', '7 derniers jours'], ['15', '15 derniers jours'], ['30', '30 derniers jours'], ['60', '60 derniers jours'], ['90', '90 derniers jours']];
 const inPeriod = (game, period) => period === 'all' || game.end * 1000 >= Date.now() - Number(period) * 86400000;
 function renderBatch() {
   const b = S.batch;
@@ -276,7 +277,12 @@ function renderBatch() {
 }
 
 // Fenêtre de choix : période (menu déroulant) et réglages du moteur (les mêmes que la roue dentée).
-async function openMultiDialog() {
+export function ouvrirAnalyseStrategique(jours) {
+  if (S.batch) { location.hash = '#/games'; return; }
+  return openMultiDialog(String(jours));
+}
+
+async function openMultiDialog(periode) {
   if (S.batch) { // le bouton sert alors à arrêter (la partie en cours garde ce qui est déjà analysé)
     S.batch.stop = true;
     if (S.batch.cur && S.batch.cur !== S.g) S.batch.cur.abort = true;
@@ -289,9 +295,12 @@ async function openMultiDialog() {
   const total = (p) => S.games.filter((x) => inPeriod(x, p)).length;
   const sel = $('#multi-period');
   sel.innerHTML = PERIODS.map(([v, label]) => `<option value="${v}"${todo(v) ? '' : ' disabled'}>${label} (${todo(v) || 'aucune'})</option>`).join('');
-  const prev = local.get('multiPeriod', 'all');
+  const imposee = typeof periode === 'string';
+  if (imposee && !todo(periode)) return;
+  const prev = imposee ? periode : local.get('multiPeriod', 'all');
   const opts = [...sel.options];
   sel.value = (opts.find((o) => o.value === prev && !o.disabled) || opts.find((o) => !o.disabled) || opts[0]).value;
+  sel.disabled = imposee;
   const update = () => {
     const n = todo(sel.value), all = total(sel.value);
     $('#multi-count').textContent = n ? `${n} à analyser sur ${all}.` : all ? `Déjà toutes analysées (${all}).` : 'Aucune partie.';
@@ -304,7 +313,7 @@ async function openMultiDialog() {
   dlg.showModal();
   dlg.querySelector('form').onsubmit = async (e) => {
     if (!e.submitter || e.submitter.value !== 'go' || !todo(sel.value)) return;
-    local.set('multiPeriod', sel.value);
+    if (!imposee) local.set('multiPeriod', sel.value);
     await f.save(); // mêmes réglages que la roue dentée
     const st = analysisSettings();
     analyzeMany(sel.value, st.fixed ? null : st.depth, maxTime(), PERIODS.find((p) => p[0] === sel.value)[1].toLowerCase(), st.depth);

@@ -1,206 +1,97 @@
-// Étude stratégique, version 1 : votre profil stratégique tiré de vos parties analysées, et le post-mortem
-// de chaque partie (vos moments clés, avec votre plan à formuler avant de voir celui du moteur).
-// Routes : #/strategy (profil) et #/strategy/game/<id> (post-mortem).
-import { Board, announce } from '../board.js';
-import { $, esc } from '../core/ui.js';
 import * as store from '../core/store.js';
-import { buildProfile, FEATURE_LABEL, MIN_SAMPLE } from '../core/strategic-profile.js';
-import { momentsOf } from '../core/postmortem.js';
-import { CLASS_LABEL } from '../core/puzzle-mine.js';
-import { getUser, BOOK, figSan } from './analyse.js';
+import { $, esc, local } from '../core/ui.js';
+import { CLASSES, fmtScore } from '../analysis.js';
+import { fmtGameDate } from '../core/format.js';
+import { erreursReglages } from '../core/manu/erreurs.js';
+import { grouperStrategie, PERIODES_STRATEGIE, periodeStrategie } from '../core/manu/strategie.js';
+import { BOOK, getGames, getUser, ouvrirAnalyseStrategique } from './analyse.js';
+import { stashPlay } from './play.js';
+import { Chess } from '../vendor/chess.js';
 
-const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-const S = { built: false, board: null, seq: 0, mom: null, k: 0, gameId: null };
-
-const pct = (x) => `${Math.round(x * 100)} %`;
-const plural = (n, one, many) => `${n} ${n > 1 ? many : one}`;
+const phases = { ouverture: 'Ouverture', milieu: 'Milieu de jeu', finale: 'Finale' };
+let vue, generation = 0, abonne;
+const period = () => periodeStrategie(local.get('strategyPeriod'));
 
 export function leave() {
-  S.seq++;
+  vue = null;
+  generation++;
+  abonne?.();
+  abonne = null;
+  window.removeEventListener('cj:games', actualiser);
 }
 
-function build(el) {
-  el.innerHTML = `
-  <div id="st-home">
-    <div class="pz-head"><h1 class="page-title">Étude stratégique</h1></div>
-    <p class="muted">Votre profil est calculé à partir de vos parties analysées. Plus vous en analysez, plus il est fiable.</p>
-    <div id="st-profile"></div>
-    <h2 class="st-h">Parties à revoir</h2>
-    <div id="st-games"></div>
-    <p class="muted small">À venir : « Trouve le plan », avec la comparaison au moteur.</p>
-  </div>
-  <div id="st-pm" class="hidden">
-    <div class="left"><div class="board-wrap"><div id="pm-board"></div></div></div>
-    <aside class="panel pz-panel" aria-label="Post-mortem">
-      <div class="phead">
-        <a href="#/strategy" class="icon-btn" aria-label="Retour au profil" title="Retour au profil"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
-        <span class="ptitle" id="pm-title"></span>
-      </div>
-      <div class="popening" id="pm-sub"></div>
-      <div id="pm-body" aria-live="polite"></div>
-      <div class="tactions">
-        <button id="pm-prev" class="btn" type="button">← Précédent</button>
-        <button id="pm-next" class="btn primary" type="button">Suivant →</button>
-      </div>
-    </aside>
-  </div>`;
-  S.board = new Board($('#pm-board', el), { onMove: () => {} });
-  S.board.interactive = false;
-  $('#pm-prev', el).onclick = () => step(-1);
-  $('#pm-next', el).onclick = () => step(1);
-}
-
-export async function show(el, sub = '') {
-  if (!S.built) { build(el); S.built = true; }
-  const tt = document.getElementById('topbar-soon'); if (tt) tt.textContent = 'Étude stratégique';
-  const m = /^game\/(.+)$/.exec(sub);
-  if (m) { await postmortem(el, decodeURIComponent(m[1])); return; }
-  $('#st-pm', el).classList.add('hidden');
-  $('#st-home', el).classList.remove('hidden');
-  await home(el);
-}
-
-// ------------------------------------------------------------------ profil
-async function home(el) {
-  const seq = ++S.seq;
-  const user = getUser();
-  const box = $('#st-profile', el), games = $('#st-games', el);
-  if (!user) {
-    box.innerHTML = '<p class="muted">Renseignez votre pseudo chess.com dans les <a href="#/settings">paramètres</a> pour calculer votre profil.</p>';
-    games.innerHTML = '';
-    return;
+export function show(el) {
+  vue = el;
+  el.innerHTML = '<h1 class="page-title">Étude stratégique</h1><p role="status">Chargement…</p>';
+  if (!abonne) {
+    abonne = store.onChange(info => {
+      if (['analysis', 'strategyWork', 'settings'].includes(info.col)) actualiser();
+    });
+    window.addEventListener('cj:games', actualiser);
   }
-  box.innerHTML = '<p class="muted">Calcul du profil…</p>';
-  games.innerHTML = '';
-  const rows = await store.all('analysis').catch(() => []);
-  if (seq !== S.seq) return;
-  if (!rows.length) {
-    box.innerHTML = '<p class="muted">Aucune partie analysée sur cet appareil. Analysez vos parties depuis l’historique pour obtenir un profil.</p>';
-    return;
-  }
-  const prof = buildProfile(rows, user, BOOK);
-  if (seq !== S.seq) return;
-  box.innerHTML = renderProfile(prof);
-  games.innerHTML = renderGames(prof.games);
+  return actualiser();
 }
 
-function renderProfile(p) {
-  if (!p.moves) return '<p class="muted">Aucun coup exploitable pour votre pseudo dans ces parties.</p>';
-  const row = (f) => `<li><b>${esc(f.label)}</b> <span class="muted">${f.mistakes} sur ${f.n} coups · ${pct(f.rate)} contre ${pct(p.base)} en moyenne</span></li>`;
-  const list = (items, empty) => (items.length ? `<ul class="st-list">${items.map(row).join('')}</ul>` : `<p class="muted">${empty}</p>`);
-  const missing = p.insufficient.length
-    ? ` Pas encore assez de coups pour : ${p.insufficient.map((f) => esc(f.label.toLowerCase())).join(', ')}.`
-    : '';
-  return `
-    <p class="muted">${plural(p.games.length, 'partie analysée', 'parties analysées')} · ${plural(p.moves, 'coup joué', 'coups joués')} · ${pct(p.base)} de vos coups sont des gaffes, erreurs ou occasions manquées.</p>
-    <h2 class="st-h">Forces</h2>
-    ${list(p.strengths, 'Aucune force nette pour l’instant.')}
-    <h2 class="st-h">Faiblesses</h2>
-    ${list(p.weaknesses, 'Aucune faiblesse nette pour l’instant.')}
-    <p class="muted small">Indicatif : une caractéristique n’est retenue qu’à partir de ${MIN_SAMPLE} coups où elle est présente.${missing}</p>`;
+function meilleurSAN(e) {
+  try { return new Chess(e.fen).move(e.meilleur).san; } catch { return e.meilleur; }
 }
 
-function renderGames(games) {
-  const todo = games.filter((g) => g.mistakes > 0).sort((a, b) => b.mistakes - a.mistakes);
-  if (!todo.length) return '<p class="muted">Aucun moment clé dans vos parties analysées.</p>';
-  return `<ul class="st-list">${todo.slice(0, 50).map((g) => `<li><a href="#/strategy/game/${encodeURIComponent(g.id)}">${esc(g.white)} – ${esc(g.black)}</a> <span class="muted">${plural(g.mistakes, 'moment clé', 'moments clés')}</span></li>`).join('')}</ul>`;
+function cadence(jeu) {
+  const [base, inc] = String(jeu.timeControl ?? '').split('+');
+  return /^\d+$/.test(base) ? Number(base) / 60 + ' min' + (inc && Number(inc) ? ' + ' + inc + ' s' : '')
+    : jeu.timeControl || jeu.timeClass || 'Cadence inconnue';
 }
 
-// ------------------------------------------------------------------ post-mortem
-async function postmortem(el, id) {
-  const seq = ++S.seq;
-  $('#st-home', el).classList.add('hidden');
-  $('#st-pm', el).classList.remove('hidden');
-  $('#pm-title').textContent = 'Post-mortem';
-  $('#pm-sub').textContent = '';
-  $('#pm-body').innerHTML = '<p class="muted">Chargement…</p>';
-  S.board.setArrows([]);
-  S.board.setPosition(START_FEN);
-  const user = getUser();
-  const a = await store.get('analysis', id).catch(() => null);
-  if (seq !== S.seq) return;
-  const res = a && user ? momentsOf(a, user, BOOK) : null;
-  S.mom = null;
-  if (!res || !res.moments.length) {
-    $('#pm-body').innerHTML = `<p class="muted">${!a ? 'Partie inconnue sur cet appareil.' : !user ? 'Renseignez votre pseudo chess.com pour analyser vos parties.' : 'Aucun moment clé dans cette partie.'}</p>`;
-    $('#pm-prev').classList.add('hidden');
-    $('#pm-next').classList.add('hidden');
-    return;
-  }
-  $('#pm-prev').classList.remove('hidden');
-  $('#pm-next').classList.remove('hidden');
-  S.mom = res;
-  S.gameId = id;
-  S.k = 0;
-  render();
+function carte(jeu, erreurs, actions) {
+  const camp = erreurs[0].color, adverse = camp === 'w' ? jeu.black : jeu.white;
+  const moi = camp === 'w' ? jeu.white : jeu.black;
+  return `<article class="card"><h3>${esc(adverse?.name || 'Adversaire inconnu')}</h3>
+    <p class="muted">${esc(fmtGameDate(jeu.end * 1000))} · ${esc(cadence(jeu))}</p>
+    <ul class="strategy-errors">${erreurs.map(e => {
+      actions.set(e.id, { erreur: e, elo: moi?.rating });
+      const gravite = CLASSES[e.gravite]?.label;
+      const date = e.travail?.date ? new Date(e.travail.date).toLocaleDateString('fr-FR') : '';
+      return `<li class="${date ? 'strategy-worked' : ''}">
+        <div><strong>${e.numero}${camp === 'w' ? '.' : '…'} ${esc(e.san)}</strong>
+        ${gravite ? `<span class="muted"> · ${esc(gravite)}</span>` : ''}
+        ${date ? `<span class="small"> · Travaillée le ${esc(date)}</span>` : ''}</div>
+        <div class="small muted">Pour vous · Avant ${esc(fmtScore(e.avant))} · Après ${esc(fmtScore(e.apres))} · Écart ${e.perdMat ? '≥ ' : ''}${e.ecartCp} cp</div>
+        <div class="row"><button class="btn primary small" type="button" data-etudier="${esc(e.id)}">Rejouer contre Maia3</button>
+        <details><summary>Voir le meilleur coup</summary><strong>${esc(meilleurSAN(e))}</strong></details></div>
+      </li>`;
+    }).join('')}</ul></article>`;
 }
 
-function step(d) {
-  if (!S.mom) return;
-  const n = S.mom.moments.length;
-  const k = S.k + d;
-  if (k < 0 || k >= n) return;
-  S.k = k;
-  render();
-}
-
-// Réponses au plan : une par moment clé, clé = partie + index du coup. Collection synchronisée « strategyNotes ».
-const noteKey = (m) => `${S.gameId}:${m.ply}`;
-const setSaved = (text) => { const p = $('#pm-saved'); if (p) p.textContent = text; };
-
-async function loadNote(m) {
-  const rec = await store.get('strategyNotes', noteKey(m)).catch(() => null);
-  const box = $('#pm-plan');
-  // Le joueur a pu changer de moment pendant le chargement : on ne remplit que le moment courant.
-  if (!box || !S.mom || S.mom.moments[S.k] !== m) return;
-  box.value = rec && rec.plan || '';
-}
-
-async function saveNote(m, text) {
-  const plan = text.trim();
+async function actualiser() {
+  if (!vue) return;
+  const gen = ++generation;
   try {
-    if (plan) await store.put('strategyNotes', noteKey(m), { gameId: S.gameId, ply: m.ply, plan, updatedAt: Date.now() });
-    else await store.remove('strategyNotes', noteKey(m));
-    setSaved(plan ? 'Réponse enregistrée sur cet appareil.' : 'Réponse effacée.');
-  } catch {
-    setSaved('Enregistrement impossible sur cet appareil.');
-  }
-}
-
-function render() {
-  const { game, color, moments } = S.mom;
-  const m = moments[S.k];
-  const opp = color === 'w' ? game.black : game.white;
-  const oppName = opp && opp.name ? opp.name : '';
-  $('#pm-title').textContent = `Coup ${m.moveNo} · ${CLASS_LABEL[m.cls] || 'Erreur'}`;
-  $('#pm-sub').textContent = `Moment ${S.k + 1} / ${moments.length}${oppName ? ' · contre ' + oppName : ''}`;
-  S.board.setOrientation(color);
-  S.board.setArrows([]);
-  S.board.setPosition(m.fen);
-  $('#pm-prev').disabled = S.k === 0;
-  $('#pm-next').disabled = S.k === moments.length - 1;
-  const feats = m.features.map((k) => FEATURE_LABEL[k]).filter(Boolean);
-  const best = m.best ? `Le moteur préférait <b>${figSan(m.best.line[0].san, m.best.line[0].color)}</b>.` : '';
-  $('#pm-body').innerHTML = `
-    <p>Vous avez joué <b>${figSan(m.played.san, color)}</b>. ${best}</p>
-    <p class="muted small">Perte de probabilité de gain : ${m.loss} points.</p>
-    <p>Caractéristiques de la position : ${feats.length ? esc(feats.join(', ').toLowerCase()) : 'aucune de celles suivies'}.</p>
-    <label class="st-h" for="pm-plan">Quel était votre plan ici ?</label>
-    <textarea id="pm-plan" rows="3"></textarea>
-    <p class="muted small" id="pm-saved" aria-live="polite">Enregistrement automatique à la sortie du champ.</p>
-    ${m.best ? '<button id="pm-reveal" class="btn" type="button">Voir le plan du moteur</button><div id="pm-engine" class="hidden"></div>' : ''}`;
-  const box = $('#pm-plan');
-  box.onchange = () => saveNote(m, box.value);
-  loadNote(m);
-  const reveal = $('#pm-reveal');
-  if (reveal) {
-    reveal.onclick = () => {
-      const line = m.best.line.map((x) => figSan(x.san, x.color)).join(' ');
-      $('#pm-engine').innerHTML = `<p>Plan du moteur : ${line}</p>`;
-      $('#pm-engine').classList.remove('hidden');
-      S.board.setArrows([{ from: m.best.uci.slice(0, 2), to: m.best.uci.slice(2, 4), color: '#81b64c' }]);
-      announce('Plan du moteur affiché.');
-      reveal.disabled = true;
+    const [analyses, travaux] = await Promise.all([store.all('analysis'), store.all('strategyWork')]);
+    if (gen !== generation || !vue) return;
+    const modele = grouperStrategie(analyses, getGames(), travaux, getUser(), BOOK, erreursReglages(local.get), period());
+    const actions = new Map();
+    vue.innerHTML = `<h1 class="page-title">Étude stratégique</h1>
+      <div class="row strategy-toolbar"><label for="strategy-period">Période</label>
+      <select id="strategy-period">${PERIODES_STRATEGIE.map(j => `<option value="${j}"${j === modele.jours ? ' selected' : ''}>${j} jours</option>`).join('')}</select>
+      ${modele.aAnalyser ? `<button class="btn" id="strategy-analyse" type="button">Analyser les parties de la période (${modele.aAnalyser})</button>` : ''}</div>
+      ${Object.entries(modele.groupes).map(([p, jeux]) => `<section class="strategy-phase"><h2>${phases[p]}</h2>
+        ${jeux.length ? jeux.map(j => carte(j.jeu, j.erreurs, actions)).join('') : '<p class="muted">Aucune erreur stratégique.</p>'}</section>`).join('')}`;
+    $('#strategy-period', vue).onchange = e => {
+      local.set('strategyPeriod', periodeStrategie(e.target.value));
+      actualiser();
     };
+    const batch = $('#strategy-analyse', vue);
+    if (batch) batch.onclick = () => ouvrirAnalyseStrategique(modele.jours);
+    vue.querySelectorAll('[data-etudier]').forEach(btn => {
+      btn.onclick = () => {
+        const { erreur, elo } = actions.get(btn.dataset.etudier);
+        stashPlay({ fen: erreur.fen, user: erreur.color, elo, etude: {
+          id: erreur.id, joue: erreur.san, meilleur: meilleurSAN(erreur), avant: erreur.avant,
+        } });
+        location.hash = '#/play';
+      };
+    });
+  } catch {
+    if (gen === generation && vue) vue.innerHTML = '<h1 class="page-title">Étude stratégique</h1><p role="alert">Impossible de lire les analyses enregistrées.</p>';
   }
 }
