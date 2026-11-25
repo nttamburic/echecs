@@ -16,9 +16,10 @@ import * as puzzles from './modules/puzzles.js';
 import * as rush from './modules/puzzles-rush.js';
 import * as ptheme from './modules/puzzles-theme.js';
 import * as prec from './modules/puzzles-recommend.js';
+import * as strategy from './modules/strategy.js';
 
 const VIEWS = ['home', 'game', 'play', 'free', 'setup', 'openings', 'rep', 'train', 'model', 'puzzles', 'puzzle', 'puzzletheme', 'puzzlerec', 'strategy', 'endgames', 'settings'];
-const MODULES = ['strategy', 'endgames']; // modules pas encore livrés
+const MODULES = ['endgames']; // modules pas encore livrés
 
 export function showView(v, tab = v === 'home' || v === 'game' ? 'games' : v === 'setup' ? 'free' : v) {
   for (const name of VIEWS) $(`#${name}-view`).classList.toggle('hidden', name !== v);
@@ -38,6 +39,7 @@ function route() {
   if (!/^#\/puzzles\/rush/.test(h)) rush.leave();
   if (!/^#\/puzzles\/theme\/./.test(h)) ptheme.leave();
   if (!/^#\/puzzles\/recommend\/./.test(h)) prec.leave();
+  if (!/^#\/strategy/.test(h)) strategy.leave();
   if (m) { showView('game'); analyse.openGame(decodeURIComponent(m[1])); return; }
   const [, name, sub] = /^#\/([^/]*)\/?(.*)$/.exec(h) || [];
   if (name === 'play') { showView('play'); play.show(); return; }
@@ -66,6 +68,7 @@ function route() {
     if (sub === 'theme') { showView('puzzles'); puzzles.showThemes($('#puzzles-view')); return; }
     showView('puzzles'); puzzles.show($('#puzzles-view')); return;
   }
+  if (name === 'strategy') { showView('strategy'); strategy.show($('#strategy-view'), sub); return; }
   if (MODULES.includes(name)) { showView(name); soon($(`#${name}-view`), name); return; }
   if (name === 'settings') { showView('settings'); settings.render($('#settings-view'), sub); return; }
   if (name !== 'games') { history.replaceState(null, '', '#/games'); }
