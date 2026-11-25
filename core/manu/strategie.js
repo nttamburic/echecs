@@ -15,7 +15,8 @@ export function grouperStrategie(analyses, jeux, travaux, user, book, seuils, pe
     if (!dansPeriode(data.game, jours, maintenant)) continue;
     const jeu = data.game;
     for (const erreur of releverErreurs(data, user, book, seuils)) {
-      if (erreur.tactique || travail.get(erreur.id)?.travaillee) continue;
+      const suivi = travail.get(erreur.id);
+      if (erreur.tactique || suivi?.travaillee || suivi?.archivee) continue;
       const [joueur, adverse] = erreur.color === 'w' ? [jeu.white, jeu.black] : [jeu.black, jeu.white];
       groupes[erreur.phase].push({ ...erreur, jeu, adversaire: adverse?.name, elo: joueur?.rating });
     }
