@@ -13,12 +13,13 @@ export function grouperStrategie(analyses, jeux, travaux, user, book, seuils, pe
   const aAnalyser = jeux.filter(g => dansPeriode(g, jours, maintenant) && !donnees.get(g.id)?.summary?.complete).length;
   for (const { data } of analyses) {
     if (!dansPeriode(data.game, jours, maintenant)) continue;
-    const erreurs = releverErreurs(data, user, book, seuils).filter(e => !e.tactique);
-    for (const p of PHASES) {
-      const liste = erreurs.filter(e => e.phase === p);
-      if (liste.length) groupes[p].push({ jeu: data.game, erreurs: liste.map(e => ({ ...e, travail: travail.get(e.id) ?? null })) });
+    const jeu = data.game;
+    for (const erreur of releverErreurs(data, user, book, seuils)) {
+      if (erreur.tactique || travail.get(erreur.id)?.travaillee) continue;
+      const [joueur, adverse] = erreur.color === 'w' ? [jeu.white, jeu.black] : [jeu.black, jeu.white];
+      groupes[erreur.phase].push({ ...erreur, jeu, adversaire: adverse?.name, elo: joueur?.rating });
     }
   }
-  for (const liste of Object.values(groupes)) liste.sort((a, b) => b.jeu.end - a.jeu.end);
+  for (const liste of Object.values(groupes)) liste.sort((a, b) => b.jeu.end - a.jeu.end || a.ply - b.ply);
   return { jours, groupes, aAnalyser };
 }

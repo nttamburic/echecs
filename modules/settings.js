@@ -190,7 +190,7 @@ function engine(el) {
     <p class="muted small">Le modèle 23M imite mieux le jeu humain ; le 5M est plus léger pour un téléphone. Chaque modèle n'est téléchargé qu'une fois.</p>
   </section>
   <section class="card">
-    <h2>Étude stratégique</h2>
+    <h2>Erreurs stratégiques</h2>
     <form id="st-strategy" class="form">
       <label>Écart minimal (cp) <input name="seuilCp" type="number" min="1" step="1" required value="${seuils.seuilCp}"></label>
       <label>Fourchette de l’évaluation avant le coup (± cp) <input name="fourchetteCp" type="number" min="1" step="1" required value="${seuils.fourchetteCp}"></label>

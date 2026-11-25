@@ -9,14 +9,21 @@ const NAMES = { K: 'Roi', Q: 'Dame', R: 'Tour', B: 'Fou', N: 'Cavalier', P: 'Pio
 
 // ------------------------------------------------------------------ page d'accueil
 // Petit échiquier statique (accueil) : cases du thème et pièces cburnett.
-export function miniBoard(placementStr, size = 150) {
+export function miniBoard(placementStr, size = 150, { orient = 'w', lastMove, mark = '' } = {}) {
   let html = '';
   const rows = placementStr.split('/');
-  for (let y = 0; y < 8; y++) {
+  for (let row = 0; row < 8; row++) {
+    const y = orient === 'b' ? 7 - row : row;
     let x = 0;
     const cells = {};
     for (const ch of rows[y]) { if (/\d/.test(ch)) x += +ch; else { cells[x] = (ch === ch.toUpperCase() ? 'w' : 'b') + ch.toUpperCase(); x++; } }
-    for (let c = 0; c < 8; c++) html += `<span class="mb-sq ${(c + y) % 2 ? 'd' : 'l'}">${cells[c] ? `<img src="pieces/${cells[c]}.svg" alt="">` : ''}</span>`;
+    for (let col = 0; col < 8; col++) {
+      const c = orient === 'b' ? 7 - col : col;
+      const square = FILES[c] + (8 - y);
+      const last = lastMove?.includes(square) ? ' last' : '';
+      const piece = cells[c] ? `<img src="pieces/${cells[c]}.svg" alt="">` : '';
+      html += `<span class="mb-sq ${(c + y) % 2 ? 'd' : 'l'}${last}">${piece}${square === lastMove?.[1] ? mark : ''}</span>`;
+    }
   }
   return `<span class="mini-board" style="width:${size}px;height:${size}px" aria-hidden="true">${html}</span>`;
 }

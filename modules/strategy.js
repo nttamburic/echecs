@@ -1,14 +1,17 @@
 import * as store from '../core/store.js';
-import { $, esc, local } from '../core/ui.js';
-import { CLASSES, fmtScore } from '../analysis.js';
+import { $, badge, esc, local } from '../core/ui.js';
+import { CLASSES } from '../analysis.js';
 import { fmtGameDate } from '../core/format.js';
 import { erreursReglages } from '../core/manu/erreurs.js';
 import { grouperStrategie, PERIODES_STRATEGIE, periodeStrategie } from '../core/manu/strategie.js';
-import { BOOK, getGames, getUser, ouvrirAnalyseStrategique } from './analyse.js';
+import { BOOK, getGames, getUser, ouvrirAnalyseStrategique, stashGamePly } from './analyse.js';
 import { stashPlay } from './play.js';
+import { miniBoard } from './setup.js';
 import { Chess } from '../vendor/chess.js';
 
 const phases = { ouverture: 'Ouverture', milieu: 'Milieu de jeu', finale: 'Finale' };
+const titre = 'Erreurs stratégiques';
+const enTete = `<h1 class="page-title">${titre}</h1>`;
 let vue, generation = 0, abonne;
 const period = () => periodeStrategie(local.get('strategyPeriod'));
 
@@ -22,7 +25,8 @@ export function leave() {
 
 export function show(el) {
   vue = el;
-  el.innerHTML = '<h1 class="page-title">Étude stratégique</h1><p role="status">Chargement…</p>';
+  $('#topbar-soon').textContent = titre;
+  el.innerHTML = `${enTete}<p role="status">Chargement des erreurs stratégiques…</p>`;
   if (!abonne) {
     abonne = store.onChange(info => {
       if (['analysis', 'strategyWork', 'settings'].includes(info.col)) actualiser();
@@ -36,30 +40,117 @@ function meilleurSAN(e) {
   try { return new Chess(e.fen).move(e.meilleur).san; } catch { return e.meilleur; }
 }
 
-function cadence(jeu) {
-  const [base, inc] = String(jeu.timeControl ?? '').split('+');
-  return /^\d+$/.test(base) ? Number(base) / 60 + ' min' + (inc && Number(inc) ? ' + ' + inc + ' s' : '')
-    : jeu.timeControl || jeu.timeClass || 'Cadence inconnue';
+const coup = e => `${e.numero}${e.color === 'w' ? '.' : '…'}${esc(e.san)}`;
+const gravite = e => CLASSES[e.gravite]?.label ?? 'Gravité non classée';
+const insigne = e => badge(e.gravite) || '<span class="badge strategy-neutral">–</span>';
+
+function ligne(e, id) {
+  return `<li><button class="strategy-row" type="button" aria-expanded="false" aria-controls="${id}">
+    <span role="img" aria-label="${gravite(e)}">${insigne(e)}</span>
+    <strong class="strategy-opponent">${esc(e.adversaire || 'Adversaire inconnu')}</strong>
+    <span class="muted">${esc(fmtGameDate(e.jeu.end * 1000))}</span>
+    <span class="strategy-move">${coup(e)}</span>
+  </button><div id="${id}" hidden></div></li>`;
 }
 
-function carte(jeu, erreurs, actions) {
-  const camp = erreurs[0].color, adverse = camp === 'w' ? jeu.black : jeu.white;
-  const moi = camp === 'w' ? jeu.white : jeu.black;
-  return `<article class="card"><h3>${esc(adverse?.name || 'Adversaire inconnu')}</h3>
-    <p class="muted">${esc(fmtGameDate(jeu.end * 1000))} · ${esc(cadence(jeu))}</p>
-    <ul class="strategy-errors">${erreurs.map(e => {
-      actions.set(e.id, { erreur: e, elo: moi?.rating });
-      const gravite = CLASSES[e.gravite]?.label;
-      const date = e.travail?.date ? new Date(e.travail.date).toLocaleDateString('fr-FR') : '';
-      return `<li class="${date ? 'strategy-worked' : ''}">
-        <div><strong>${e.numero}${camp === 'w' ? '.' : '…'} ${esc(e.san)}</strong>
-        ${gravite ? `<span class="muted"> · ${esc(gravite)}</span>` : ''}
-        ${date ? `<span class="small"> · Travaillée le ${esc(date)}</span>` : ''}</div>
-        <div class="small muted">Pour vous · Avant ${esc(fmtScore(e.avant))} · Après ${esc(fmtScore(e.apres))} · Écart ${e.perdMat ? '≥ ' : ''}${e.ecartCp} cp</div>
-        <div class="row"><button class="btn primary small" type="button" data-etudier="${esc(e.id)}">Rejouer contre Maia3</button>
-        <details><summary>Voir le meilleur coup</summary><strong>${esc(meilleurSAN(e))}</strong></details></div>
-      </li>`;
-    }).join('')}</ul></article>`;
+function afficherDetails(el, e) {
+  const { after, from, to } = new Chess(e.fen).move(e.joue);
+  const board = miniBoard(after.split(' ')[0], 208, { orient: e.color, lastMove: [from, to], mark: insigne(e) });
+  el.innerHTML = `<div class="strategy-detail">
+    ${board}
+    <div class="strategy-actions">
+      <div><strong class="strategy-move">${coup(e)}</strong> <span class="muted">· ${gravite(e)}</span></div>
+      <div><button type="button" class="btn" data-analyser aria-describedby="${el.id}-analyse">Analyser la position</button>
+        <p id="${el.id}-analyse" class="small muted">Retrouvez le coup dans l’analyse de la partie.</p></div>
+      <div><button type="button" class="btn primary" data-rejouer aria-describedby="${el.id}-rejouer">Rejouer la partie</button>
+        <p id="${el.id}-rejouer" class="small muted">Repartez de la position avant l’erreur contre Maia3.</p></div>
+    </div>
+  </div>`;
+  $('[data-analyser]', el).onclick = () => {
+    stashGamePly(e.jeu.id, e.ply + 1);
+    location.hash = '#/game/' + encodeURIComponent(e.jeu.id);
+  };
+  $('[data-rejouer]', el).onclick = () => {
+    stashPlay({ fen: e.fen, user: e.color, elo: e.elo, etude: {
+      id: e.id, joue: e.san, meilleur: meilleurSAN(e), avant: e.avant,
+    } });
+    location.hash = '#/play';
+  };
+}
+
+function afficher(modele) {
+  const noms = Object.keys(phases);
+  const pref = local.get('strategyTab');
+  const active = noms.includes(pref) ? pref : 'ouverture';
+  vue.innerHTML = `<header class="strategy-toolbar">${enTete}
+    <div class="row"><label for="strategy-period">Période</label>
+    <select id="strategy-period">${PERIODES_STRATEGIE.map(j => `<option value="${j}"${j === modele.jours ? ' selected' : ''}>${j} jours</option>`).join('')}</select>
+    ${modele.aAnalyser ? `<button class="btn" id="strategy-analyse" type="button">Analyser les parties de la période (${modele.aAnalyser})</button>` : ''}</div>
+    </header>
+    <div class="ptabs strategy-tabs" role="tablist" aria-label="Phase de la partie">
+      ${noms.map(p => `<button role="tab" type="button" id="strategy-tab-${p}" aria-controls="strategy-panel-${p}"
+        aria-selected="${p === active}" tabindex="${p === active ? 0 : -1}">${phases[p]} <span class="strategy-count">${modele.groupes[p].length}</span></button>`).join('')}
+    </div>
+    ${noms.map(p => `<section role="tabpanel" id="strategy-panel-${p}" aria-labelledby="strategy-tab-${p}"${p === active ? '' : ' hidden'}>
+      ${modele.groupes[p].length ? `<ul class="strategy-list">${modele.groupes[p].map((e, i) => ligne(e, `strategy-detail-${p}-${i}`)).join('')}</ul>`
+        : '<p class="muted">Aucune erreur stratégique sur cette période.</p>'}</section>`).join('')}`;
+
+  $('#strategy-period', vue).onchange = e => {
+    local.set('strategyPeriod', periodeStrategie(e.target.value));
+    actualiser();
+  };
+  const batch = $('#strategy-analyse', vue);
+  if (batch) batch.onclick = () => ouvrirAnalyseStrategique(modele.jours);
+
+  let ouverte;
+  function fermerLigne() {
+    if (!ouverte) return;
+    ouverte.setAttribute('aria-expanded', 'false');
+    ouverte.nextElementSibling.hidden = true;
+    ouverte = null;
+  }
+
+  const tabs = Array.from(vue.querySelectorAll('[role="tab"]'));
+  const panels = Array.from(vue.querySelectorAll('[role="tabpanel"]'));
+  function choisirOnglet(index) {
+    if (tabs[index].getAttribute('aria-selected') !== 'true') fermerLigne();
+    tabs.forEach((tab, i) => {
+      tab.setAttribute('aria-selected', String(i === index));
+      tab.tabIndex = i === index ? 0 : -1;
+      panels[i].hidden = i !== index;
+    });
+    local.set('strategyTab', noms[index]);
+  }
+  tabs.forEach((tab, index) => {
+    tab.onclick = () => choisirOnglet(index);
+    tab.onkeydown = e => {
+      let suivant;
+      switch (e.key) {
+        case 'ArrowLeft': suivant = (index + tabs.length - 1) % tabs.length; break;
+        case 'ArrowRight': suivant = (index + 1) % tabs.length; break;
+        case 'Home': suivant = 0; break;
+        case 'End': suivant = tabs.length - 1; break;
+        default: return;
+      }
+      e.preventDefault();
+      choisirOnglet(suivant);
+      tabs[suivant].focus();
+    };
+    const erreurs = modele.groupes[noms[index]];
+    if (!erreurs.length) panels[index].tabIndex = 0;
+    panels[index].querySelectorAll('.strategy-row').forEach((btn, i) => {
+      btn.onclick = () => {
+        const fermer = ouverte === btn;
+        fermerLigne();
+        if (fermer) return;
+        const detail = btn.nextElementSibling;
+        if (!detail.firstElementChild) afficherDetails(detail, erreurs[i]);
+        detail.hidden = false;
+        btn.setAttribute('aria-expanded', 'true');
+        ouverte = btn;
+      };
+    });
+  });
 }
 
 async function actualiser() {
@@ -68,30 +159,8 @@ async function actualiser() {
   try {
     const [analyses, travaux] = await Promise.all([store.all('analysis'), store.all('strategyWork')]);
     if (gen !== generation || !vue) return;
-    const modele = grouperStrategie(analyses, getGames(), travaux, getUser(), BOOK, erreursReglages(local.get), period());
-    const actions = new Map();
-    vue.innerHTML = `<h1 class="page-title">Étude stratégique</h1>
-      <div class="row strategy-toolbar"><label for="strategy-period">Période</label>
-      <select id="strategy-period">${PERIODES_STRATEGIE.map(j => `<option value="${j}"${j === modele.jours ? ' selected' : ''}>${j} jours</option>`).join('')}</select>
-      ${modele.aAnalyser ? `<button class="btn" id="strategy-analyse" type="button">Analyser les parties de la période (${modele.aAnalyser})</button>` : ''}</div>
-      ${Object.entries(modele.groupes).map(([p, jeux]) => `<section class="strategy-phase"><h2>${phases[p]}</h2>
-        ${jeux.length ? jeux.map(j => carte(j.jeu, j.erreurs, actions)).join('') : '<p class="muted">Aucune erreur stratégique.</p>'}</section>`).join('')}`;
-    $('#strategy-period', vue).onchange = e => {
-      local.set('strategyPeriod', periodeStrategie(e.target.value));
-      actualiser();
-    };
-    const batch = $('#strategy-analyse', vue);
-    if (batch) batch.onclick = () => ouvrirAnalyseStrategique(modele.jours);
-    vue.querySelectorAll('[data-etudier]').forEach(btn => {
-      btn.onclick = () => {
-        const { erreur, elo } = actions.get(btn.dataset.etudier);
-        stashPlay({ fen: erreur.fen, user: erreur.color, elo, etude: {
-          id: erreur.id, joue: erreur.san, meilleur: meilleurSAN(erreur), avant: erreur.avant,
-        } });
-        location.hash = '#/play';
-      };
-    });
+    afficher(grouperStrategie(analyses, getGames(), travaux, getUser(), BOOK, erreursReglages(local.get), period()));
   } catch {
-    if (gen === generation && vue) vue.innerHTML = '<h1 class="page-title">Étude stratégique</h1><p role="alert">Impossible de lire les analyses enregistrées.</p>';
+    if (gen === generation && vue) vue.innerHTML = `${enTete}<p role="alert">Impossible de charger les erreurs stratégiques.</p>`;
   }
 }

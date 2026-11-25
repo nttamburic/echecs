@@ -414,9 +414,21 @@ function recompute(g) {
 
 const isComplete = (g) => g.free || g.positions.every(Boolean);
 
+let gamePlyStash = null;
+export function stashGamePly(id, ply) { gamePlyStash = { id, ply }; }
+
 export async function openGame(id) {
   stopAuto();
-  if (S.g && S.g.id === id) { renderGame(); return; }
+  const ply = gamePlyStash?.id === id ? gamePlyStash.ply : null;
+  gamePlyStash = null;
+  const afficher = g => {
+    board.setOrientation(g.playerColor || 'w');
+    setPly(ply ?? 0);
+  };
+  if (S.g && S.g.id === id) {
+    if (ply !== null) afficher(S.g); else renderGame();
+    return;
+  }
   if (S.g) S.g.abort = true;
   $('#moves').innerHTML = '<p class="muted pad">Chargement de la partie…</p>';
   let game = S.games.find((x) => x.id === id);
@@ -436,9 +448,7 @@ export async function openGame(id) {
     const g = S.batch.cur;
     S.g = g;
     S.cycle = {};
-    g.ply = 0; g.var = null;
-    board.setOrientation(g.playerColor || 'w');
-    renderGame();
+    afficher(g);
     return;
   }
   if (S.batch && S.batch.cur) S.batch.cur.abort = true; // l'analyse multiple se met en pause
@@ -449,8 +459,7 @@ export async function openGame(id) {
   }
   S.g = g;
   S.cycle = {};
-  board.setOrientation(g.playerColor || 'w');
-  renderGame(); // pas d'analyse automatique : bouton « Analyser »
+  afficher(g);
 }
 
 function prepareGame(id, game, saved) {
