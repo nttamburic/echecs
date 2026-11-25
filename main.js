@@ -17,9 +17,10 @@ import * as rush from './modules/puzzles-rush.js';
 import * as ptheme from './modules/puzzles-theme.js';
 import * as prec from './modules/puzzles-recommend.js';
 import * as strategy from './modules/strategy.js';
+import * as endgames from './modules/endgames.js';
 
-const VIEWS = ['home', 'game', 'play', 'free', 'setup', 'openings', 'rep', 'train', 'model', 'puzzles', 'puzzle', 'puzzletheme', 'puzzlerec', 'strategy', 'endgames', 'settings'];
-const MODULES = ['endgames']; // modules pas encore livrés
+const VIEWS = ['home', 'game', 'play', 'free', 'setup', 'openings', 'rep', 'train', 'model', 'puzzles', 'puzzle', 'puzzletheme', 'puzzlerec', 'strategy', 'endgames', 'endgame', 'settings'];
+const MODULES = []; // modules pas encore livrés
 
 export function showView(v, tab = v === 'home' || v === 'game' ? 'games' : v === 'setup' ? 'free' : v) {
   for (const name of VIEWS) $(`#${name}-view`).classList.toggle('hidden', name !== v);
@@ -69,6 +70,11 @@ function route() {
     showView('puzzles'); puzzles.show($('#puzzles-view')); return;
   }
   if (name === 'strategy') { showView('strategy'); strategy.show($('#strategy-view'), sub); return; }
+  if (name === 'endgames') {
+    if (sub === 'setup') { showView('setup', 'endgames'); endgames.editeur($('#setup-view')); return; }
+    if (sub === 'play') { showView('endgame', 'endgames'); endgames.jouerVue($('#endgame-view')); return; }
+    showView('endgames'); endgames.show($('#endgames-view')); return;
+  }
   if (MODULES.includes(name)) { showView(name); soon($(`#${name}-view`), name); return; }
   if (name === 'settings') { showView('settings'); settings.render($('#settings-view'), sub); return; }
   if (name !== 'games') { history.replaceState(null, '', '#/games'); }

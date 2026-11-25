@@ -114,7 +114,7 @@ a.btn { text-decoration: none; }
 #more { margin-top: 10px; }
 
 /* ---- vue partie (façon chess.com) : échiquier au centre, barre d'évaluation à gauche, panneau à droite ---- */
-#game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view { display: flex; gap: 16px; padding: 12px 16px; align-items: flex-start; justify-content: center; }
+#game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view, #endgame-view { display: flex; gap: 16px; padding: 12px 16px; align-items: flex-start; justify-content: center; }
 .left { width: calc(var(--board) + var(--eval-w) + 8px); max-width: 100%; flex: none; }
 .player { padding: 6px 2px 6px calc(var(--eval-w) + 8px); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 44px; }
 .avatar-sm { width: 32px; height: 32px; border-radius: 4px; display: grid; place-items: center; background: var(--light); flex: none; }
@@ -330,14 +330,14 @@ a.btn { text-decoration: none; }
 
 /* empilé : mobile et tablette en portrait (le mobile paysage est exclu plus bas) */
 @media (max-width: 760px), (max-width: 1279px) and (orientation: portrait) {
-  #game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view { flex-direction: column; align-items: stretch; gap: 8px; }
+  #game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view, #endgame-view { flex-direction: column; align-items: stretch; gap: 8px; }
   .left { margin: 0 auto; }
   .panel { width: 100%; max-width: 640px; margin: 0 auto; height: auto; position: static; overflow: visible; }
   .pmoves, #moves { flex: none; max-height: 260px; min-height: 0; }
   /* barre des coups : toujours accessible au pouce, fixée en bas */
   .navbar { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 30; order: 0; margin: 0; border-top: 1px solid var(--line); border-bottom: 0; border-radius: 0;
     padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); }
-  body[data-view="game"] #content, body[data-view="play"] #content, body[data-view="rep"] #content, body[data-view="train"] #content, body[data-view="puzzle"] #content, body[data-view="puzzletheme"] #content, body[data-view="puzzlerec"] #content {
+  body[data-view="game"] #content, body[data-view="play"] #content, body[data-view="rep"] #content, body[data-view="train"] #content, body[data-view="puzzle"] #content, body[data-view="puzzletheme"] #content, body[data-view="puzzlerec"] #content, body[data-view="endgame"] #content {
     padding-bottom: calc(68px + env(safe-area-inset-bottom)); }
 }
 @media (max-width: 1279px) {
@@ -375,7 +375,7 @@ a.btn { text-decoration: none; }
   /* « Analyser plusieurs parties » en feuille du bas */
   #multi-dlg { margin: auto 0 0; max-height: 88vh; overflow-y: auto; width: 100%; max-width: none; border-radius: var(--r-sheet) var(--r-sheet) 0 0; padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
   #multi-dlg .btn { min-height: var(--tap); }
-  #game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view { padding: 6px 4px; }
+  #game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view, #endgame-view { padding: 6px 4px; }
   .pmoves { max-height: 220px; }
   #moves { max-height: 220px; }
   .player { font-size: 13px; min-height: 38px; }
@@ -397,7 +397,7 @@ a.btn { text-decoration: none; }
     border-bottom: 0; border-right: 1px solid var(--line-soft); box-sizing: border-box; }
   #topbar .brand span { display: none; }
   #content { margin-left: 48px; }
-  #game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view { flex-direction: row; align-items: flex-start; justify-content: center; padding: 4px 8px; gap: 8px; }
+  #game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view, #endgame-view { flex-direction: row; align-items: flex-start; justify-content: center; padding: 4px 8px; gap: 8px; }
   .left { margin: 0; }
   .panel { width: var(--panel-w); height: calc(100dvh - 8px); top: 4px; position: sticky; max-width: none; margin: 0; overflow-y: auto; }
   .navbar { position: sticky; bottom: 0; top: auto; left: auto; right: auto; order: 0; }
@@ -1239,8 +1239,8 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 /* ---- Phase 9 : pages « Bientôt » mobiles ---- */
 .soon-m, #topbar-soon { display: none; }
 @media (max-width: 760px) {
-  body[data-view="puzzles"] #topbar .brand, body[data-view="strategy"] #topbar .brand, body[data-view="endgames"] #topbar .brand { display: none; }
-  body[data-view="puzzles"] #topbar-soon, body[data-view="strategy"] #topbar-soon, body[data-view="endgames"] #topbar-soon { display: block; flex: 1; min-width: 0; font-size: 17px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body[data-view="puzzles"] #topbar .brand, body[data-view="strategy"] #topbar .brand, body[data-view="endgames"] #topbar .brand, body[data-view="endgame"] #topbar .brand { display: none; }
+  body[data-view="puzzles"] #topbar-soon, body[data-view="strategy"] #topbar-soon, body[data-view="endgames"] #topbar-soon, body[data-view="endgame"] #topbar-soon { display: block; flex: 1; min-width: 0; font-size: 17px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .soon2 { display: none; }
   .soon-m { display: flex; flex-direction: column; min-height: calc(100dvh - var(--topbar) - env(safe-area-inset-top) - var(--nav-h, 0px)); margin: -16px -8px; }
   .soon-m-body { flex: 1; padding: 20px 16px; display: flex; flex-direction: column; gap: 16px; }
@@ -1500,3 +1500,37 @@ a.pz-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px;
 }
 .strategy-bilan dl { display: grid; grid-template-columns: 1fr auto; gap: .35rem .65rem; }
 .strategy-bilan dd { margin: 0; font-weight: 600; }
+
+/* ---- Finales ------------------------------------------------------- */
+#endgames-view .ptabs { margin-bottom: 16px; }
+.eg-card h2 { margin: 0 0 6px; font-size: var(--fs-h2); line-height: var(--lh-h2); }
+.eg-card p { margin: 0 0 10px; }
+.eg-libre { display: flex; gap: 18px; align-items: center; }
+.eg-libre .mini-board { flex: none; grid-template-rows: repeat(8, minmax(0, 1fr)); }
+.eg-form { display: flex; flex-direction: column; gap: 10px; }
+.eg-form input { width: 100%; box-sizing: border-box; font-family: var(--font-mono); }
+.eg-form p { margin: 0; }
+.eg-form p:empty { display: none; }
+.eg-camp { display: flex; flex-direction: column; gap: 8px; }
+.eg-goal { display: flex; align-items: center; gap: 12px; padding: 12px 14px 0; }
+.eg-goal div { display: flex; flex-direction: column; }
+.eg-goal b { font-size: 22px; line-height: 28px; color: var(--text-strong); }
+.pz-panel .tactions.eg-actions { flex-wrap: wrap; flex: none; }
+.pz-panel .tactions.eg-actions .btn { flex: 1 1 140px; }
+.pz-panel > .tmsg { flex: none; }
+.eg-correction:not(:empty) { padding: 0 14px 12px; border-bottom: 1px solid var(--line); flex: none; }
+.eg-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.eg-nav .btn { min-width: var(--tap); min-height: var(--tap); font-size: 20px; }
+.eg-groupe h3 { margin: 10px 0 6px; font-size: 14px; }
+.eg-groupe.r2 h3 { color: #a9d67a; } .eg-groupe.r0 h3 { color: var(--danger-text); }
+.page .eg-groupe ul, .eg-groupe ul { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.eg-groupe li { background: var(--surface-2); border-radius: var(--r); padding: 4px 8px; margin: 0; }
+.eg-groupe li.joue { box-shadow: inset 0 0 0 2px var(--focus); }
+.eg-moves { padding: 8px 14px 14px; font-variant-numeric: tabular-nums; }
+.eg-moves ol { display: flex; flex-wrap: wrap; gap: 4px 14px; list-style: none; margin: 0; padding: 0; }
+.eg-moves li { display: flex; gap: 6px; }
+.eg-moves .mno { color: var(--muted); }
+@media (max-width: 760px) { .eg-libre { flex-direction: column; align-items: flex-start; } }
+.setup-side .castles[hidden] { display: none; }
+#setup-turn-seg .chip[aria-checked="true"] { background: #45423e; color: var(--text-strong); font-weight: 700; }
+.setup-side .msg[hidden] { display: none; }

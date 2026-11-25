@@ -82,7 +82,7 @@ export function renderHome(el) {
 }
 
 // ------------------------------------------------------------------ éditeur
-const E = { pos: {}, turn: 'w', castle: { K: false, Q: false, k: false, q: false }, orient: 'w', tool: 'move', drag: null, el: null };
+const E = { pos: {}, turn: 'w', castle: { K: false, Q: false, k: false, q: false }, orient: 'w', tool: 'move', drag: null, el: null, finale: null };
 
 function parsePlacement(pl) {
   const pos = {};
@@ -121,7 +121,8 @@ const CASTLE_REQ = { K: ['e1', 'wK', 'h1', 'wR'], Q: ['e1', 'wK', 'a1', 'wR'], k
 const castleOk = (k) => { const [ks, kp, rs, rp] = CASTLE_REQ[k]; return E.pos[ks] === kp && E.pos[rs] === rp; };
 
 function fen() {
-  const c = Object.keys(E.castle).filter((k) => E.castle[k] && castleOk(k)).join('') || '-';
+  // en mode finale, la table n’accepte aucun droit au roque
+  const c = (!E.finale && Object.keys(E.castle).filter((k) => E.castle[k] && castleOk(k)).join('')) || '-';
   return `${placement()} ${E.turn} ${c} - 0 1`;
 }
 
@@ -143,7 +144,7 @@ function problem() {
   // le camp qui n'a pas le trait ne peut pas être en échec
   const other = f.replace(/ [wb] /, ` ${E.turn === 'w' ? 'b' : 'w'} `);
   try { if (new Chess(other).inCheck()) return `Le roi ${E.turn === 'w' ? 'noir' : 'blanc'} est en échec alors que ce sont les ${E.turn === 'w' ? 'Blancs' : 'Noirs'} qui ont le trait : position impossible.`; } catch { /* */ }
-  return null;
+  return E.finale ? E.finale.probleme(f) : null;
 }
 
 function coords(sq) {
@@ -231,8 +232,10 @@ function endDrag(e) {
   render();
 }
 
-export function renderEditor(el) {
+// finale (facultatif) : { probleme(fen), jouer(fen, camp) } ; l’éditeur sert alors au module Finales.
+export function renderEditor(el, { finale = null } = {}) {
   E.el = el;
+  E.finale = finale;
   const pal = (c) => ['K', 'Q', 'R', 'B', 'N', 'P'].map((t) => `<button type="button" data-tool="${c}${t}" title="${NAMES[t]} ${c === 'w' ? 'blanc' : 'noir'}"><img src="pieces/${c}${t}.svg" alt=""></button>`).join('');
   el.innerHTML = `<div class="setup">
     <div class="setup-left">
@@ -242,25 +245,27 @@ export function renderEditor(el) {
       <p class="muted small">Choisissez une pièce puis cliquez sur les cases pour la poser. Glissez une pièce pour la déplacer, ou hors de l'échiquier pour la retirer (clic droit : retirer).</p>
     </div>
     <aside class="card setup-side" aria-label="Réglages de la position">
-      <h1>Définir la position</h1>
+      <h1>${finale ? 'Position libre' : 'Définir la position'}</h1>
       <div class="setup-sec"><span class="lbl-up" id="lbl-turn">Trait</span>
         <div class="segctl" id="setup-turn-seg" role="radiogroup" aria-labelledby="lbl-turn">
           <button type="button" role="radio" class="chip" data-turn="w"><img src="pieces/wK.svg" alt="" width="20" height="20"> Blancs</button>
           <button type="button" role="radio" class="chip" data-turn="b"><img src="pieces/bK.svg" alt="" width="20" height="20"> Noirs</button></div>
         <select id="setup-turn" class="sr-only" aria-label="Trait aux" tabindex="-1"><option value="w">Blancs</option><option value="b">Noirs</option></select></div>
-      <fieldset class="castles"><legend class="lbl-up">Roques possibles</legend>
+      <fieldset class="castles"${finale ? ' hidden' : ''}><legend class="lbl-up">Roques possibles</legend>
         <label><input type="checkbox" id="setup-cK"> Blancs O-O</label><label><input type="checkbox" id="setup-cQ"> Blancs O-O-O</label>
         <label><input type="checkbox" id="setup-ck"> Noirs O-O</label><label><input type="checkbox" id="setup-cq"> Noirs O-O-O</label>
       </fieldset>
       <div class="row">
-        <button type="button" id="setup-start" class="btn">Position de départ</button>
+        <button type="button" id="setup-start" class="btn"${finale ? ' hidden' : ''}>Position de départ</button>
         <button type="button" id="setup-clear" class="btn">Vider l'échiquier</button>
         <button type="button" id="setup-flip" class="btn">⇅ Retourner</button>
       </div>
       <label class="fenl lbl-up">FEN<input id="setup-fen" spellcheck="false" autocomplete="off"></label>
       <p id="setup-msg" class="small"></p>
-      <button type="button" id="setup-ok" class="btn big primary">Valider et analyser</button>
-      <p><a href="#/free">← Retour</a></p>
+      ${finale ? `<label class="eg-camp lbl-up">Je joue<select id="setup-camp"><option value="">Le camp au trait</option><option value="w">Les Blancs</option><option value="b">Les Noirs</option></select></label>
+      <p id="setup-refus" class="msg err" role="alert" hidden></p>` : ''}
+      <button type="button" id="setup-ok" class="btn big primary">${finale ? 'Jouer cette position' : 'Valider et analyser'}</button>
+      <p><a href="${finale ? '#/endgames' : '#/free'}">← Retour</a></p>
     </aside>
   </div>`;
   const boardEl = $('#setup-board');
@@ -305,8 +310,16 @@ export function renderEditor(el) {
       $('#setup-msg').className = 'msg err';
     }
   };
-  $('#setup-ok').onclick = () => {
+  $('#setup-ok').onclick = async () => {
     if (problem()) return;
+    if (E.finale) {
+      const bouton = $('#setup-ok'), refus = $('#setup-refus');
+      bouton.disabled = true; refus.hidden = true;
+      try { await E.finale.jouer(fen(), $('#setup-camp').value || E.turn); }
+      catch (err) { refus.textContent = err.message; refus.hidden = false; }
+      finally { bouton.disabled = !!problem(); }
+      return;
+    }
     stashFree({ fen: fen(), orient: E.orient });
     location.hash = '#/free/new';
   };
