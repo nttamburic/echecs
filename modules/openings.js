@@ -272,6 +272,51 @@ export function sharedConflicts(reps) {
   return out;
 }
 
+// ------------------------------------------------------------------ résultats par ouverture
+// Codes de résultat chess.com qui valent une nulle (« win » = victoire, tout autre code = défaite).
+export const DRAWS = ['agreed', 'repetition', 'stalemate', 'insufficient', '50move', 'timevsinsufficient'];
+
+// Pourcentages entiers dont la somme fait toujours 100 (méthode du plus fort reste).
+function percents(counts) {
+  const total = counts.reduce((a, b) => a + b, 0);
+  const exact = counts.map((c) => (c * 100) / total);
+  const out = exact.map(Math.floor);
+  const order = exact.map((x, i) => i).sort((a, b) => (exact[b] - out[b]) - (exact[a] - out[a]) || a - b);
+  for (let k = 0, rest = 100 - out.reduce((a, b) => a + b, 0); k < rest; k++) out[order[k]]++;
+  return out;
+}
+
+// Ouvertures les plus jouées parmi les parties analysées, avec les résultats du point de vue de user.
+// Une ligne par famille et par couleur ; aucune limite de période.
+// entries : [{ game: { white: { name, result }, black: { name, result } }, opening }]
+// Renvoie { total (parties analysées de user), unnamed (sans ouverture reconnue),
+//           count (nombre de lignes avant la limite), rows: [{ family, color, n, w, d, l, pw, pd, pl }] }.
+export function openingResults(entries, user, limit = 5) {
+  const me = (user || '').toLowerCase();
+  const groups = new Map();
+  let total = 0, unnamed = 0;
+  for (const { game, opening } of me ? entries : []) {
+    if (!game || !game.white || !game.black) continue;
+    const color = String(game.white.name || '').toLowerCase() === me ? 'w' : String(game.black.name || '').toLowerCase() === me ? 'b' : null;
+    if (!color) continue;
+    const res = (color === 'w' ? game.white : game.black).result;
+    if (!res) continue;
+    total++;
+    if (!opening) { unnamed++; continue; }
+    const family = familyOf(opening);
+    const key = `${color}|${family}`;
+    let g = groups.get(key);
+    if (!g) { g = { family, color, n: 0, w: 0, d: 0, l: 0 }; groups.set(key, g); }
+    g.n++;
+    if (res === 'win') g.w++; else if (DRAWS.includes(res)) g.d++; else g.l++;
+  }
+  const rows = [...groups.values()]
+    .sort((a, b) => b.n - a.n || a.family.localeCompare(b.family) || b.color.localeCompare(a.color))
+    .slice(0, limit)
+    .map((g) => { const [pw, pd, pl] = percents([g.w, g.d, g.l]); return { ...g, pw, pd, pl }; });
+  return { total, unnamed, count: groups.size, rows };
+}
+
 // ------------------------------------------------------------------ reconnaissance de l'ouverture
 // Livre d'ouvertures (openings.json, EPD → [ECO, nom]), le même que celui de l'analyse. Chargé par
 // analyse.js au démarrage ; tant qu'il est vide, tous les écarts sont comptés (ancien comportement).

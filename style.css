@@ -935,6 +935,27 @@ button.link { background: none; border: 0; padding: 0; font: inherit; color: var
 @media (hover: hover) { .rep-del:hover { color: var(--danger-text); background: var(--danger-bg); } }
 .rep-del:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .sugg-box { margin-bottom: 0; }
+/* Résultats des ouvertures les plus jouées */
+.top-op { margin: 0 0 28px; }
+.top-op .op-h2 { margin: 0 0 4px; }
+.top-op > p { margin: 8px 0 0; }
+.top-op > .op-h2 + p { margin-top: 0; }
+.top-op .top-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.top-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px 20px; align-items: center; padding: 12px 0; border-top: 1px solid var(--surface-2); }
+.top-name { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.top-name .avatar-sm { flex: 0 0 auto; }
+.top-name > span:last-child { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.top-bar { display: flex; gap: 2px; height: 8px; border-radius: var(--r-sm); overflow: hidden; }
+.top-bar i { flex-basis: 0; min-width: 3px; }
+.tb-w { background: var(--win); } .tb-d { background: var(--draw); } .tb-l { background: var(--loss); }
+.top-pct { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 6px 0 0; font-size: 13px; }
+.top-pct div { display: flex; flex-wrap: wrap; gap: 0 5px; }
+.top-pct div:nth-child(2) { justify-content: center; }
+.top-pct div:nth-child(3) { justify-content: flex-end; }
+.top-pct dt { color: var(--text-muted); }
+.top-pct dd { margin: 0; font-weight: 700; white-space: nowrap; }
+.tp-w dd { color: var(--win); } .tp-d dd { color: var(--text); } .tp-l dd { color: var(--loss); }
+@media (max-width: 760px) { .top-row { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 760px) { .train-mode.due-mode { grid-column: auto; } .op-head { margin-bottom: 16px; } }
 .train-modes { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .train-mode:last-child { grid-column: 1 / -1; flex-direction: row; align-items: center; flex-wrap: wrap; padding: 14px 18px; }

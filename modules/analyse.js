@@ -15,10 +15,9 @@ import {
 import { syncNow, cfg as syncCfg } from '../core/sync.js';
 import * as store from '../core/store.js';
 import * as chesscom from '../core/chesscom.js';
-import { scanGames, setBook } from './openings.js';
+import { scanGames, setBook, DRAWS } from './openings.js';
 
 const TIME_FR = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapide', daily: 'Par jour' };
-const DRAWS = ['agreed', 'repetition', 'stalemate', 'insufficient', '50move', 'timevsinsufficient'];
 
 // ------------------------------------------------------------------ état
 export let BOOK = {};

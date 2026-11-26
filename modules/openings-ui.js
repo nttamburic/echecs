@@ -14,7 +14,7 @@ import {
   listRepertoires, getRepertoire, saveRepertoire, deleteRepertoire,
   listEvents, computeMastery, masterySummary, scanGames, STATUS, EVT, REP, WINDOW_DAYS, MIN_SITUATIONS, THRESHOLD,
   computeCards, cardsSummary, NEW_PER_DAY,
-  findSuggestions, applySuggestion, pathTo, SUGGEST_MIN, importPgn, computePerformance,
+  findSuggestions, applySuggestion, pathTo, SUGGEST_MIN, importPgn, computePerformance, openingResults,
 } from './openings.js';
 import { Chess } from '../vendor/chess.js';
 import { coverageOf, cachedCoverage, covN, THRESHOLDS, pct, coverageKey } from './openings-coverage.js';
@@ -105,7 +105,13 @@ function rescanSoon() {
 // Événements ajoutés (parcours des parties) ou données arrivées d'un autre appareil : on rafraîchit.
 let reloadTimer = null;
 let homeTimer = null;
+let topTimer = null;
 store.onChange((info) => {
+  // Analyse enregistrée ou effacée, ou pseudo reçu d'un autre appareil : seul le bloc des résultats est refait.
+  if ((info.col === 'analysisIndex' || (info.col === 'settings' && info.remote)) && document.body.dataset.view === 'openings') {
+    clearTimeout(topTimer);
+    topTimer = setTimeout(() => { const box = $('#top-openings'); if (box && document.body.dataset.view === 'openings') renderTopOpenings(box); }, 400);
+  }
   if ((info.col === EVT || info.col === REP) && document.body.dataset.view === 'openings') {
     clearTimeout(homeTimer);
     homeTimer = setTimeout(() => { if (document.body.dataset.view === 'openings') renderHome($('#openings-view')); }, 400);
@@ -147,6 +153,7 @@ export async function renderHome(el) {
       <button class="rep-del" data-del="${esc(r.id)}" title="Supprimer ce répertoire" aria-label="Supprimer le répertoire ${esc(r.name)}">${TRASH}</button>
     </div>`).join('') : '<p class="muted">Aucun répertoire pour le moment. Créez-en un, puis jouez vos coups sur l\'échiquier.</p>'}</div>
   ${reps.length && lichessStatus() ? `<p class="muted small li-status">${lichessStatus()}</p>` : ''}
+  <section class="card top-op" id="top-openings" aria-labelledby="top-op-title">${topHead}<p class="muted small">Calcul à partir de vos parties analysées…</p></section>
   ${reps.length ? '<section class="card sugg-box" id="sugg-box"><h2>Suggestions</h2><p class="muted small">Recherche des erreurs répétées dans vos parties analysées…</p></section>' : ''}
   <dialog id="rep-dlg" class="dlg"><form method="dialog">
     <h2>Nouveau répertoire</h2>
@@ -189,6 +196,7 @@ export async function renderHome(el) {
     <div class="row end"><button value="cancel" class="btn">Annuler</button><button id="pgn-go" value="ok" class="btn primary">Importer</button></div>
   </form></dialog>`;
   bindImport(el, reps);
+  renderTopOpenings($('#top-openings', el));
   if (reps.length && !LI.loaded) loadLichess();
   if (reps.length) renderSuggestions($('#sugg-box', el), reps);
   homeCoverage(el, reps);
@@ -360,6 +368,59 @@ function bindImport(el, reps) {
     rescanSoon();
     location.hash = '#/openings/' + encodeURIComponent(rep.id);
   };
+}
+
+// ------------------------------------------------------------------ résultats des ouvertures les plus jouées
+const TOP_N = 5;
+const topHead = '<h2 class="op-h2" id="top-op-title">Vos ouvertures les plus jouées</h2>';
+
+// Le résultat est lu dans la partie enregistrée avec l'analyse (les parties chess.com n'ont pas besoin
+// d'être chargées), l'ouverture dans l'index, que les anciennes analyses reçoivent après coup.
+async function renderTopOpenings(box) {
+  const show = (html) => { if (box.isConnected) box.innerHTML = topHead + html; };
+  const user = getUser();
+  if (!user) {
+    show('<p class="muted small">Indiquez votre pseudo chess.com (<a href="#/settings/profile">Paramètres → Profil</a>) pour savoir de quel côté vous jouiez et calculer vos résultats.</p>');
+    return;
+  }
+  let entries;
+  try {
+    const [analyses, index] = await Promise.all([store.all('analysis'), store.all('analysisIndex')]);
+    const summaries = new Map(index.map((r) => [r.id, r.data]));
+    entries = analyses.filter((r) => r.data).map((r) => {
+      const s = summaries.get(r.id) || r.data.summary;
+      return { game: r.data.game, opening: s && s.opening };
+    });
+  } catch {
+    show('<p class="err small">Impossible de lire vos parties analysées.</p>');
+    return;
+  }
+  const res = openingResults(entries, user, TOP_N);
+  if (!res.total) {
+    show(entries.length
+      ? `<p class="muted small">Aucune des parties analysées n'a été jouée avec le pseudo <b>${esc(user)}</b>. Vérifiez-le dans <a href="#/settings/profile">Paramètres → Profil</a>.</p>`
+      : '<p class="muted small">Aucune partie analysée pour le moment. Analysez des parties depuis l\'<a href="#/games">Historique des parties</a> (une par une ou avec « Analyse multiple »).</p>');
+    return;
+  }
+  const notes = [];
+  if (res.rows.length && res.count < TOP_N) notes.push(`Seulement ${plural(res.count, 'ouverture')} pour le moment : analysez d'autres parties pour en voir jusqu'à ${TOP_N}.`);
+  if (res.unnamed) notes.push(res.unnamed > 1 ? `${res.unnamed} parties sans ouverture reconnue ne sont pas classées.` : '1 partie sans ouverture reconnue n\'est pas classée.');
+  show(`<p class="muted small">Vos résultats sur ${plural(res.total, 'partie')} analysée${res.total > 1 ? 's' : ''}, toutes périodes confondues (analyses complètes ou non). Les variantes sont réunies par famille ; les Blancs et les Noirs sont comptés à part.</p>
+    ${res.rows.length ? `<ol class="top-list">${res.rows.map(topRow).join('')}</ol>` : '<p class="muted">Aucune ouverture reconnue dans ces parties.</p>'}
+    ${notes.map((n) => `<p class="muted small">${n}</p>`).join('')}`);
+}
+
+function topRow(r) {
+  const name = frOpening(r.family);
+  const parts = [['w', r.pw, r.w, 'Victoires'], ['d', r.pd, r.d, 'Nulles'], ['l', r.pl, r.l, 'Défaites']];
+  return `<li class="top-row">
+    <div class="top-name"><span class="avatar-sm ${r.color}"><img src="pieces/${r.color}K.svg" alt=""></span>
+      <span><b>${esc(name)}</b><span class="muted small">Avec les ${colorFr(r.color)} · ${plural(r.n, 'partie')}</span></span></div>
+    <div class="top-res">
+      <div class="top-bar" aria-hidden="true">${parts.map(([k, p, n]) => (n ? `<i class="tb-${k}" style="flex-grow:${n}"></i>` : '')).join('')}</div>
+      <dl class="top-pct">${parts.map(([k, p, n, label]) => `<div class="tp-${k}" title="${label} : ${n} sur ${r.n}"><dt>${label}</dt><dd>${p} %</dd></div>`).join('')}</dl>
+    </div>
+  </li>`;
 }
 
 // ------------------------------------------------------------------ suggestions d'enrichissement
