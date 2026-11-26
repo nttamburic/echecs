@@ -21,9 +21,10 @@ import * as prec from './modules/puzzles-recommend.js';
 import * as strategy from './modules/strategy.js';
 import * as endgames from './modules/endgames.js';
 import * as endgamePuzzles from './modules/endgames-puzzles.js';
+import * as revision from './modules/revision.js';
 import { oublierSiAilleurs } from './core/puzzle-reprise.js';
 
-const VIEWS = ['accueil', 'home', 'game', 'play', 'free', 'setup', 'studies', 'study', 'openings', 'rep', 'train', 'model', 'puzzles', 'puzzle', 'puzzletheme', 'puzzlerec', 'strategy', 'endgames', 'endgame', 'endgamepz', 'settings'];
+const VIEWS = ['accueil', 'home', 'game', 'play', 'free', 'setup', 'studies', 'study', 'openings', 'rep', 'train', 'model', 'puzzles', 'puzzle', 'puzzletheme', 'puzzlerec', 'strategy', 'endgames', 'endgame', 'endgamepz', 'revision', 'exercice', 'settings'];
 const MODULES = []; // modules pas encore livrés
 
 export function showView(v, tab = v === 'home' || v === 'game' ? 'games' : v === 'setup' ? 'free' : v) {
@@ -39,7 +40,9 @@ function route() {
   oublierSiAilleurs(h);
   const m = /^#\/game\/(.+)$/.exec(h);
   if (!m) analyse.leave();
-  if (/^#\/(game|games|play|free|study|openings|puzzles|strategy|endgames|settings)(\/|$)/.test(h)) accueil.leave();
+  if (/^#\/(game|games|play|free|study|openings|puzzles|strategy|endgames|revision|settings)(\/|$)/.test(h)) accueil.leave();
+  if (h !== '#/revision') revision.leave();
+  if (h !== '#/revision/seance') revision.leaveSeance();
   if (!/^#\/study\/./.test(h)) study.leave();
   if (!/^#\/openings\/./.test(h) || /^#\/openings\/(train|model)/.test(h)) openingsUi.leaveRepertoire();
   if (!/^#\/openings\/model/.test(h)) model.leave();
@@ -90,6 +93,10 @@ function route() {
     if (sub === 'play') { showView('endgame', 'endgames'); endgames.jouerVue($('#endgame-view')); return; }
     if (sub.startsWith('puzzles/')) { showView('endgamepz', 'endgames'); endgamePuzzles.demarrer($('#endgamepz-view'), sub.slice(8)); return; }
     showView('endgames'); endgames.show($('#endgames-view'), sub); return;
+  }
+  if (name === 'revision') {
+    if (sub === 'seance') { showView('exercice', 'revision'); revision.seance($('#exercice-view')); return; }
+    showView('revision'); revision.show($('#revision-view')); return;
   }
   if (MODULES.includes(name)) { showView(name); soon($(`#${name}-view`), name); return; }
   if (name === 'settings') { showView('settings'); settings.render($('#settings-view'), sub); return; }

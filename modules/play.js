@@ -13,6 +13,7 @@ import { frOpening } from './opening-names.js';
 import { put } from '../core/store.js';
 import { scoreJoueur } from '../core/manu/erreurs.js';
 import { CLE_PARTIE, partieAGarder, relirePartie } from '../core/play-reprise.js';
+import { noterConversion } from '../core/revision-store.js';
 
 const P = {
   phase: 'setup', // setup | play | over
@@ -218,7 +219,8 @@ function undo() {
   P.last = Date.now();
   render();
 }
-const canUndo = () => P.phase !== 'setup' && !(P.etude && P.phase === 'over') &&
+const defi = () => P.etude?.type === 'conversion'; // à réussir sans reprendre de coup
+const canUndo = () => P.phase !== 'setup' && !defi() && !(P.etude && P.phase === 'over') &&
   !(P.result && (P.result.resigned || P.result.flag)) && P.moves.slice(P.base).some((m) => m.color === P.user);
 
 function resign() {
@@ -258,7 +260,32 @@ function enregistrerEtude(etude) {
     .finally(() => { if (P.etude === etude && document.body.dataset.view === 'play') render(); });
 }
 
+function enregistrerDefi(etude, reussie) {
+  etude.enregistrement = 'en_cours';
+  noterConversion(etude.id, reussie)
+    .then(() => { etude.enregistrement = 'ok'; }, () => { etude.enregistrement = 'erreur'; })
+    .finally(() => { if (P.etude === etude && document.body.dataset.view === 'play') render(); });
+}
+
+function bilanDefi() {
+  const e = P.etude;
+  const reussie = P.result.score === (P.user === 'w' ? '1-0' : '0-1');
+  if (!e.date) {
+    e.date = Date.now();
+    // quitter sans avoir joué un seul coup ne compte pas comme un essai
+    e.joueUnCoup = P.moves.slice(P.base).some((m) => m.color === P.user);
+    if (e.joueUnCoup) enregistrerDefi(e, reussie);
+  }
+  const etat = !e.joueUnCoup ? 'Aucun coup joué : cet essai ne compte pas.' : e.enregistrement === 'ok' ? 'Essai enregistré.'
+    : e.enregistrement === 'erreur' ? 'Enregistrement impossible.' : 'Enregistrement…';
+  return `<section class="card strategy-bilan"><h2>${reussie ? 'Avantage converti !' : 'Avantage non converti'}</h2><p>${esc(P.result.text)}</p>
+    <p class="small muted" role="status">${etat}</p>
+    <div class="row"><a class="btn primary" href="${esc(e.retour.href)}">${esc(e.retour.texte)}</a>
+    <button type="button" class="btn" id="play-defi-retry">Réessayer la position</button></div></section>`;
+}
+
 function bilanEtude() {
+  if (defi()) return bilanDefi();
   const e = P.etude;
   if (!e.date) {
     e.date = Date.now();
@@ -405,7 +432,7 @@ function render() {
   $('#play-undo').disabled = !canUndo();
   $('#play-hint').disabled = !myTurn;
   $('#play-hint').classList.toggle('hidden', !!P.etude);
-  $('#play-study-end').classList.toggle('hidden', !P.etude || P.phase !== 'play');
+  $('#play-study-end').classList.toggle('hidden', !P.etude || defi() || P.phase !== 'play'); // un défi s'abandonne
   $('#play-resign').disabled = P.phase !== 'play';
 
   // état : réflexion, aide, résultat
@@ -431,11 +458,17 @@ function render() {
     html = `<div class="hint err" role="alert">${esc(P.botErr)} <button id="play-retry" class="btn small" type="button">Réessayer</button></div>`;
   } else if (P.phase === 'play') {
     html = `<div class="hint muted">${atLatest() ? (P.chess.turn() === P.user ? 'À vous de jouer.' : '') : 'Revenez à la dernière position pour jouer (→ ou ⏭).'}</div>`;
+    if (defi()) html = '<div class="hint muted small">Convertir l’avantage : gagnez cette position. Ni aide ni reprise de coup.</div>' + html;
     if (P.label) html =`<div class="hint muted small">Partie depuis votre répertoire « ${esc(P.label)} ».</div>` + html;
   }
   st.innerHTML = html;
   const save = $('#play-study-retry');
   if (save) save.onclick = () => { enregistrerEtude(P.etude); render(); };
+  const rejouerDefi = $('#play-defi-retry');
+  if (rejouerDefi) rejouerDefi.onclick = () => {
+    const { id, type, retour } = P.etude;
+    startGame({ fen: P.startFen, user: P.user, elo: P.elo, etude: { id, type, retour } });
+  };
   const again = $('#play-again');
   if (again) again.onclick = newGame;
   const lvl = $('#play-level'); if (lvl) lvl.onclick = newGame;

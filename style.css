@@ -114,7 +114,7 @@ a.btn { text-decoration: none; }
 #more { margin-top: 10px; }
 
 /* ---- vue partie (façon chess.com) : échiquier au centre, barre d'évaluation à gauche, panneau à droite ---- */
-#game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view, #endgame-view, #endgamepz-view { display: flex; gap: 16px; padding: 12px 16px; align-items: flex-start; justify-content: center; }
+#game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view, #endgame-view, #endgamepz-view, #exercice-view { display: flex; gap: 16px; padding: 12px 16px; align-items: flex-start; justify-content: center; }
 .left { width: calc(var(--board) + var(--eval-w) + 8px); max-width: 100%; flex: none; }
 .player { padding: 6px 2px 6px calc(var(--eval-w) + 8px); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 44px; }
 .avatar-sm { width: 32px; height: 32px; border-radius: 4px; display: grid; place-items: center; background: var(--light); flex: none; }
@@ -330,7 +330,7 @@ a.btn { text-decoration: none; }
 
 /* empilé : mobile et tablette en portrait (le mobile paysage est exclu plus bas) */
 @media (max-width: 760px), (max-width: 1279px) and (orientation: portrait) {
-  #game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view, #endgame-view, #endgamepz-view { flex-direction: column; align-items: stretch; gap: 8px; }
+  #game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view, #endgame-view, #endgamepz-view, #exercice-view { flex-direction: column; align-items: stretch; gap: 8px; }
   .left { margin: 0 auto; }
   .panel { width: 100%; max-width: 640px; margin: 0 auto; height: auto; position: static; overflow: visible; }
   .pmoves, #moves { flex: none; max-height: 260px; min-height: 0; }
@@ -375,7 +375,7 @@ a.btn { text-decoration: none; }
   /* « Analyser plusieurs parties » en feuille du bas */
   #multi-dlg { margin: auto 0 0; max-height: 88vh; overflow-y: auto; width: 100%; max-width: none; border-radius: var(--r-sheet) var(--r-sheet) 0 0; padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
   #multi-dlg .btn { min-height: var(--tap); }
-  #game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view, #endgame-view, #endgamepz-view { padding: 6px 4px; }
+  #game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view, #endgame-view, #endgamepz-view, #exercice-view { padding: 6px 4px; }
   .pmoves { max-height: 220px; }
   #moves { max-height: 220px; }
   .player { font-size: 13px; min-height: 38px; }
@@ -397,7 +397,7 @@ a.btn { text-decoration: none; }
     border-bottom: 0; border-right: 1px solid var(--line-soft); box-sizing: border-box; }
   #topbar .brand span { display: none; }
   #content { margin-left: 48px; }
-  #game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view, #endgame-view, #endgamepz-view { flex-direction: row; align-items: flex-start; justify-content: center; padding: 4px 8px; gap: 8px; }
+  #game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view, #endgame-view, #endgamepz-view, #exercice-view { flex-direction: row; align-items: flex-start; justify-content: center; padding: 4px 8px; gap: 8px; }
   .left { margin: 0; }
   .panel { width: var(--panel-w); height: calc(100dvh - 8px); top: 4px; position: sticky; max-width: none; margin: 0; overflow-y: auto; }
   .navbar { position: sticky; bottom: 0; top: auto; left: auto; right: auto; order: 0; }
@@ -1613,3 +1613,17 @@ a.pz-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px;
 /* Finales : titre et accès à la position libre contre la table de finales */
 .eg-entete { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .eg-entete .btn { min-height: 44px; display: inline-flex; align-items: center; }
+
+/* Révision : page d'accueil et exercice « Trouvez mieux » */
+.rv-bloc { margin-top: 16px; }
+.rv-liste { list-style: none; margin: 0; padding: 0; }
+.rv-ligne { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line); }
+.rv-texte { display: flex; flex-direction: column; flex: 1 1 220px; min-width: 0; }
+.rv-ligne .btn, .rv-bloc .row .btn { min-height: 44px; display: inline-flex; align-items: center; }
+.rv-ok { color: var(--accent); font-size: 14px; font-weight: 700; }
+.rv-solution { padding: 0 16px 12px; overflow-y: auto; }
+.rv-solution:empty { display: none; }
+.rv-solution dt { color: var(--text-muted); font-size: 13px; margin-top: 10px; }
+.rv-solution dd { margin: 2px 0 0; }
+.rv-solution .fig { width: 16px; height: 16px; }
+.coach-exo { margin-top: 8px; min-height: 44px; }

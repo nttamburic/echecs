@@ -1,6 +1,8 @@
 import * as store from '../core/store.js';
 import { $, badge, esc, local, toast } from '../core/ui.js';
 import { CLASSES } from '../analysis.js';
+import { coupsDe, exerciceDe } from '../core/revision.js';
+import { demanderSeance } from '../core/revision-store.js';
 import { fmtGameDate } from '../core/format.js';
 import { PERIODES_STRATEGIE, periodeStrategie } from '../core/manu/strategie.js';
 import { getGames, ouvrirAnalyseStrategique, stashGamePly } from './analyse.js';
@@ -62,14 +64,23 @@ function afficherDetails(el, e) {
     ${board}
     <div class="strategy-actions">
       <div><strong class="strategy-move">${coup(e)}</strong> <span class="muted">· ${gravite(e)}</span></div>
+      <div><button type="button" class="btn primary" data-trouver aria-describedby="${el.id}-trouver">Trouvez mieux</button>
+        <p id="${el.id}-trouver" class="small muted">Cherchez un meilleur coup depuis la position avant l’erreur.</p></div>
       <div><button type="button" class="btn" data-analyser aria-describedby="${el.id}-analyse">Analyser la position</button>
         <p id="${el.id}-analyse" class="small muted">Retrouvez le coup dans l’analyse de la partie.</p></div>
-      <div><button type="button" class="btn primary" data-rejouer aria-describedby="${el.id}-rejouer">Rejouer la partie</button>
+      <div><button type="button" class="btn" data-rejouer aria-describedby="${el.id}-rejouer">Rejouer la partie</button>
         <p id="${el.id}-rejouer" class="small muted">Repartez de la position avant l’erreur contre Maia3.</p></div>
       <div><button type="button" class="btn" data-archiver aria-describedby="${el.id}-archiver">Archiver l’erreur</button>
         <p id="${el.id}-archiver" class="small muted">Retire l’erreur de la liste.</p></div>
     </div>
   </div>`;
+  $('[data-trouver]', el).onclick = async () => {
+    const data = await store.get('analysis', e.jeu.id).catch(() => null);
+    const ex = data && exerciceDe(data, coupsDe(data.game), e.ply, { gravite: e.gravite });
+    if (!ex) { toast('Exercice indisponible pour cette position.', { type: 'err' }); return; }
+    demanderSeance({ exercices: [ex], retour });
+    location.hash = '#/revision/seance';
+  };
   $('[data-analyser]', el).onclick = () => {
     stashGamePly(e.jeu.id, e.ply + 1);
     location.hash = '#/game/' + encodeURIComponent(e.jeu.id);

@@ -16,6 +16,8 @@ import { syncNow, cfg as syncCfg } from '../core/sync.js';
 import * as store from '../core/store.js';
 import * as chesscom from '../core/chesscom.js';
 import { scanGames, setBook, DRAWS } from './openings.js';
+import { exerciceDe } from '../core/revision.js';
+import { demanderSeance } from '../core/revision-store.js';
 
 const TIME_FR = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapide', daily: 'Par jour' };
 
@@ -1095,6 +1097,8 @@ function renderCoach(g, d, review) {
         html += `<p>${bad.length ? `De votre côté : ${bad.join(', ')}.` : 'Aucune erreur de votre côté : bravo !'}</p>`;
       }
       html += '<p class="muted">Cliquez sur « Suivant » pour revoir la partie coup par coup.</p>';
+      const n = fautesDe(g).length;
+      if (n) html += `<button type="button" class="btn coach-exo" data-exo="toutes">↺ Trouvez mieux : ${n > 1 ? `mes ${n} fautes` : 'ma faute'}</button>`;
     } else html += '<p class="muted">Jouez vos propres coups : Stockfish les note.</p>';
     el.innerHTML = coachWrap(html);
     bindCoach(g);
@@ -1121,14 +1125,30 @@ function renderCoach(g, d, review) {
   const lineRow = (cls, label, text, key) => `<div class="line ${cls}"><span class="lhead">${label}</span><span class="ltext" title="${esc(text)}">${esc(text)}</span><button type="button" class="btn small" data-line="${key}" aria-label="Voir : ${label}">▶ Voir</button></div>`;
   if (hasAfter) html += lineRow('bad', 'Après ce coup', ex.refutation.text, 'played');
   if (ex.best) html += lineRow('good', bestLbl, ex.best.text, bestKey);
+  if (!d.inVar && !g.free && d.color === g.playerColor && ['inaccuracy', ...FAUTES].includes(d.r.cls) && exercice(g, g.ply - 1)) {
+    html += `<button type="button" class="btn coach-exo" data-exo="${g.ply - 1}">↺ Trouvez mieux</button>`;
+  }
   html += `<div class="coach-foot muted">${esc(SOURCE_LABEL(d.pos))}</div>`;
   el.innerHTML = coachWrap(html);
   bindCoach(g, d);
 }
 
+// « Trouvez mieux » : les fautes du joueur dans la partie ouverte.
+const FAUTES = ['mistake', 'miss', 'blunder'];
+const exercice = (g, ply) => exerciceDe({ game: { ...g.game, id: g.id }, positions: g.positions }, g.moves, ply, { gravite: g.results[ply]?.cls });
+const fautesDe = (g) => g.moves.map((m, i) => (m.color === g.playerColor && FAUTES.includes(g.results[i]?.cls) ? exercice(g, i) : null)).filter(Boolean);
+function ouvrirExercices(g, quoi) {
+  const exercices = quoi === 'toutes' ? fautesDe(g) : [exercice(g, +quoi)].filter(Boolean);
+  if (!exercices.length) return;
+  stopAuto();
+  demanderSeance({ exercices, retour: { href: '#/game/' + encodeURIComponent(g.id), texte: 'Retour au bilan' } });
+  location.hash = '#/revision/seance';
+}
+
 const coachWrap = (html) => `<div class="coach-wrap"><div class="avatar"><img src="pieces/wN.svg" alt=""></div><div class="bubble">${html}</div></div>`;
 
 function bindCoach(g, d) {
+  document.querySelectorAll('#coach [data-exo]').forEach((b) => { b.onclick = () => ouvrirExercices(g, b.dataset.exo); });
   const ev = $('#exit-var');
   if (ev) ev.onclick = exitVar;
   const cm = $('#coach-more');

@@ -55,7 +55,7 @@ export function puzzlesDus(cartes, maintenant = Date.now()) {
 const pluriel = (n, un, plusieurs) => (n > 1 ? plusieurs : un);
 
 // « À faire aujourd'hui », dans l'ordre d'importance ; les activités sans rien à faire sont omises.
-export function taches({ ouvertures, puzzles, woodpecker, parties }) {
+export function taches({ ouvertures, puzzles, woodpecker, parties, erreurs }) {
   const out = [];
   if (ouvertures && ouvertures.dus + ouvertures.nouveaux > 0) {
     const { dus, nouveaux, repertoires } = ouvertures;
@@ -66,6 +66,10 @@ export function taches({ ouvertures, puzzles, woodpecker, parties }) {
   if (puzzles?.n) {
     out.push({ cle: 'puzzles', n: puzzles.n, titre: pluriel(puzzles.n, 'Puzzle à revoir', 'Puzzles à revoir'),
       detail: 'Répétition espacée des puzzles recommandés', action: 'S’entraîner', href: `#/puzzles/recommend/${puzzles.source}` });
+  }
+  if (erreurs) {
+    out.push({ cle: 'erreurs', n: erreurs, titre: pluriel(erreurs, 'Erreur à rejouer', 'Erreurs à rejouer'),
+      detail: 'Trouvez mieux : vos erreurs stratégiques et de finales', action: 'Réviser', href: '#/revision/seance' });
   }
   if (woodpecker) {
     const reste = woodpecker.total - woodpecker.faits;

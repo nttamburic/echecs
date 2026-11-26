@@ -16,12 +16,21 @@ import { buildDueTargets } from './openings-train.js';
 import { listStudies } from './study-model.js';
 import { BOOK, getGames, getUser, isLoadingGames, ouvrirAnalyseStrategique } from './analyse.js';
 import { miniBoard } from './setup.js';
+import { chargerFile } from '../core/revision-store.js';
 
 const CADENCES = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapide', daily: 'Par jour' };
 const ISSUES = { win: 'Victoire', draw: 'Nulle', loss: 'Défaite' };
 const plural = (n, s) => `${n} ${s}${n > 1 ? 's' : ''}`;
 
-const H = { el: null, seq: 0, timer: null, offStore: null, offSync: null };
+// revision : nombre d'erreurs à rejouer. Le calcul peut être long la première fois : la page ne l'attend pas.
+const H = { el: null, seq: 0, timer: null, offStore: null, offSync: null, revision: 0 };
+
+async function compterRevision(user) {
+  const n = user ? await lire(async () => { const f = await chargerFile(user, BOOK); return f.dues.length + f.nouvelles.length; }, 0) : 0;
+  if (n === H.revision) return;
+  H.revision = n;
+  if (H.el) rafraichir();
+}
 
 // Une donnée illisible ne doit pas vider la page : le bloc concerné est simplement omis.
 const lire = async (f, defaut) => { try { return await f(); } catch (e) { console.warn('Accueil', e); return defaut; } };
@@ -119,6 +128,7 @@ function blocTaches(d) {
     ouvertures: d.ouvertures,
     puzzles: puzzlesDus(d.cartes),
     woodpecker: d.woodpecker,
+    erreurs: d.user ? H.revision : 0,
     parties: d.user && !d.chargement ? aAnalyser(d.jeux, d.index) : 0,
   });
   const corps = liste.length ? `<ul class="ac-lignes">${liste.map((t, i) => {
@@ -237,6 +247,7 @@ async function rendre() {
   if (seq !== H.seq || !H.el) return;
   const focus = H.el.contains(document.activeElement) ? document.activeElement.getAttribute('href') : null;
   H.el.innerHTML = `<div class="ac">${page(d)}</div>`;
+  if (!d.chargement) compterRevision(d.user);
   const analyser = $('[data-analyser]', H.el);
   if (analyser) analyser.onclick = () => ouvrirAnalyseStrategique(JOURS_RECENTS);
   if (focus) H.el.querySelector(`[href="${CSS.escape(focus)}"]`)?.focus({ preventScroll: true });
