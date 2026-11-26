@@ -49,7 +49,7 @@ function construire(el) {
   el.innerHTML = `<h1 class="sr-only">Puzzles de finales</h1>
     <div class="left"><div id="egp-board"></div></div>
     <aside class="panel pz-panel" aria-label="Puzzles de finales">
-      <div class="phead"><a class="btn small" href="#/endgames">← Finales</a><span class="ptitle" id="egp-title"></span></div>
+      <div class="phead"><a class="btn small" href="#/endgames/puzzles">← Finales</a><span class="ptitle" id="egp-title"></span></div>
       <div class="popening" id="egp-sub"></div>
       <div id="egp-msg" class="tmsg" role="status" aria-live="polite"></div>
       <div class="tactions">

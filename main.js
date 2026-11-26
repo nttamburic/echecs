@@ -44,7 +44,7 @@ function route() {
   if (!/^#\/puzzles\/theme\/./.test(h)) ptheme.leave();
   if (!/^#\/puzzles\/recommend\/./.test(h)) prec.leave();
   if (!/^#\/strategy/.test(h)) strategy.leave();
-  if (!/^#\/endgames\/?$/.test(h)) endgames.leave();
+  if (!/^#\/endgames\/mes-finales$/.test(h)) endgames.leave();
   if (!/^#\/endgames\/puzzles\/./.test(h)) endgamePuzzles.leave();
   if (m) { showView('game'); analyse.openGame(decodeURIComponent(m[1])); return; }
   const [, name, sub] = /^#\/([^/]*)\/?(.*)$/.exec(h) || [];
@@ -81,7 +81,7 @@ function route() {
     if (sub === 'setup') { showView('setup', 'endgames'); endgames.editeur($('#setup-view')); return; }
     if (sub === 'play') { showView('endgame', 'endgames'); endgames.jouerVue($('#endgame-view')); return; }
     if (sub.startsWith('puzzles/')) { showView('endgamepz', 'endgames'); endgamePuzzles.demarrer($('#endgamepz-view'), sub.slice(8)); return; }
-    showView('endgames'); endgames.show($('#endgames-view')); return;
+    showView('endgames'); endgames.show($('#endgames-view'), sub); return;
   }
   if (MODULES.includes(name)) { showView(name); soon($(`#${name}-view`), name); return; }
   if (name === 'settings') { showView('settings'); settings.render($('#settings-view'), sub); return; }

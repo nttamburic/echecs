@@ -33,6 +33,7 @@ export class Board {
     this.fen = new Chess().fen();
     this.lastMove = null;
     this.arrows = [];
+    this.highlights = [];
     this.mark = null;
     this.selected = null;
     this.interactive = true;
@@ -58,10 +59,11 @@ export class Board {
   }
 
   // mark : { sq, color, sym, label } — classification du dernier coup, affichée sur sa case d'arrivée.
-  setPosition(fen, { lastMove = null, arrows = [], mark = null } = {}) {
+  setPosition(fen, { lastMove = null, arrows = [], mark = null, highlights = [] } = {}) {
     this.fen = fen;
     this.lastMove = lastMove;
     this.arrows = arrows;
+    this.highlights = highlights;
     this.mark = mark;
     this.selected = null;
     this.hl.clear();
@@ -150,8 +152,12 @@ export class Board {
   renderArrows() {
     let s = '<defs>';
     const colors = [...new Set(this.arrows.map((a) => a.color))];
-    colors.forEach((c, i) => { s += `<marker id="ah${i}" markerWidth="4" markerHeight="4" refX="2.2" refY="2" orient="auto"><path d="M0,0 L4,2 L0,4 z" style="fill:${c}"/></marker>`; });
+    colors.forEach((c, i) => { s += `<marker id="${this.uid}-ah${i}" markerWidth="4" markerHeight="4" refX="2.2" refY="2" orient="auto"><path d="M0,0 L4,2 L0,4 z" style="fill:${c}"/></marker>`; });
     s += '</defs>';
+    for (const { sq, color } of this.highlights) {
+      const { x, y } = this.coords(sq);
+      s += `<rect x="${x}" y="${y}" width="1" height="1" fill="${color}" opacity=".29"/>`;
+    }
     for (const a of this.arrows) {
       const f = this.coords(a.from);
       const t = this.coords(a.to);
@@ -159,7 +165,7 @@ export class Board {
       const len = Math.hypot(x2 - x1, y2 - y1);
       const k = (len - 0.45) / len;
       const i = colors.indexOf(a.color);
-      s += `<line x1="${x1}" y1="${y1}" x2="${x1 + (x2 - x1) * k}" y2="${y1 + (y2 - y1) * k}" style="stroke:${a.color}" stroke-width="0.17" stroke-linecap="round" opacity="${a.opacity || 0.85}" marker-end="url(#ah${i})"/>`;
+      s += `<line x1="${x1}" y1="${y1}" x2="${x1 + (x2 - x1) * k}" y2="${y1 + (y2 - y1) * k}" style="stroke:${a.color}" stroke-width="0.17" stroke-linecap="round" opacity="${a.opacity || 0.85}" marker-end="url(#${this.uid}-ah${i})"/>`;
     }
     this.svg.innerHTML = s;
   }

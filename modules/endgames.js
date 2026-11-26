@@ -1,11 +1,12 @@
 // Module « Finales » : page d’accueil (trois onglets) et jeu d’une position contre la table de finales.
 import { Board, announce } from '../board.js';
-import { $, $$, esc, fetchJson, local, uciOf } from '../core/ui.js';
+import { $, $$, esc, fetchJson, uciOf } from '../core/ui.js';
 import { creerSonde, Exercice, lireFen, NOM_FIN, NOM_RESULTAT, uciEnCoup } from '../core/finales.js';
 import { grouperFinales, TYPES_FINALES } from '../core/finales-erreurs.js';
 import { frSan } from '../explain.js';
 import { BOOK, figSan, getGames, getUser } from './analyse.js';
 import * as puzzles from './endgames-puzzles.js';
+import { monterCours } from './endgames-cours.js';
 import { creerListeErreurs } from './liste-erreurs.js';
 import { fenError, renderEditor } from './setup.js';
 import { Chess } from '../vendor/chess.js';
@@ -17,13 +18,12 @@ const sonde = creerSonde(fetchJson);
 
 const COULEUR_INDICE = 'var(--arrow-best)';
 const ONGLETS = [['cours', 'Cours'], ['puzzles', 'Puzzles de finales'], ['mes-finales', 'Mes finales']];
-// L’onglet « Cours » est volontairement vide. L’écran de la position libre est gardé (route
-// #/endgames/setup) mais aucun lien n’y mène pour le moment.
+let afficherCours;
 const mesFinales = creerListeErreurs({
   prefixe: 'endgameMistakes',
   onglets: TYPES_FINALES,
   nomOnglets: 'Type de finale',
-  retour: { href: '#/endgames', texte: 'Retour à mes finales' },
+  retour: { href: '#/endgames/mes-finales', texte: 'Retour à mes finales' },
   textes: {
     chargement: 'Chargement de vos finales…',
     vide: 'Aucune faute dans ce type de finale sur cette période.',
@@ -50,13 +50,10 @@ async function lancer(fen, camp) {
 }
 
 // ------------------------------------------------------------------ page d’accueil
-export function show(el) {
-  $('#topbar-soon').textContent = 'Finales';
-  mesFinales.leave();
-  const choisi = ONGLETS.some(([k]) => k === local.get('endgamesTab')) ? local.get('endgamesTab') : 'cours';
+function monterAccueil(el) {
   el.innerHTML = `<h1 class="page-title">Finales</h1>
     <div class="ptabs eg-onglets" role="tablist" aria-label="Parties du module">${ONGLETS.map(([k, nom]) =>
-      `<button type="button" role="tab" id="eg-tab-${k}" aria-controls="eg-panel-${k}" data-k="${k}" aria-selected="${k === choisi}" tabindex="${k === choisi ? 0 : -1}">${nom}</button>`).join('')}</div>
+      `<button type="button" role="tab" id="eg-tab-${k}" aria-controls="eg-panel-${k}" data-k="${k}">${nom}</button>`).join('')}</div>
     <section role="tabpanel" id="eg-panel-cours" aria-labelledby="eg-tab-cours"></section>
     <section role="tabpanel" id="eg-panel-puzzles" aria-labelledby="eg-tab-puzzles">
       <div id="eg-puzzles"><p class="muted" role="status">Chargement…</p></div></section>
@@ -64,30 +61,40 @@ export function show(el) {
       <div id="eg-mes-finales"></div></section>`;
 
   const onglets = $$('.eg-onglets [role="tab"]', el);
-  const choisir = (i) => {
-    onglets.forEach((b, j) => {
-      b.setAttribute('aria-selected', String(i === j));
-      b.tabIndex = i === j ? 0 : -1;
-      $('#eg-panel-' + b.dataset.k, el).hidden = i !== j;
-    });
-    const cle = onglets[i].dataset.k;
-    local.set('endgamesTab', cle);
-    // « Mes finales » relit toutes les analyses : on ne le calcule que lorsqu’il est affiché
-    if (cle === 'mes-finales') mesFinales.show($('#eg-mes-finales', el)); else mesFinales.leave();
-  };
+  const choisir = (b) => { location.hash = '#/endgames/' + b.dataset.k; };
   onglets.forEach((b, i) => {
-    b.onclick = () => choisir(i);
+    b.onclick = () => choisir(b);
     b.onkeydown = (e) => {
       const suivant = { ArrowLeft: i + onglets.length - 1, ArrowRight: i + 1, Home: 0, End: onglets.length - 1 }[e.key];
       if (suivant === undefined) return;
       e.preventDefault();
-      choisir(suivant % onglets.length);
-      onglets[suivant % onglets.length].focus();
+      const cible = onglets[suivant % onglets.length];
+      choisir(cible);
+      cible.focus();
     };
   });
-  choisir(ONGLETS.findIndex(([k]) => k === choisi));
+}
 
-  puzzles.listerThemes($('#eg-puzzles', el));
+export function show(el, sub) {
+  $('#topbar-soon').textContent = 'Finales';
+  if (!afficherCours) {
+    monterAccueil(el);
+    afficherCours = monterCours($('#eg-panel-cours', el));
+  }
+  const choisi = sub === 'puzzles' || sub === 'mes-finales' ? sub : 'cours';
+  for (const b of $$('.eg-onglets [role="tab"]', el)) {
+    const actif = b.dataset.k === choisi;
+    b.setAttribute('aria-selected', String(actif));
+    b.tabIndex = actif ? 0 : -1;
+    $('#eg-panel-' + b.dataset.k, el).hidden = !actif;
+  }
+  if (choisi === 'mes-finales') {
+    mesFinales.show($('#eg-mes-finales', el));
+  } else {
+    mesFinales.leave();
+    if (choisi === 'puzzles') puzzles.listerThemes($('#eg-puzzles', el));
+    else afficherCours(sub.startsWith('cours/') ? sub.slice(6) : '');
+  }
 }
 
 export function editeur(el) {

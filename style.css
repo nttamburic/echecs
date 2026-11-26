@@ -1541,6 +1541,64 @@ a.pz-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px;
 
 /* ---- Finales ------------------------------------------------------- */
 #endgames-view .ptabs { margin-bottom: 16px; }
+
+/* ---- Finales / Cours ---- */
+.eg-cours [hidden] { display: none; }
+.eg-cours h2 { margin: 0 0 14px; font-size: 19px; line-height: 1.3; }
+.eg-cours h3 { margin: 0; font-size: 14px; font-weight: 650; }
+.eg-cours .muted { font-size: 13px; }
+.eg-cours .btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 34px; padding: 5px 10px; border-radius: 6px; font-size: 13px;
+}
+.eg-cours-back { margin-bottom: 14px; }
+.eg-cours-group { margin: 0 0 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-1); }
+.eg-cours-group summary { min-height: 44px; padding: 11px 13px; border-radius: 6px; color: var(--text); font-weight: 650; }
+.eg-cours-group summary .muted { margin-left: 4px; font-weight: 400; white-space: nowrap; }
+.eg-cours-study {
+  display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 8px;
+  min-height: 42px; padding: 8px 13px; border-top: 1px solid var(--border);
+  color: var(--text); text-decoration: none; overflow-wrap: anywhere;
+}
+.eg-cours-study:hover, .eg-cours-group summary:hover { background: var(--surface-2); color: var(--text); }
+.eg-cours-layout { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr); gap: 14px; align-items: start; }
+.eg-cours .board { touch-action: pan-y; }
+.eg-cours-board-controls, .eg-cours-neighbors {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 8px;
+}
+.eg-cours-neighbors { margin-top: 14px; }
+.eg-cours-panel { min-width: 0; border-radius: 8px; background: var(--sidebar); }
+.eg-cours-head {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+}
+.eg-cours-notes {
+  display: grid; gap: 9px; max-height: 268px; padding: 12px;
+  overflow: auto; overflow-wrap: anywhere; font-size: 14px;
+}
+.eg-cours-notes p { margin: 0; white-space: pre-line; }
+.eg-cours-notes strong { display: block; margin-bottom: 2px; color: var(--text-strong); font-size: 13px; }
+.eg-cours-score { padding: 10px 12px 12px; border-top: 1px solid var(--border); }
+.eg-cours-moves {
+  display: flex; flex-wrap: wrap; align-content: flex-start; gap: 4px;
+  min-height: 39px; max-height: 115px; margin-top: 6px; padding: 2px; overflow: auto;
+}
+.eg-cours-move {
+  min-height: 26px; padding: 2px 6px; border: 0; border-radius: 4px;
+  background: var(--surface-1); color: var(--text); font: inherit; font-size: 13px; white-space: nowrap; cursor: pointer;
+}
+.eg-cours-move:hover { background: var(--surface-2); }
+.eg-cours-move[data-variant] { color: var(--link-hover); }
+.eg-cours-move[aria-current] { background: var(--cur); color: var(--text-strong); outline: 1px solid var(--accent); }
+.eg-cours-controls { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 8px; }
+.eg-cours-controls .btn { padding: 3px; font-size: 19px; line-height: 1; }
+@media (max-width: 560px) {
+  .eg-cours-layout { grid-template-columns: minmax(0, 1fr); }
+  .eg-cours-notes, .eg-cours-moves { max-height: none; }
+}
+@media (pointer: coarse) {
+  .eg-cours .btn, .eg-cours-move, .eg-cours-study { min-height: 44px; }
+}
 .eg-card h2 { margin: 0 0 6px; font-size: var(--fs-h2); line-height: var(--lh-h2); }
 .eg-card p { margin: 0 0 10px; }
 .eg-libre { display: flex; gap: 18px; align-items: center; }
