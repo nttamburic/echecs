@@ -1,5 +1,5 @@
 import { Board } from '../board.js';
-import { $, $$, esc, fetchJson } from '../core/ui.js';
+import { $, $$, esc, fetchJson, local } from '../core/ui.js';
 import { BRUSHES, chessAt } from '../core/study-pgn.js';
 import { GLYPH_CLASS, moveNo, treeHtml, showInList } from '../core/tree-view.js';
 import { figSan } from './analyse.js';
@@ -210,6 +210,7 @@ export function monterCours(zone) {
 
   function afficherEtude(s, position) {
     etude = s;
+    local.set('finaleDerniere', JSON.stringify({ id: s.id, titre: titre(s) })); // « Reprendre » sur l'accueil
     noeuds = arbre(s);
     ply = 0;
     ligne = [0];

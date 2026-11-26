@@ -36,6 +36,7 @@ const S = {
 
 export const getUser = () => S.user;
 export const getGames = () => S.games;
+export const isLoadingGames = () => S.busy;
 
 // ------------------------------------------------------------------ accueil
 function resultFor(game, user) {

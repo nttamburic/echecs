@@ -10,6 +10,7 @@ import { soon } from './modules/soon.js';
 import * as play from './modules/play.js';
 import * as setup from './modules/setup.js';
 import * as study from './modules/study.js';
+import * as accueil from './modules/home.js';
 import * as openingsUi from './modules/openings-ui.js';
 import * as train from './modules/openings-train.js';
 import * as model from './modules/openings-model.js';
@@ -22,7 +23,7 @@ import * as endgames from './modules/endgames.js';
 import * as endgamePuzzles from './modules/endgames-puzzles.js';
 import { oublierSiAilleurs } from './core/puzzle-reprise.js';
 
-const VIEWS = ['home', 'game', 'play', 'free', 'setup', 'studies', 'study', 'openings', 'rep', 'train', 'model', 'puzzles', 'puzzle', 'puzzletheme', 'puzzlerec', 'strategy', 'endgames', 'endgame', 'endgamepz', 'settings'];
+const VIEWS = ['accueil', 'home', 'game', 'play', 'free', 'setup', 'studies', 'study', 'openings', 'rep', 'train', 'model', 'puzzles', 'puzzle', 'puzzletheme', 'puzzlerec', 'strategy', 'endgames', 'endgame', 'endgamepz', 'settings'];
 const MODULES = []; // modules pas encore livrés
 
 export function showView(v, tab = v === 'home' || v === 'game' ? 'games' : v === 'setup' ? 'free' : v) {
@@ -34,10 +35,11 @@ export function showView(v, tab = v === 'home' || v === 'game' ? 'games' : v ===
 }
 
 function route() {
-  const h = location.hash || '#/games';
+  const h = location.hash || '#/accueil';
   oublierSiAilleurs(h);
   const m = /^#\/game\/(.+)$/.exec(h);
   if (!m) analyse.leave();
+  if (/^#\/(game|games|play|free|study|openings|puzzles|strategy|endgames|settings)(\/|$)/.test(h)) accueil.leave();
   if (!/^#\/study\/./.test(h)) study.leave();
   if (!/^#\/openings\/./.test(h) || /^#\/openings\/(train|model)/.test(h)) openingsUi.leaveRepertoire();
   if (!/^#\/openings\/model/.test(h)) model.leave();
@@ -91,9 +93,10 @@ function route() {
   }
   if (MODULES.includes(name)) { showView(name); soon($(`#${name}-view`), name); return; }
   if (name === 'settings') { showView('settings'); settings.render($('#settings-view'), sub); return; }
-  if (name !== 'games') { history.replaceState(null, '', '#/games'); }
-  showView('home');
-  analyse.showHome();
+  if (name === 'games') { showView('home'); analyse.showHome(); return; }
+  if (h !== '#/accueil') history.replaceState(null, '', '#/accueil');
+  showView('accueil');
+  accueil.show($('#accueil-view'));
 }
 
 // ---- menu latéral sur téléphone (tiroir) ----

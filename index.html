@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="tokens.css">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="study.css">
+<link rel="stylesheet" href="home.css">
 </head>
 <body>
 <a href="#content" class="skip" id="skip">Aller au contenu</a>
@@ -22,15 +23,17 @@
     <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
   </button>
   <button id="tb-back" class="icon-btn" type="button" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
-  <a href="#/games" class="brand"><img src="pieces/wN.svg" alt=""><span>Chess Journey</span></a>
+  <a href="#/accueil" class="brand"><img src="pieces/wN.svg" alt=""><span>Chess Journey</span></a>
   <h1 id="topbar-title"></h1>
   <span id="topbar-soon" aria-hidden="true"></span>
 </header>
 <div id="scrim"></div>
 
 <aside id="sidebar" aria-label="Navigation">
-  <a href="#/games" class="brand"><img src="pieces/wN.svg" alt=""><span>Chess Journey</span></a>
+  <a href="#/accueil" class="brand"><img src="pieces/wN.svg" alt=""><span>Chess Journey</span></a>
   <nav id="tabs" aria-label="Modules">
+    <a href="#/accueil" data-tab="accueil" title="Accueil" aria-label="Accueil">
+      <svg viewBox="0 0 24 24"><path d="M3.5 11L12 4l8.5 7M6 9.5V20h12V9.5M10 20v-5h4v5"/></svg><span>Accueil</span></a>
     <a href="#/play" data-tab="play" title="Jouer" aria-label="Jouer">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path class="fill" d="M10 8.2l6 3.8-6 3.8z"/></svg><span>Jouer</span></a>
     <a href="#/free" data-tab="free" title="Analyse libre" aria-label="Analyse libre">
@@ -59,7 +62,8 @@
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><path d="M4 4l16 16"/></svg>
   <span>Vous êtes hors ligne. Vos modifications restent sur cet appareil et seront synchronisées au retour de la connexion.</span>
 </div>
-<main id="home-view" class="view page">
+<main id="accueil-view" class="view page"></main>
+<main id="home-view" class="view hidden page">
   <header class="hist-head">
     <div>
       <h1>Historique des parties</h1>

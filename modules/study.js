@@ -356,6 +356,7 @@ async function load(el, studyId, chapterId, key = null) {
   S.node = same ? nodeAt(S.ch.root, key) : S.ch.root;
   S.dirty = false;
   local.set(lastKey, rec.id);
+  local.set('studyLastOpened', study.id); // « Reprendre » sur l'accueil
   S.board.setOrientation(S.ch.orientation);
   renderAll();
 }
