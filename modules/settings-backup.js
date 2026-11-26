@@ -27,7 +27,7 @@ function download(name, parts, type) {
 
 function summaryOf(records) {
   const n = (col) => records.filter((r) => r.col === col).length;
-  return `${plural(n('analysis'), 'partie analysée', 'parties analysées')}, ${plural(n(REP), 'répertoire')}, ${plural(records.length, 'enregistrement')} au total`;
+  return `${plural(n('analysis'), 'partie analysée', 'parties analysées')}, ${plural(n(REP), 'répertoire')}, ${plural(n('study'), 'étude')}, ${plural(records.length, 'enregistrement')} au total`;
 }
 
 function lastBackupText() {

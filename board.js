@@ -7,6 +7,10 @@ const PIECE_FR = { p: 'pion', n: 'cavalier', b: 'fou', r: 'tour', q: 'dame', k: 
 const PIECE_NOM = { p: 'Pion', n: 'Cavalier', b: 'Fou', r: 'Tour', q: 'Dame', k: 'Roi' };
 const PROMO_KEYS = { q: 'q', d: 'q', r: 'r', t: 'r', b: 'b', f: 'b', n: 'n', c: 'n' };
 let boardUid = 0;
+// Les études contiennent des positions pédagogiques sans roi : l'échiquier les affiche sans les contrôler.
+const chessAt = (fen) => new Chess(fen, { skipValidation: true });
+// Couleur d'un dessin selon les touches tenues (comme sur Lichess).
+const brushOf = (e) => (e.altKey && (e.shiftKey || e.ctrlKey) ? 'Y' : e.altKey ? 'B' : e.shiftKey || e.ctrlKey ? 'R' : 'G');
 
 // Annonce pour les lecteurs d'écran (région aria-live="polite" de index.html).
 export function announce(text) {
@@ -26,9 +30,16 @@ export function applyBoardPrefs() {
 }
 
 export class Board {
-  constructor(el, { onMove } = {}) {
+  // onShape(couleur 'G'|'R'|'B'|'Y', de, vers) : flèches et cercles dessinés au clic droit (ou au doigt
+  // quand drawBrush est défini). Sans onShape, le clic droit surligne la case.
+  // freePlay : on continue de jouer après une nulle (matériel insuffisant, 50 coups), comme dans une étude.
+  constructor(el, { onMove, onShape, freePlay = false } = {}) {
+    this.freePlay = freePlay;
     this.el = el;
     this.onMove = onMove;
+    this.onShape = onShape;
+    this.drawBrush = null;
+    this.circles = [];
     this.orientation = 'w';
     this.fen = new Chess().fen();
     this.lastMove = null;
@@ -59,7 +70,8 @@ export class Board {
   }
 
   // mark : { sq, color, sym, label } — classification du dernier coup, affichée sur sa case d'arrivée.
-  setPosition(fen, { lastMove = null, arrows = [], mark = null, highlights = [] } = {}) {
+  setPosition(fen, { lastMove = null, arrows = [], mark = null, highlights = [], circles = [] } = {}) {
+    this.circles = circles;
     this.fen = fen;
     this.lastMove = lastMove;
     this.arrows = arrows;
@@ -71,7 +83,7 @@ export class Board {
     if (lastMove) this.announceMove(lastMove[1], mark);
   }
   announceMove(sq, mark) {
-    const chess = new Chess(this.fen);
+    const chess = chessAt(this.fen);
     const p = chess.get(sq);
     if (!p) return;
     let t = `${PIECE_NOM[p.type]} en ${sq}.`;
@@ -97,7 +109,7 @@ export class Board {
   }
 
   render() {
-    const chess = new Chess(this.fen);
+    const chess = chessAt(this.fen);
     const check = chess.inCheck() ? chess.findPiece({ type: 'k', color: chess.turn() })[0] : null;
     let sq = '';
     const kbName = this.kbSq;
@@ -158,6 +170,10 @@ export class Board {
       const { x, y } = this.coords(sq);
       s += `<rect x="${x}" y="${y}" width="1" height="1" fill="${color}" opacity=".29"/>`;
     }
+    for (const { sq, color } of this.circles) {
+      const { x, y } = this.coords(sq);
+      s += `<circle cx="${x + 0.5}" cy="${y + 0.5}" r="0.45" fill="none" style="stroke:${color}" stroke-width="0.08" opacity="0.9"/>`;
+    }
     for (const a of this.arrows) {
       const f = this.coords(a.from);
       const t = this.coords(a.to);
@@ -172,13 +188,19 @@ export class Board {
 
   canMoveFrom(sq) {
     if (!this.interactive) return false;
-    const chess = new Chess(this.fen);
+    const chess = chessAt(this.fen);
     const p = chess.get(sq);
-    return p && p.color === chess.turn() && !chess.isGameOver();
+    return p && p.color === chess.turn() && (this.freePlay || !chess.isGameOver());
   }
 
   pointerDown(e) {
     if (!this.promoEl.classList.contains('hidden')) return;
+    if (this.onShape && (e.button === 2 || (e.button === 0 && this.drawBrush))) {
+      const from = this.squareAt(e.clientX, e.clientY);
+      if (from) this.drawing = { from, brush: e.button === 0 ? this.drawBrush : brushOf(e) };
+      e.preventDefault();
+      return;
+    }
     if (e.button === 2) { // clic droit : surligne la case
       const s2 = this.squareAt(e.clientX, e.clientY);
       if (s2) { if (this.hl.has(s2)) this.hl.delete(s2); else this.hl.add(s2); this.render(); }
@@ -212,6 +234,13 @@ export class Board {
     d.img.style.transform = `translate(${dx}px, ${dy}px)`;
   }
   pointerUp(e) {
+    if (this.drawing) {
+      const { from, brush } = this.drawing;
+      this.drawing = null;
+      const to = this.squareAt(e.clientX, e.clientY);
+      if (to) this.onShape(brush, from, to);
+      return;
+    }
     if (!this.drag) return;
     const d = this.drag;
     this.drag = null;
@@ -224,7 +253,7 @@ export class Board {
   }
 
   tryMove(from, to) {
-    const chess = new Chess(this.fen);
+    const chess = chessAt(this.fen);
     const moves = chess.moves({ square: from, verbose: true }).filter((m) => m.to === to);
     if (!moves.length) return false;
     if (moves.some((m) => m.promotion)) {
@@ -291,8 +320,8 @@ export class Board {
       if (this.selected && this.tryMove(this.selected, sq)) return;
       if (this.canMoveFrom(sq)) {
         this.selected = sq; this.render();
-        const n = new Chess(this.fen).moves({ square: sq }).length;
-        announce(`${PIECE_NOM[new Chess(this.fen).get(sq).type]} en ${sq} sélectionné. ${n} coup${n > 1 ? 's' : ''} possible${n > 1 ? 's' : ''}.`);
+        const n = chessAt(this.fen).moves({ square: sq }).length;
+        announce(`${PIECE_NOM[chessAt(this.fen).get(sq).type]} en ${sq} sélectionné. ${n} coup${n > 1 ? 's' : ''} possible${n > 1 ? 's' : ''}.`);
       } else { announce(this.selected ? 'Coup illégal.' : 'Aucune pièce jouable sur cette case.'); }
     }
   }

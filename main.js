@@ -9,6 +9,7 @@ import * as settings from './modules/settings.js';
 import { soon } from './modules/soon.js';
 import * as play from './modules/play.js';
 import * as setup from './modules/setup.js';
+import * as study from './modules/study.js';
 import * as openingsUi from './modules/openings-ui.js';
 import * as train from './modules/openings-train.js';
 import * as model from './modules/openings-model.js';
@@ -21,7 +22,7 @@ import * as endgames from './modules/endgames.js';
 import * as endgamePuzzles from './modules/endgames-puzzles.js';
 import { oublierSiAilleurs } from './core/puzzle-reprise.js';
 
-const VIEWS = ['home', 'game', 'play', 'free', 'setup', 'openings', 'rep', 'train', 'model', 'puzzles', 'puzzle', 'puzzletheme', 'puzzlerec', 'strategy', 'endgames', 'endgame', 'endgamepz', 'settings'];
+const VIEWS = ['home', 'game', 'play', 'free', 'setup', 'studies', 'study', 'openings', 'rep', 'train', 'model', 'puzzles', 'puzzle', 'puzzletheme', 'puzzlerec', 'strategy', 'endgames', 'endgame', 'endgamepz', 'settings'];
 const MODULES = []; // modules pas encore livrés
 
 export function showView(v, tab = v === 'home' || v === 'game' ? 'games' : v === 'setup' ? 'free' : v) {
@@ -37,6 +38,7 @@ function route() {
   oublierSiAilleurs(h);
   const m = /^#\/game\/(.+)$/.exec(h);
   if (!m) analyse.leave();
+  if (!/^#\/study\/./.test(h)) study.leave();
   if (!/^#\/openings\/./.test(h) || /^#\/openings\/(train|model)/.test(h)) openingsUi.leaveRepertoire();
   if (!/^#\/openings\/model/.test(h)) model.leave();
   if (!/^#\/openings\/train/.test(h)) train.leave();
@@ -53,6 +55,10 @@ function route() {
     if (sub === 'new') { showView('game', analyse.freeTab()); analyse.openFree(); return; }
     if (sub === 'setup') { showView('setup'); setup.renderEditor($('#setup-view')); return; }
     showView('free'); setup.renderHome($('#free-view')); return;
+  }
+  if (name === 'study') {
+    if (sub) { showView('study'); study.openStudy($('#study-view'), sub); return; }
+    showView('studies', 'study'); study.renderHome($('#studies-view')); return;
   }
   if (name === 'openings') {
     if (sub.startsWith('train')) {
