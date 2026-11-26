@@ -72,7 +72,7 @@
   <header class="hist-head">
     <div>
       <h1>Historique des parties</h1>
-      <p class="hist-sub muted">chess.com<span id="hist-user"></span></p>
+      <p class="hist-sub muted"><span id="hist-user"></span></p>
     </div>
     <div class="stack">
       <button id="multi" class="btn primary" disabled>Analyse multiple</button>
@@ -89,11 +89,15 @@
     <div class="fcol grow2"><span class="lbl-up" id="lbl-cad">Cadence</span>
       <div id="tc" class="segctl" role="group" aria-labelledby="lbl-cad">
         <button class="chip" data-tc="" aria-pressed="true">Toutes</button>
+        <button class="chip hidden" data-tc="ultraBullet" data-rare aria-pressed="false">UltraBullet</button>
         <button class="chip" data-tc="bullet" aria-pressed="false">Bullet</button>
         <button class="chip" data-tc="blitz" aria-pressed="false">Blitz</button>
         <button class="chip" data-tc="rapid" aria-pressed="false">Rapide</button>
+        <button class="chip hidden" data-tc="classical" data-rare aria-pressed="false">Classique</button>
         <button class="chip" data-tc="daily" aria-pressed="false">Par jour</button>
       </div></div>
+    <div class="fcol grow hidden" id="hist-site-col"><label for="hist-site" class="lbl-up">Site</label>
+      <select id="hist-site"><option value="">Tous les sites</option><option value="chesscom">chess.com</option><option value="lichess">Lichess</option></select></div>
     <div class="fcol grow"><label for="op" class="lbl-up">Ouverture</label>
       <select id="op" title="Ouverture jouée (parties analysées)"><option value="">Toutes les ouvertures</option></select></div>
     <span id="count" class="muted fcount" role="status" aria-live="polite"></span>

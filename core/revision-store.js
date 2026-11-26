@@ -2,6 +2,7 @@
 // « Convertir l'avantage » (conversionWork), synchronisés comme le reste.
 import * as store from './store.js';
 import { local } from './ui.js';
+import { getPseudoLichess } from './joueur.js';
 import { review } from './srs.js';
 import { erreursReglages } from './manu/erreurs.js';
 import { dansPeriode } from './manu/strategie.js';
@@ -40,7 +41,7 @@ export async function chargerFile(user, book, maintenant = Date.now()) {
   let calculees = 0;
   for (const row of analyses) {
     if (!row.data?.game || !dansPeriode(row.data.game, JOURS_NOUVELLES, maintenant)) continue;
-    const signature = JSON.stringify([row.updatedAt, user, seuils, Object.keys(book).length > 0]);
+    const signature = JSON.stringify([row.updatedAt, user, getPseudoLichess(), seuils, Object.keys(book).length > 0]);
     let m = memo.get(row.id);
     if (m?.signature !== signature) {
       m = { signature, liste: candidats([row], user, book, seuils, [], maintenant) };

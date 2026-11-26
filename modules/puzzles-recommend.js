@@ -15,6 +15,7 @@ import { PuzzleRun, updateElo } from './puzzles-engine.js';
 import { analyserPuzzle } from './puzzles-analyse.js';
 import { getUser, BOOK } from './analyse.js';
 import { frOpening } from './opening-names.js';
+import { aUnPseudo } from '../core/joueur.js';
 
 const SIZE = 10;
 const REPLY_DELAY = 350;
@@ -28,15 +29,16 @@ const familyName = (f) => f.replace(/_/g, ' ');
 // Puzzles tirés des parties + familles d'ouvertures jouées. Recalculé à chaque ouverture de l'écran.
 async function loadSources() {
   const user = getUser();
-  const rows = user ? await store.all('analysis').catch(() => []) : [];
-  const mined = user ? mineAll(rows, user, BOOK) : [];
-  const idx = user ? await store.all('analysisIndex').catch(() => []) : [];
+  const joueur = aUnPseudo(user);
+  const rows = joueur ? await store.all('analysis').catch(() => []) : [];
+  const mined = joueur ? mineAll(rows, user, BOOK) : [];
+  const idx = joueur ? await store.all('analysisIndex').catch(() => []) : [];
   const counts = new Map();
   for (const r of idx) {
     const name = r.data && r.data.opening;
     if (name) counts.set(name, (counts.get(name) || 0) + 1);
   }
-  return { user, games: rows.length, mined, openingNames: counts };
+  return { joueur, games: rows.length, mined, openingNames: counts };
 }
 
 // Familles du manifeste correspondant aux ouvertures jouées, de la plus fréquente à la moins fréquente.
@@ -84,7 +86,7 @@ export async function show(el) {
   const canM = dueM + newM > 0, canO = fams.length > 0 || dueO > 0;
 
   let info;
-  if (!src.user) info = '<p class="tmsg">Connectez votre compte chess.com dans <a href="#/settings">Paramètres</a> pour obtenir des puzzles tirés de vos parties.</p>';
+  if (!src.joueur) info = '<p class="tmsg">Connectez votre compte chess.com dans <a href="#/settings">Paramètres</a> pour obtenir des puzzles tirés de vos parties.</p>';
   else if (!src.games) info = '<p class="tmsg">Aucune partie analysée pour l’instant. <a href="#/games">Analysez quelques parties</a> : vos gaffes et occasions manquées deviendront des puzzles.</p>';
   else info = '';
 

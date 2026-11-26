@@ -2,7 +2,7 @@
 // Les calculs sont dans core/stats.js ; rien n'est enregistré, tout se recalcule depuis les parties.
 import { $, esc, fr1, local } from '../core/ui.js';
 import * as store from '../core/store.js';
-import { couleurDe } from '../core/revision.js';
+import { SITES, couleurDe, siteDe, cleCadence, nomCadence, aUnPseudo, nomsJoueur, getPseudoLichess } from '../core/joueur.js';
 import { PHASES } from '../core/manu/erreurs.js';
 import { fmtDuree } from '../core/temps.js';
 import {
@@ -11,9 +11,8 @@ import {
 } from '../core/stats.js';
 import { TITRES, trouverAxes } from '../core/axes.js';
 import { frOpening } from './opening-names.js';
-import { BOOK, getGames, getUser, isLoadingGames, ouvrirAnalyseStrategique, stashGamePly } from './analyse.js';
+import { BOOK, getGames, getUser, isLoadingGames, ouvrirAnalyseStrategique, stashGamePly, getProfilLichess } from './analyse.js';
 
-const CADENCES = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapide', daily: 'Par jour' };
 const NOMS_PHASES = { ouverture: 'Ouverture', milieu: 'Milieu de jeu', finale: 'Finale' };
 const OUVERTURES_VISIBLES = 8;
 const S = { el: null, seq: 0, timer: null, off: null, vue: '' };
@@ -21,7 +20,7 @@ const S = { el: null, seq: 0, timer: null, off: null, vue: '' };
 // Lire une partie coûte quelques millisecondes : le résultat est gardé tant que rien ne change.
 const memo = new Map();
 function mesurer(game, ligne, user) {
-  const signature = `${user}|${ligne?.updatedAt ?? ''}|${Object.keys(BOOK).length > 0}`;
+  const signature = `${user}|${getPseudoLichess()}|${ligne?.updatedAt ?? ''}|${Object.keys(BOOK).length > 0}`;
   let m = memo.get(game.id);
   if (m?.signature === signature) return { m, neuf: false };
   m = { signature, ouverture: null, temps: null, mesure: null };
@@ -41,7 +40,8 @@ function mesurer(game, ligne, user) {
 const plural = (n, un, plusieurs = un + 's') => `${n} ${n > 1 ? plusieurs : un}`;
 const jourCourt = (t) => new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 const pct = (v) => (v == null ? '—' : `${Math.round(v)} %`);
-const cadence = (c) => CADENCES[c] || esc(c);
+// le site n'est précisé que s'il y a des parties des deux
+const cadence = (c, d) => esc(nomCadence(c, d.sites.length > 1));
 
 // Écart avec la période précédente : la flèche donne le sens, le mot dit si c'est mieux.
 function tendance(diff, { sens = 1, unite = 'point', decimales = 0 } = {}) {
@@ -109,10 +109,10 @@ function blocElo(d) {
     const semaines = parSemaine(points, d.bornes);
     // l'Elo retenu pour une semaine est celui de sa dernière partie
     const finDe = (s) => points.filter((p) => p.t <= s.fin && p.t > s.debut).at(-1)?.v;
-    return `<div class="st-serie"><h3>${cadence(c)} · ${dernier} <span class="muted small">${points.length > 1 ? `de ${premier} à ${dernier} en ${plural(points.length, 'partie classée', 'parties classées')}` : 'une seule partie classée'}</span></h3>
+    return `<div class="st-serie"><h3>${cadence(c, d)} · ${dernier} <span class="muted small">${points.length > 1 ? `de ${premier} à ${dernier} en ${plural(points.length, 'partie classée', 'parties classées')}` : 'une seule partie classée'}</span></h3>
       ${points.length < 2 ? '' : courbe({ points: [points.at(-1)], ligne: points, ...d.bornes, min: Math.min(...vs) - marge, max: Math.max(...vs) + marge, fmtY: (v) => Math.round(v),
-        titre: `Elo ${cadence(c)} : de ${premier} à ${dernier}`, lectures: points.map((p) => ({ t: p.t, texte: `${jourCourt(p.t)} · Elo ${p.v}` })) })}
-      ${points.length < 2 ? '' : tableau(`Tableau par semaine (${cadence(c)})`, ['Semaine du', 'Elo en fin de semaine', 'Parties'], semaines.map((s) => [jourCourt(s.debut), finDe(s) ?? '—', s.n]))}</div>`;
+        titre: `Elo ${cadence(c, d)} : de ${premier} à ${dernier}`, lectures: points.map((p) => ({ t: p.t, texte: `${jourCourt(p.t)} · Elo ${p.v}` })) })}
+      ${points.length < 2 ? '' : tableau(`Tableau par semaine (${cadence(c, d)})`, ['Semaine du', 'Elo en fin de semaine', 'Parties'], semaines.map((s) => [jourCourt(s.debut), finDe(s) ?? '—', s.n]))}</div>`;
   }).join('');
   return bloc('elo', 'Elo', corps);
 }
@@ -126,7 +126,7 @@ function lignesResultats(lignes, nom) {
 function blocResultats(d, ouvertures) {
   if (!d.actuels.length) return '';
   let corps = '<p class="small st-legende"><span><i class="st-win"></i>Victoires</span><span><i class="st-draw"></i>Nulles</span><span><i class="st-loss"></i>Défaites</span></p>';
-  if (!d.cadence) corps += `<h3>Par cadence</h3>${lignesResultats(grouperResultats(d.actuels, d.user, (g) => g.timeClass), cadence)}`;
+  if (!d.cadence) corps += `<h3>Par cadence</h3>${lignesResultats(grouperResultats(d.actuels, d.user, cleCadence), (c) => cadence(c, d))}`;
   corps += `<h3>Par couleur</h3>${lignesResultats(grouperResultats(d.actuels, d.user, (g) => couleurDe(g, d.user)).sort((a, b) => b.cle.localeCompare(a.cle)), (c) => (c === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'))}`;
   corps += '<h3>Par ouverture</h3>';
   if (!ouvertures) corps += calcul;
@@ -174,8 +174,8 @@ function blocTemps(d, actuel, precedent, tempsJeux) {
     ? `<div class="st-tuiles">${repere('Fautes en manque de temps', 'manque', '10 % du temps ou moins')}${repere('Fautes jouées trop vite', 'vite', 'rapide et blitz seulement')}</div>`
     : '<p class="muted">Aucune partie analysée avec pendule sur la période.</p>';
   const parCadence = cadencesJouees(d.actuels).map(({ cadence: c }) => {
-    const liste = d.actuels.filter((g) => g.timeClass === c).map((g) => tempsJeux.get(g.id)).filter(Boolean);
-    return liste.length ? [cadence(c), moyenneTemps(liste), liste.length] : null;
+    const liste = d.actuels.filter((g) => cleCadence(g) === c).map((g) => tempsJeux.get(g.id)).filter(Boolean);
+    return liste.length ? [cadence(c, d), moyenneTemps(liste), liste.length] : null;
   }).filter(Boolean);
   if (parCadence.length) {
     corps += `<h3>Temps moyen par coup</h3><div class="table-wrap"><table class="st-table"><thead><tr><th scope="col">Cadence</th>${PHASES.map((p) => `<th scope="col">${NOMS_PHASES[p]}</th>`).join('')}<th scope="col">Parties</th></tr></thead>
@@ -275,9 +275,11 @@ function couverture(d, actuel, precedent, calcule) {
 }
 
 function filtres(d) {
-  const options = [['', 'Toutes les cadences'], ...d.jouees.map((c) => [c.cadence, `${CADENCES[c.cadence] || c.cadence} (${c.total})`])];
+  const options = [['', 'Toutes les cadences'], ...d.jouees.map((c) => [c.cadence, `${nomCadence(c.cadence, d.sites.length > 1 && !d.site)} (${c.total})`])];
+  const sites = [['', 'Tous les sites'], ...d.sites.map((s) => [s, SITES[s]])];
   return `<div class="st-filtres">
     <div class="segctl" role="group" aria-label="Période">${PERIODES_STATS.map((j) => `<button type="button" class="chip" data-jours="${j}" aria-pressed="${j === d.jours}">${j} jours</button>`).join('')}</div>
+    ${d.sites.length > 1 ? `<label><span class="sr-only">Site</span><select id="st-site">${sites.map(([v, t]) => `<option value="${v}"${v === d.site ? ' selected' : ''}>${t}</option>`).join('')}</select></label>` : ''}
     <label><span class="sr-only">Cadence</span><select id="st-cadence">${options.map(([v, t]) => `<option value="${esc(v)}"${v === d.cadence ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
   </div>`;
 }
@@ -292,7 +294,11 @@ function page(d, calculs) {
     corps = couverture(d, actuel, precedent, !!calculs) + (calculs ? blocAxes(d, axesDe(d, calculs)) : '') + tuiles(d, actuel, precedent, !!calculs) + blocElo(d) + blocResultats(d, calculs?.ouvertures)
       + (calculs ? blocPrecision(d, mesures) + blocPhases(actuel, precedent) + blocTemps(d, actuel, precedent, calculs.temps) : calcul);
   }
-  return `<header><h1 class="page-title">Statistiques</h1><p class="muted">${esc(d.user)} · ${d.jours} derniers jours, comparés aux ${d.jours} jours précédents</p></header>${filtres(d)}${corps}`;
+  const melange = d.sites.length > 1 && !d.site && !d.cadence
+    ? '<p class="muted small">Les deux sites sont réunis pour le score, la précision et les axes. Leurs classements et leurs cadences ne sont pas équivalents : l’Elo reste séparé.</p>' : '';
+  const ancien = d.lichessJours && d.lichessJours < 2 * d.jours && d.sites.includes('lichess') && d.site !== 'chesscom'
+    ? `<p class="muted small">Lichess n’est importé que sur ${d.lichessJours} jours : la période précédente y est incomplète. Choisissez 180 jours dans <a href="#/settings/profile">Paramètres → Profil</a> pour comparer.</p>` : '';
+  return `<header><h1 class="page-title">Statistiques</h1><p class="muted">${esc(nomsJoueur(d.user))} · ${d.jours} derniers jours, comparés aux ${d.jours} jours précédents</p></header>${filtres(d)}${melange}${ancien}${corps}`;
 }
 
 function afficher(d, calculs) {
@@ -302,6 +308,8 @@ function afficher(d, calculs) {
   el.innerHTML = `<div class="st">${page(d, calculs)}</div>`;
   el.querySelectorAll('details').forEach((x) => { if (ouverts.has(x.dataset.cle)) x.open = true; });
   el.querySelectorAll('[data-jours]').forEach((b) => { b.onclick = () => { local.set('statsPeriod', b.dataset.jours); rendre(); }; });
+  const site = $('#st-site', el);
+  if (site) site.onchange = () => { local.set('statsSite', site.value || 'tous'); rendre(); };
   const choix = $('#st-cadence', el);
   if (choix) choix.onchange = () => { local.set('statsCadence', choix.value || 'toutes'); rendre(); };
   el.querySelectorAll('[data-ply]').forEach((a) => { a.onclick = () => stashGamePly(a.dataset.partie, Number(a.dataset.ply) + 1); });
@@ -316,7 +324,7 @@ const message = (html) => { S.el.innerHTML = `<div class="st"><h1 class="page-ti
 async function rendre() {
   const seq = ++S.seq;
   const user = getUser();
-  if (!user) { message('<p class="card">Indiquez votre pseudo chess.com dans <a href="#/settings/profile">Paramètres → Profil</a>.</p>'); return; }
+  if (!aUnPseudo(user)) { message('<p class="card">Indiquez votre pseudo chess.com dans <a href="#/settings/profile">Paramètres → Profil</a>.</p>'); return; }
   if (isLoadingGames()) { if (!S.el.querySelector('.st-filtres')) message('<p class="muted" role="status">Récupération de vos parties…</p>'); return; }
   const jeux = getGames();
   if (!jeux.length) { message('<p class="card">Aucune partie récupérée. <a href="#/games">Ouvrir l’historique</a></p>'); return; }
@@ -327,7 +335,7 @@ async function rendre() {
   const d = { ...contexte(user, jeux), index };
   // Le premier calcul peut durer : la page montre où il en est.
   // Les résultats et l'Elo, qui ne demandent aucune lecture, s'affichent d'abord.
-  const vue = `${user}|${d.jours}|${d.cadence}`;
+  const vue = `${user}|${d.jours}|${d.site}|${d.cadence}`;
   const calculs = await calculer(d, lignes, (i, total) => {
     if (seq !== S.seq || !S.el) return false;
     if (S.vue !== vue || !S.el.querySelector('.st-tuiles')) { afficher(d, null); S.vue = vue; }
@@ -344,14 +352,21 @@ function contexte(user, jeux) {
   const jours = PERIODES_STATS.includes(Number(local.get('statsPeriod'))) ? Number(local.get('statsPeriod')) : PERIODES_STATS[0];
   const courante = bornes(jours);
   const deuxPeriodes = { debut: bornes(jours, courante.fin, 1).debut, fin: courante.fin };
-  const jouees = cadencesJouees(jeuxDe(jeux, user, deuxPeriodes));
+  const tous = jeuxDe(jeux, user, deuxPeriodes);
+  const sites = Object.keys(SITES).filter((x) => tous.some((g) => siteDe(g) === x));
+  // Par défaut, le site de la cadence la plus jouée.
+  const siteVoulu = local.get('statsSite');
+  const principale = cadencesJouees(tous)[0]?.cadence;
+  const site = sites.length < 2 || siteVoulu === 'tous' ? ''
+    : sites.includes(siteVoulu) ? siteVoulu : principale?.startsWith('lichess|') ? 'lichess' : 'chesscom';
+  const jouees = cadencesJouees(jeuxDe(jeux, user, deuxPeriodes, '', site));
   // Par défaut, la cadence la plus jouée : mélanger les cadences brouille la précision et les temps.
   const voulue = local.get('statsCadence');
   const choisie = voulue === 'toutes' ? '' : jouees.some((c) => c.cadence === voulue) ? voulue : jouees[0]?.cadence ?? '';
   return {
-    user, jours, jouees, cadence: choisie, bornes: courante,
-    actuels: jeuxDe(jeux, user, courante, choisie),
-    precedents: jeuxDe(jeux, user, bornes(jours, courante.fin, 1), choisie),
+    user, jours, jouees, sites, site, cadence: choisie, bornes: courante, lichessJours: getPseudoLichess() ? getProfilLichess().jours : 0,
+    actuels: jeuxDe(jeux, user, courante, choisie, site),
+    precedents: jeuxDe(jeux, user, bornes(jours, courante.fin, 1), choisie, site),
   };
 }
 
@@ -380,7 +395,8 @@ async function calculer(d, lignes, pas = () => true) {
 export async function axesActuels(user, jeux) {
   const d = contexte(user, jeux);
   const calculs = await calculer(d, await store.all('analysis'));
-  return { ...axesDe(d, calculs), jours: d.jours, cadence: d.cadence ? CADENCES[d.cadence] || d.cadence : 'Toutes les cadences' };
+  const cadences = d.cadence ? nomCadence(d.cadence, d.sites.length > 1) : `Toutes les cadences${d.site ? ` · ${SITES[d.site]}` : ''}`;
+  return { ...axesDe(d, calculs), jours: d.jours, cadence: cadences };
 }
 
 const rafraichir = () => { clearTimeout(S.timer); S.timer = setTimeout(rendre, 1500); };

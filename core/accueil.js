@@ -2,11 +2,12 @@
 // jeux : parties chess.com ({ id, end (s), timeClass, white, black }) ; index : analyses résumées par
 // identifiant de partie ({ complete, accW, accB }).
 import { DRAWS } from '../modules/openings.js';
+import { couleurDe, cleCadence } from './joueur.js';
 
 const JOUR = 86400000;
 export const JOURS_RECENTS = 7;
 
-const estBlanc = (jeu, user) => jeu.white.name.toLowerCase() === String(user).toLowerCase();
+const estBlanc = (jeu, user) => couleurDe(jeu, user) === 'w';
 const recentes = (jeux, jours, maintenant) => jeux.filter((g) => g.end * 1000 >= maintenant - jours * JOUR && g.end * 1000 <= maintenant);
 const parDate = (jeux) => [...jeux].sort((a, b) => b.end - a.end);
 
@@ -26,7 +27,7 @@ export function resultatsRecents(jeux, user, maintenant = Date.now(), jours = JO
 export function dernierElo(jeux, user) {
   const g = parDate(jeux)[0];
   if (!g) return null;
-  return { cadence: g.timeClass, elo: g[estBlanc(g, user) ? 'white' : 'black'].rating };
+  return { cadence: cleCadence(g), elo: g[estBlanc(g, user) ? 'white' : 'black'].rating };
 }
 
 export const aAnalyser = (jeux, index, maintenant = Date.now(), jours = JOURS_RECENTS) =>
@@ -37,7 +38,7 @@ export function dernieresParties(jeux, index, user, n = 5) {
     const blanc = estBlanc(g, user);
     const a = index[g.id];
     return {
-      id: g.id, end: g.end, cadence: g.timeClass, camp: blanc ? 'w' : 'b',
+      id: g.id, end: g.end, cadence: cleCadence(g), camp: blanc ? 'w' : 'b',
       adversaire: (blanc ? g.black : g.white).name, issue: issue(g, user),
       precision: a?.complete ? (blanc ? a.accW : a.accB) : null,
     };

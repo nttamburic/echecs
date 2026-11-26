@@ -5,7 +5,8 @@ import { classifyGame, summarize, winPct, epd } from '../analysis.js';
 import { issue } from './accueil.js';
 import { phase, PHASES, estTactique } from './manu/erreurs.js';
 import { uciOf } from './ui.js';
-import { couleurDe, SEUIL_GAGNANT } from './revision.js';
+import { SEUIL_GAGNANT } from './revision.js';
+import { couleurDe, siteDe, cleCadence } from './joueur.js';
 import { tempsDePartie, reperesDe, SEUILS_VITE } from './temps.js';
 
 export const PERIODES_STATS = Object.freeze([30, 90]);
@@ -18,14 +19,16 @@ const JOUR = 86400000;
 export function bornes(jours, maintenant = Date.now(), rang = 0) {
   return { debut: maintenant - (rang + 1) * jours * JOUR, fin: maintenant - rang * jours * JOUR };
 }
-export function jeuxDe(jeux, user, { debut, fin }, cadence = '') {
-  return jeux.filter((g) => g.end * 1000 > debut && g.end * 1000 <= fin && couleurDe(g, user) && (!cadence || g.timeClass === cadence));
+// cadence : clé de cleCadence (« blitz » pour chess.com, « lichess|blitz ») ; site : 'chesscom' | 'lichess'.
+export function jeuxDe(jeux, user, { debut, fin }, cadence = '', site = '') {
+  return jeux.filter((g) => g.end * 1000 > debut && g.end * 1000 <= fin && couleurDe(g, user)
+    && (!cadence || cleCadence(g) === cadence) && (!site || siteDe(g) === site));
 }
 
 // Cadences jouées, la plus jouée d'abord.
 export function cadencesJouees(jeux) {
   const n = new Map();
-  for (const g of jeux) n.set(g.timeClass, (n.get(g.timeClass) ?? 0) + 1);
+  for (const g of jeux) n.set(cleCadence(g), (n.get(cleCadence(g)) ?? 0) + 1);
   return [...n].sort((a, b) => b[1] - a[1]).map(([cadence, total]) => ({ cadence, total }));
 }
 
@@ -55,8 +58,9 @@ export function seriesElo(jeux, user) {
     const camp = couleurDe(g, user);
     const elo = camp && (camp === 'w' ? g.white : g.black).rating;
     if (g.rated === false || !Number.isFinite(elo)) continue;
-    if (!out.has(g.timeClass)) out.set(g.timeClass, []);
-    out.get(g.timeClass).push({ t: g.end * 1000, v: elo });
+    const cle = cleCadence(g);
+    if (!out.has(cle)) out.set(cle, []);
+    out.get(cle).push({ t: g.end * 1000, v: elo });
   }
   return out;
 }

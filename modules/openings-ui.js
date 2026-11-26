@@ -7,6 +7,7 @@ import { epd } from '../analysis.js';
 import { figSan, BOOK, getGames, getUser, engineFields } from './analyse.js';
 import * as store from '../core/store.js';
 import { frSan, explainOpeningMove } from '../explain.js';
+import { getPseudoLichess, aUnPseudo, couleurDe, nomsJoueur } from '../core/joueur.js';
 import { lichessCfg, explore, expRatings, expSpeeds, lichessGames, studyPgn } from '../core/lichess.js';
 import { analyzePosition, analysisSettings, maxTime, nLines, SOURCE_LABEL, onStatus } from '../core/engine.js';
 import {
@@ -48,7 +49,8 @@ function refreshMastery() {
 // les parties chess.com (maîtrise) et comptées dans la performance.
 const LI = { games: [], promise: null, err: null, loaded: false };
 function loadLichess() {
-  if (!lichessCfg.user) return Promise.resolve([]);
+  // avec un pseudo Lichess dans le profil, ces parties sont déjà dans l'historique : rien à charger ici
+  if (getPseudoLichess() || !lichessCfg.user) return Promise.resolve([]);
   if (LI.promise) return LI.promise;
   LI.promise = lichessGames(lichessCfg.user, { days: WINDOW_DAYS })
     .then(async (g) => {
@@ -66,10 +68,10 @@ function refreshAfterLichess() {
   if (document.body.dataset.view === 'openings') renderHome($('#openings-view'));
   else if (E.rep && document.body.dataset.view === 'rep') render();
 }
-const perfSets = () => [{ games: getGames(), user: getUser() }, { games: LI.games, user: lichessCfg.user }];
+const perfSets = () => [{ games: getGames(), user: getUser() }, { games: getPseudoLichess() ? [] : LI.games, user: lichessCfg.user }];
 const perfMemo = new Map(); // id du répertoire → { key, map }
 function perfOf(rep) {
-  const key = `${rep.edges.length}|${rep.edges.map((e) => e.uci).join()}|${getGames().length}|${LI.games.length}`;
+  const key = `${rep.edges.length}|${rep.edges.map((e) => e.uci).join()}|${getGames().length}|${LI.games.length}|${getPseudoLichess()}`;
   const m = perfMemo.get(rep.id);
   if (m && m.key === key) return m.map;
   const map = computePerformance(rep, perfSets());
@@ -78,11 +80,12 @@ function perfOf(rep) {
 }
 const perfShort = (st) => `${plural(st.n, 'partie')} · ${pct(st.score)}`;
 function perfLine(st) {
-  if (!getUser() && !lichessCfg.user) return '';
+  if (!aUnPseudo(getUser()) && !lichessCfg.user) return '';
   if (!st) return `Ici dans vos parties : aucune (${WINDOW_DAYS} derniers jours)`;
   return `<span title="Parties des ${WINDOW_DAYS} derniers jours passées par cette position · score ${pct(st.score)}">Ici dans vos parties : <span class="pf-w">+${st.w}</span> <span class="pf-d">=${st.d}</span> <span class="pf-l">−${st.l}</span> · ${plural(st.n, 'partie')}</span>`;
 }
 function lichessStatus() {
+  if (getPseudoLichess()) return `Parties Lichess (${esc(getPseudoLichess())}) : prises dans votre historique.`;
   if (!lichessCfg.connected) return 'Connectez Lichess (Paramètres → Connexion) pour compter aussi vos parties Lichess.';
   if (!lichessCfg.user) return '';
   if (LI.err) return `Parties Lichess (${esc(lichessCfg.user)}) : ${esc(LI.err)}.`;
@@ -96,7 +99,7 @@ let rescanTimer = null;
 function rescanSoon() {
   clearTimeout(rescanTimer);
   rescanTimer = setTimeout(async () => {
-    const n = (await scanGames(getGames(), getUser())) + (LI.games.length ? await scanGames(LI.games, lichessCfg.user) : 0);
+    const n = (await scanGames(getGames(), getUser())) + (LI.games.length && !getPseudoLichess() ? await scanGames(LI.games, lichessCfg.user) : 0);
     if (!E.rep) return;
     await loadMastery();
     if (n) render();
@@ -380,7 +383,7 @@ const topHead = '<h2 class="op-h2" id="top-op-title">Vos ouvertures les plus jou
 async function renderTopOpenings(box) {
   const show = (html) => { if (box.isConnected) box.innerHTML = topHead + html; };
   const user = getUser();
-  if (!user) {
+  if (!aUnPseudo(user)) {
     show('<p class="muted small">Indiquez votre pseudo chess.com (<a href="#/settings/profile">Paramètres → Profil</a>) pour savoir de quel côté vous jouiez et calculer vos résultats.</p>');
     return;
   }
@@ -399,7 +402,7 @@ async function renderTopOpenings(box) {
   const res = openingResults(entries, user, TOP_N);
   if (!res.total) {
     show(entries.length
-      ? `<p class="muted small">Aucune des parties analysées n'a été jouée avec le pseudo <b>${esc(user)}</b>. Vérifiez-le dans <a href="#/settings/profile">Paramètres → Profil</a>.</p>`
+      ? `<p class="muted small">Aucune des parties analysées n'a été jouée avec le pseudo <b>${esc(nomsJoueur(user))}</b>. Vérifiez-le dans <a href="#/settings/profile">Paramètres → Profil</a>.</p>`
       : '<p class="muted small">Aucune partie analysée pour le moment. Analysez des parties depuis l\'<a href="#/games">Historique des parties</a> (une par une ou avec « Analyse multiple »).</p>');
     return;
   }
@@ -428,12 +431,12 @@ function topRow(r) {
 // Parties analysées → coups, classes (Imprécision, Erreur…) des 40 premiers demi-coups. Mis en cache.
 const classified = new Map();
 async function analysedGames() {
-  const user = (getUser() || '').toLowerCase();
+  const user = getUser();
   const out = [];
   for (const r of await store.all('analysis')) {
     const a = r.data;
     if (!a || !a.game || !a.positions || !a.game.pgn) continue;
-    const color = (a.game.white && a.game.white.name || '').toLowerCase() === user ? 'w' : (a.game.black && a.game.black.name || '').toLowerCase() === user ? 'b' : null;
+    const color = couleurDe(a.game, user);
     if (!color) continue;
     const key = `${r.id}|${r.updatedAt}`;
     if (!classified.has(key)) {
@@ -459,7 +462,7 @@ function uciToSan(fen, uci) {
 }
 
 async function renderSuggestions(box, reps) {
-  if (!getUser()) {
+  if (!aUnPseudo(getUser())) {
     box.innerHTML = '<h2>Suggestions</h2><p class="muted small">Indiquez votre pseudo chess.com (Paramètres → Profil) : les suggestions viennent des erreurs répétées dans vos parties analysées.</p>';
     return;
   }
@@ -471,7 +474,7 @@ async function renderSuggestions(box, reps) {
   const missing = getGames().filter((g) => !done.has(g.id)).length;
   const note = loaded
     ? (missing ? `<p class="muted small">${plural(missing, 'partie')} sur ${loaded} ${missing > 1 ? 'ne sont pas analysées' : 'n\'est pas analysée'} : leurs erreurs n'apparaissent pas ici. Lancez « Analyse multiple » dans l'<a href="#/games">Historique des parties</a>.</p>` : '')
-    : '<p class="muted small">Vos parties chess.com ne sont pas encore chargées (Historique des parties).</p>';
+    : '<p class="muted small">Vos parties ne sont pas encore chargées (Historique des parties).</p>';
   const cnt = (errs) => {
     const by = {};
     for (const e of errs) by[e.cls] = (by[e.cls] || 0) + 1;

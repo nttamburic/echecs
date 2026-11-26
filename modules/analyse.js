@@ -1,4 +1,4 @@
-// Module « Analyse » : liste des parties chess.com et analyse détaillée d'une partie.
+// Module « Analyse » : liste des parties chess.com et Lichess, et analyse détaillée d'une partie.
 import { initSheet } from '../core/sheet.js';
 import { fmtGameDate, fmtPct } from '../core/format.js';
 import { Chess } from '../vendor/chess.js';
@@ -15,17 +15,22 @@ import {
 import { syncNow, cfg as syncCfg } from '../core/sync.js';
 import * as store from '../core/store.js';
 import * as chesscom from '../core/chesscom.js';
+import { PERIODES_LICHESS, MAX_PARTIES_LICHESS, importerLichess, lichessEnCache } from '../core/lichess.js';
+import { SITES, CADENCES, siteDe, couleurDe, aUnPseudo, definirPseudoLichess } from '../core/joueur.js';
 import { scanGames, setBook, DRAWS } from './openings.js';
 import { exerciceDe } from '../core/revision.js';
 import { demanderSeance } from '../core/revision-store.js';
 import { tempsDePartie, pendule, repere, reperesDe, REPERES, fmtDuree, fmtPendule } from '../core/temps.js';
 
-const TIME_FR = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapide', daily: 'Par jour' };
+const TIME_FR = CADENCES;
 
 // ------------------------------------------------------------------ état
 export let BOOK = {};
 const S = {
-  user: '',
+  user: '', // pseudo chess.com
+  lichess: { pseudo: '', jours: PERIODES_LICHESS[0] }, // import des parties Lichess ; sans pseudo : aucun
+  site: '', // filtre de site de l'historique
+  errLi: '', // dernière erreur de l'import Lichess
   games: [],
   index: {},
   shown: 100,
@@ -38,12 +43,13 @@ const S = {
 };
 
 export const getUser = () => S.user;
+export const getProfilLichess = () => ({ ...S.lichess });
 export const getGames = () => S.games;
 export const isLoadingGames = () => S.busy;
 
 // ------------------------------------------------------------------ accueil
 function resultFor(game, user) {
-  const me = game.white.name.toLowerCase() === user.toLowerCase() ? 'white' : 'black';
+  const me = couleurDe(game, user) === 'w' ? 'white' : 'black';
   const r = game[me].result;
   const HOW = { resigned: 'abandon', checkmated: 'mat', timeout: 'temps', abandoned: 'abandon', agreed: 'accord', repetition: 'répétition', stalemate: 'pat', insufficient: 'matériel', timevsinsufficient: 'matériel', '50move': '50 coups' };
   const other = game[me === 'white' ? 'black' : 'white'].result;
@@ -59,6 +65,33 @@ async function setUser(user) {
   if (!cur || cur.chesscomUser !== user) await store.put('settings', 'profile', { ...(cur || {}), chesscomUser: user }, { file: 'settings.json' });
 }
 
+const periodeLichess = (v) => (PERIODES_LICHESS.includes(Number(v)) ? Number(v) : PERIODES_LICHESS[0]);
+function appliquerLichess(pseudo, jours) {
+  S.lichess = { pseudo: String(pseudo || '').trim(), jours: periodeLichess(jours) };
+  definirPseudoLichess(S.lichess.pseudo);
+  local.set('lichessPseudo', S.lichess.pseudo);
+  local.set('lichessJours', String(S.lichess.jours));
+}
+function recharger() {
+  S.site = '';
+  showUser();
+  if (aUnPseudo(S.user)) { S.loading = loadGames(); return; }
+  S.loadToken = {};
+  S.games = [];
+  S.busy = false;
+  renderList();
+  window.dispatchEvent(new Event('cj:games'));
+}
+
+// Pseudo Lichess et période (Paramètres → Profil). Un pseudo vide arrête l'import : les parties Lichess
+// sortent de l'historique et des statistiques, leurs analyses sont gardées.
+export async function changeLichess(pseudo, jours) {
+  appliquerLichess(pseudo, jours);
+  const cur = await store.get('settings', 'profile');
+  await store.put('settings', 'profile', { ...(cur || {}), lichessPseudo: S.lichess.pseudo, lichessJours: S.lichess.jours }, { file: 'settings.json' });
+  recharger();
+}
+
 // Pseudo choisi dans Paramètres → Profil chess.com : on enregistre puis on recharge les parties.
 export async function changeUser(user) {
   user = (user || '').trim();
@@ -69,42 +102,81 @@ export async function changeUser(user) {
 }
 
 function showUser() {
-  const has = !!S.user;
-  $('#hist-user').textContent = has ? ' · ' + S.user : '';
+  const has = aUnPseudo(S.user);
+  $('#hist-user').textContent = [S.user && `chess.com · ${S.user}`, S.lichess.pseudo && `Lichess · ${S.lichess.pseudo}`].filter(Boolean).join('  |  ');
+  $('#hist-site-col').classList.toggle('hidden', !S.lichess.pseudo);
+  $('#hist-site').value = S.site;
   $('#hist-nouser').classList.toggle('hidden', has);
   $('#load').classList.toggle('hidden', !has);
   $('#clear-hist').classList.toggle('hidden', !has);
   $('#load-progress').classList.toggle('hidden', !has);
 }
 
-export async function loadGames() {
+// force : « Actualiser » redemande aussi les parties Lichess récentes sans attendre.
+export async function loadGames({ force = false } = {}) {
   const user = S.user;
-  if (!user) return;
+  const li = { ...S.lichess };
+  if (!user && !li.pseudo) return;
   S.games = [];
   S.shown = 100;
   S.err = '';
+  S.errLi = '';
   S.busy = true;
   renderList();
   const token = (S.loadToken = {}); // un nouveau chargement annule le précédent
   const prog = $('#load-progress');
-  try {
-    prog.textContent = 'Recherche du compte…';
-    const months = await chesscom.archives(user);
-    if (token !== S.loadToken) return;
-    months.reverse(); // les plus récents d'abord
-    let done = 0;
-    for (const month of months) {
-      const games = await chesscom.month(user, month);
+  const etat = { cc: user ? 'Recherche du compte…' : '', li: li.pseudo ? 'Lichess : récupération…' : '' };
+  const dire = () => { if (token === S.loadToken) prog.textContent = [etat.cc, etat.li].filter(Boolean).join(' · '); };
+  const ajouter = (games) => { S.games.push(...games); S.games.sort((a, b) => b.end - a.end); };
+  dire();
+
+  const depuisChesscom = async () => {
+    if (!user) return;
+    try {
+      const months = await chesscom.archives(user);
       if (token !== S.loadToken) return;
-      S.games.push(...games);
-      done++;
-      prog.textContent = `Récupération des parties : mois ${done}/${months.length} (${S.games.length} parties)`;
-      if (done % 3 === 0 || done === months.length) renderList();
+      months.reverse(); // les plus récents d'abord
+      let done = 0, total = 0;
+      for (const month of months) {
+        const games = await chesscom.month(user, month);
+        if (token !== S.loadToken) return;
+        ajouter(games);
+        total += games.length;
+        done++;
+        etat.cc = `Récupération des parties : mois ${done}/${months.length} (${total} parties chess.com)`;
+        dire();
+        if (done % 3 === 0 || done === months.length) renderList();
+      }
+      etat.cc = `${total} partie${total > 1 ? 's terminées récupérées' : ' terminée récupérée'} sur chess.com (${months.length} mois depuis la création du compte).`;
+    } catch (e) {
+      if (token !== S.loadToken) return;
+      S.err = e.message || 'Erreur inconnue';
+      etat.cc = `chess.com : ${S.err}`;
     }
-    S.games.sort((a, b) => b.end - a.end);
-    prog.textContent = `${S.games.length} parties terminées récupérées (${months.length} mois depuis la création du compte).`;
-  } catch (e) {
-    if (token === S.loadToken) { S.err = e.message || 'Erreur inconnue'; prog.textContent = ''; }
+    dire();
+  };
+
+  const depuisLichess = async () => {
+    if (!li.pseudo) return;
+    try {
+      const r = await importerLichess(li.pseudo, { days: li.jours, force });
+      if (token !== S.loadToken) return;
+      ajouter(r.games);
+      etat.li = `Lichess : ${r.games.length} partie${r.games.length > 1 ? 's' : ''} contre des humains sur ${li.jours} jours${r.limite ? ` (demande limitée aux ${MAX_PARTIES_LICHESS} plus récentes)` : ''}.`;
+    } catch (e) {
+      // sans réponse de Lichess, les parties déjà sur l'appareil restent disponibles
+      const gardees = await lichessEnCache(li.pseudo, { days: li.jours });
+      if (token !== S.loadToken) return;
+      ajouter(gardees);
+      S.errLi = e.message || 'Erreur inconnue';
+      etat.li = `Lichess : ${S.errLi}${gardees.length ? ` (${gardees.length} parties déjà sur l'appareil affichées)` : ''}.`;
+    }
+    dire();
+    renderList();
+  };
+
+  try {
+    await Promise.all([depuisChesscom(), depuisLichess()]);
   } finally {
     if (token === S.loadToken) {
       S.busy = false;
@@ -120,25 +192,40 @@ function setTc(v) {
   document.querySelectorAll('#tc .chip').forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.tc === v)));
 }
 
+function setSite(v) {
+  S.site = v;
+  $('#hist-site').value = v;
+}
+// UltraBullet et Classique n'existent que sur Lichess : leurs puces ne s'affichent que s'il y en a.
+function renderCadences() {
+  document.querySelectorAll('#tc .chip[data-rare]').forEach((c) => {
+    const present = S.games.some((g) => g.timeClass === c.dataset.tc && (!S.site || siteDe(g) === S.site));
+    c.classList.toggle('hidden', !present);
+    if (!present && S.tc === c.dataset.tc) setTc('');
+  });
+}
+
 function renderList() {
   const q = $('#filter').value.trim().toLowerCase();
   const tc = S.tc;
   const op = $('#op').value;
   renderOpeningFilter();
+  renderCadences();
   const list = S.games.filter((g) => {
+    if (S.site && siteDe(g) !== S.site) return false;
     if (tc && g.timeClass !== tc) return false;
     if (op) {
       const name = S.index[g.id] && S.index[g.id].opening;
       if (!name || (op[0] === 'f' ? family(name) !== op.slice(2) : name !== op.slice(2))) return false;
     }
     if (q) {
-      const opp = (g.white.name.toLowerCase() === S.user.toLowerCase() ? g.black.name : g.white.name).toLowerCase();
+      const opp = (couleurDe(g, S.user) === 'w' ? g.black.name : g.white.name).toLowerCase();
       if (!opp.includes(q)) return false;
     }
     return true;
   });
   const rows = list.slice(0, S.shown).map((g) => {
-    const meWhite = g.white.name.toLowerCase() === S.user.toLowerCase();
+    const meWhite = couleurDe(g, S.user) === 'w';
     const opp = meWhite ? g.black : g.white;
     const me = meWhite ? g.white : g.black;
     const res = resultFor(g, S.user);
@@ -150,10 +237,11 @@ function renderList() {
     }
     const when = fmtGameDate(g.end * 1000);
     const tcl = TIME_FR[g.timeClass] || esc(g.timeClass);
-    const label = `${when}, ${tcl}, contre ${opp.name} (${opp.rating}), ${res.txt}${a && a.complete ? `, précision ${fmtPct(meWhite ? a.accW : a.accB, 1)}` : ''}. Ouvrir la partie.`;
+    const site = S.lichess.pseudo ? SITES[siteDe(g)] : '';
+    const label = `${when}, ${tcl}${site ? ` sur ${site}` : ''}, contre ${opp.name} (${opp.rating}), ${res.txt}${a && a.complete ? `, précision ${fmtPct(meWhite ? a.accW : a.accB, 1)}` : ''}. Ouvrir la partie.`;
     return `<tr role="row" class="grow" data-id="${esc(g.id)}" tabindex="0" aria-label="${esc(label)}">
       <td role="cell" class="c-date">${when}</td>
-      <td role="cell" class="c-tc">${tcl}</td>
+      <td role="cell" class="c-tc">${tcl}${site ? ` <span class="csite muted">${site}</span>` : ''}</td>
       <td role="cell" class="c-me"><img class="cdot" src="pieces/${meWhite ? 'wK' : 'bK'}.svg" alt="${meWhite ? 'Blancs' : 'Noirs'}" width="20" height="20">${esc(me.rating)}</td>
       <td role="cell" class="c-opp opp">${esc(opp.name)} <span class="muted">(${esc(opp.rating)})</span></td>
       <td role="cell" class="c-res"><span class="rpill ${res.cls}"><span aria-hidden="true">${res.sym}</span> ${res.txt}</span>${res.how ? ` <span class="muted small rhow">${res.how}</span>` : ''}</td>
@@ -163,9 +251,9 @@ function renderList() {
   const st = $('#hist-state');
   let state = '';
   if (!S.games.length) {
-    if (S.err) state = `<div role="alert" class="hs err"><strong>Impossible de récupérer les parties.</strong><span class="muted">${esc(S.err)}</span><button class="btn" id="hs-retry">Réessayer</button></div>`;
+    if ((S.err || S.errLi) && !S.busy) state = `<div role="alert" class="hs err"><strong>Impossible de récupérer les parties.</strong><span class="muted">${esc([S.err, S.errLi].filter(Boolean).join(' · '))}</span><button class="btn" id="hs-retry">Réessayer</button></div>`;
     else if (S.busy) html = Array.from({ length: 6 }, () => '<tr role="row" class="skel" aria-hidden="true"><td role="cell" colspan="6"><span></span></td></tr>').join('');
-    else if (S.user) state = '<div class="hs"><strong>Aucune partie pour le moment.</strong><span class="muted">Récupérez vos parties terminées depuis chess.com.</span><button class="btn primary" id="hs-load">Actualiser</button></div>';
+    else if (aUnPseudo(S.user)) state = '<div class="hs"><strong>Aucune partie pour le moment.</strong><span class="muted">Récupérez vos parties terminées.</span><button class="btn primary" id="hs-load">Actualiser</button></div>';
   } else if (!list.length) {
     state = '<div class="hs"><strong>Aucune partie ne correspond.</strong><span class="muted">Essayez d\'élargir les filtres.</span><button class="btn" id="hs-reset">Réinitialiser les filtres</button></div>';
   }
@@ -174,9 +262,9 @@ function renderList() {
   st.innerHTML = state;
   st.classList.toggle('hidden', !state);
   const bind = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
-  bind('#hs-retry', () => { S.loading = loadGames(); });
-  bind('#hs-load', () => { S.loading = loadGames(); });
-  bind('#hs-reset', () => { $('#filter').value = ''; $('#op').value = ''; setTc(''); S.shown = 100; renderList(); });
+  bind('#hs-retry', () => { S.loading = loadGames({ force: true }); });
+  bind('#hs-load', () => { S.loading = loadGames({ force: true }); });
+  bind('#hs-reset', () => { $('#filter').value = ''; $('#op').value = ''; setTc(''); setSite(''); S.shown = 100; renderList(); });
   $('#more').classList.toggle('hidden', list.length <= S.shown);
   $('#count').textContent = S.games.length ? `${list.length} partie${list.length > 1 ? 's' : ''}` : '';
   renderBatch();
@@ -262,8 +350,7 @@ function renderBatch() {
   const c = b.cur;
   const paused = b.paused || (S.g && S.g !== c);
   const eta = b.done >= 1 ? Math.max(1, Math.round(((Date.now() - b.t0) / b.done) * (b.total - b.done) / 60000)) : 0;
-  const me = (S.user || '').toLowerCase();
-  const opp = c ? (c.game.white.name.toLowerCase() === me ? c.game.black.name : c.game.white.name) : '';
+  const opp = c ? (couleurDe(c.game, S.user) === 'w' ? c.game.black.name : c.game.white.name) : '';
   const detail = b.paused ? 'en pause — touchez « Reprendre » pour continuer'
     : paused ? 'en pause pendant que vous consultez une partie'
     : `${c ? `en cours : contre ${opp}, coup ${c.positions.filter(Boolean).length}` : 'préparation…'}${eta ? ` · reste ≈ ${eta} min` : ''}`;
@@ -364,7 +451,7 @@ async function analyzeMany(period, depth, movetime, label, shownDepth) {
 async function clearHistory() {
   const n = Object.keys(S.index).length;
   const ok = confirm(`Effacer l'historique ?\n\n`
-    + `• La liste des parties est vidée (cliquez ensuite sur « Actualiser » pour la récupérer à nouveau depuis chess.com).\n`
+    + `• La liste des parties est vidée (cliquez ensuite sur « Actualiser » pour la récupérer à nouveau).\n`
     + `• ${n ? `Les ${n} analyse(s) enregistrée(s) sont supprimées` : 'Toutes les analyses enregistrées sont supprimées'} de cet appareil ET de votre dépôt GitHub, donc aussi de vos autres appareils.\n\n`
     + `Cette action est définitive. Pour pouvoir revenir en arrière, annulez et téléchargez d'abord une sauvegarde (Paramètres → Sauvegarde).`);
   if (!ok) return;
@@ -439,7 +526,7 @@ export async function openGame(id) {
   const saved = await store.get('analysis', id).catch(() => null);
   if (!game && saved) game = saved.game;
   if (!game && S.loading) {
-    $('#moves').innerHTML = '<p class="muted pad">Récupération des parties chess.com…</p>';
+    $('#moves').innerHTML = '<p class="muted pad">Récupération de vos parties…</p>';
     await S.loading;
     game = S.games.find((x) => x.id === id);
   }
@@ -470,8 +557,7 @@ function prepareGame(id, game, saved) {
   const c = new Chess();
   c.loadPgn(game.pgn);
   const moves = c.history({ verbose: true });
-  const userLow = (S.user || '').toLowerCase();
-  const playerColor = game.white.name.toLowerCase() === userLow ? 'w' : game.black.name.toLowerCase() === userLow ? 'b' : null;
+  const playerColor = couleurDe(game, S.user);
   const g = {
     id, game, moves,
     startFen: moves.length ? moves[0].before : c.fen(),
@@ -934,12 +1020,17 @@ function renderGame() {
   $('#ptitle').innerHTML = g.free ? 'Analyse libre' : review ? `<span class="badge" style="background:${CLASSES.best.color}">★</span> Bilan` : 'Analyse';
   const tt = $('#topbar-title');
   if (tt) {
-    const oppN = g.free ? '' : (g.game.white.name.toLowerCase() === (S.user || '').toLowerCase() ? g.game.black.name : g.game.white.name);
+    const oppN = g.free ? '' : (couleurDe(g.game, S.user) === 'w' ? g.game.black.name : g.game.white.name);
     tt.innerHTML = (g.free ? 'Analyse libre' : review ? 'Bilan' : 'Analyse') + (oppN ? ` <span class="tt-opp">· vs ${esc(oppN)}</span>` : '');
   }
   // Seule une adresse https:// est acceptée (les données peuvent venir de la synchronisation : jamais de javascript: ni data:).
   const ccUrl = /^https:\/\/[^\s]+$/i.test(g.game.url || '') ? g.game.url : '';
   if (ccUrl) $('#cc-link').href = ccUrl; else $('#cc-link').removeAttribute('href');
+  if (!g.free) {
+    const voir = `Voir la partie sur ${SITES[siteDe(g.game)]}`;
+    $('#cc-link').title = voir;
+    $('#cc-link').setAttribute('aria-label', voir);
+  }
   $('#cc-link').classList.toggle('hidden', !!g.free || !ccUrl);
   $('#back').title = g.back ? g.back.label : g.free ? 'Retour à l\'analyse libre' : 'Retour à l\'historique des parties';
   $('#back').setAttribute('aria-label', g.back ? g.back.label : 'Retour');
@@ -1444,9 +1535,11 @@ export async function init() {
   board = new Board($('#board'), { onMove: onBoardMove });
   const profile = await store.get('settings', 'profile').catch(() => null);
   S.user = (profile && profile.chesscomUser) || local.get('user', '');
+  appliquerLichess(profile?.lichessPseudo ?? local.get('lichessPseudo', ''), profile?.lichessJours ?? local.get('lichessJours', ''));
   S.live = local.get('liveEval', '0') === '1';
   showUser();
-  $('#load').onclick = () => { S.loading = loadGames(); };
+  $('#load').onclick = () => { S.loading = loadGames({ force: true }); };
+  $('#hist-site').onchange = (e) => { S.site = e.target.value; S.shown = 100; renderList(); };
   $('#filter').oninput = () => { S.shown = 100; renderList(); };
   document.querySelectorAll('#tc .chip').forEach((c) => { c.onclick = () => { setTc(c.dataset.tc); S.shown = 100; renderList(); }; });
   $('#op').onchange = () => { S.shown = 100; renderList(); };
@@ -1511,12 +1604,18 @@ export async function init() {
     if (info.col === 'analysisIndex') { await loadIndex(); await backfillOpenings(); if (!S.g) { renderList(); renderBatch(); } }
     if (info.col === 'settings') {
       const p = await store.get('settings', 'profile');
-      if (p && p.chesscomUser && !S.user) { S.user = p.chesscomUser; showUser(); loadGames(); }
+      const nouveauCc = !!(p && p.chesscomUser && !S.user);
+      if (nouveauCc) S.user = p.chesscomUser;
+      // le réglage Lichess suit l'autre appareil, y compris son retrait
+      const nouveauLi = p?.lichessPseudo !== undefined
+        && (p.lichessPseudo !== S.lichess.pseudo || periodeLichess(p.lichessJours) !== S.lichess.jours);
+      if (nouveauLi) appliquerLichess(p.lichessPseudo, p.lichessJours);
+      if (nouveauCc || nouveauLi) recharger();
     }
   });
 
   try { BOOK = await (await fetch('openings.json')).json(); } catch { BOOK = {}; }
   setBook(BOOK);
   await loadIndex();
-  if (S.user) S.loading = loadGames();
+  if (aUnPseudo(S.user)) S.loading = loadGames();
 }

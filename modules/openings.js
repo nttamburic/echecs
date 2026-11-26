@@ -16,6 +16,7 @@ import { Chess } from '../vendor/chess.js';
 import { epd } from '../analysis.js';
 import * as store from '../core/store.js';
 import { review, startOfDay } from '../core/srs.js';
+import { siteDe, couleurDe, getPseudoLichess } from '../core/joueur.js';
 
 export const REP = 'openingRepertoire';
 export const EVT = 'openingEvents';
@@ -274,7 +275,16 @@ export function sharedConflicts(reps) {
 
 // ------------------------------------------------------------------ résultats par ouverture
 // Codes de résultat chess.com qui valent une nulle (« win » = victoire, tout autre code = défaite).
-export const DRAWS = ['agreed', 'repetition', 'stalemate', 'insufficient', '50move', 'timevsinsufficient'];
+export const DRAWS = ['agreed', 'repetition', 'stalemate', 'insufficient', '50move', 'timevsinsufficient', 'nulle'];
+
+// Couleur du joueur. Une partie Lichess suit le pseudo Lichess réglé dans le profil ; sans ce réglage
+// (parties du compte lié au jeton), le pseudo fourni avec les parties.
+const couleurJoueur = (game, user) => {
+  if (siteDe(game) === 'lichess' && getPseudoLichess()) return couleurDe(game, user);
+  const me = String(user || '').toLowerCase();
+  if (!me) return null;
+  return String(game.white?.name || '').toLowerCase() === me ? 'w' : String(game.black?.name || '').toLowerCase() === me ? 'b' : null;
+};
 
 // Pourcentages entiers dont la somme fait toujours 100 (méthode du plus fort reste).
 function percents(counts) {
@@ -292,12 +302,11 @@ function percents(counts) {
 // Renvoie { total (parties analysées de user), unnamed (sans ouverture reconnue),
 //           count (nombre de lignes avant la limite), rows: [{ family, color, n, w, d, l, pw, pd, pl }] }.
 export function openingResults(entries, user, limit = 5) {
-  const me = (user || '').toLowerCase();
   const groups = new Map();
   let total = 0, unnamed = 0;
-  for (const { game, opening } of me ? entries : []) {
+  for (const { game, opening } of entries) {
     if (!game || !game.white || !game.black) continue;
-    const color = String(game.white.name || '').toLowerCase() === me ? 'w' : String(game.black.name || '').toLowerCase() === me ? 'b' : null;
+    const color = couleurJoueur(game, user);
     if (!color) continue;
     const res = (color === 'w' ? game.white : game.black).result;
     if (!res) continue;
@@ -537,17 +546,16 @@ export function scanGames(games, user, now = Date.now()) {
   return scanning;
 }
 async function doScan(games, user, now) {
-  if (!user || !games || !games.length) return 0;
+  if (!games || !games.length) return 0;
   const reps = await listRepertoires();
   if (!reps.length) return 0;
   const covered = new Map(reps.map((r) => [r.id, userPositions(r, false)]));
   const have = new Set((await store.all(EVT)).map((r) => r.id));
   const from = now - WINDOW_DAYS * 86400000;
-  const me = user.toLowerCase();
   let added = 0;
   for (const g of games) {
     if (!g.end || g.end * 1000 < from || !g.pgn) continue;
-    const color = (g.white && g.white.name || '').toLowerCase() === me ? 'w' : (g.black && g.black.name || '').toLowerCase() === me ? 'b' : null;
+    const color = couleurJoueur(g, user);
     if (!color) continue;
     const mine = reps.filter((r) => r.color === color);
     if (!mine.length) continue;
@@ -588,11 +596,10 @@ export function computePerformance(rep, sets, now = Date.now()) {
   const from = now - WINDOW_DAYS * 86400000;
   const done = new Set();
   for (const { games, user } of sets) {
-    if (!user || !games) continue;
-    const me = user.toLowerCase();
+    if (!games) continue;
     for (const g of games) {
       if (done.has(g.id) || !g.end || g.end * 1000 < from || !g.pgn) continue;
-      const color = (g.white && g.white.name || '').toLowerCase() === me ? 'w' : (g.black && g.black.name || '').toLowerCase() === me ? 'b' : null;
+      const color = couleurJoueur(g, user);
       if (color !== rep.color) continue;
       const s = gameScore(g, color);
       if (s == null) continue;

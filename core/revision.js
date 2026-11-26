@@ -6,6 +6,7 @@
 import { Chess } from '../vendor/chess.js';
 import { winPct, thresholds } from '../analysis.js';
 import { uciOf } from './ui.js';
+import { couleurDe } from './joueur.js';
 import { releverErreurs } from './manu/erreurs.js';
 import { releverFinales } from './finales-erreurs.js';
 import { dansPeriode } from './manu/strategie.js';
@@ -16,11 +17,7 @@ export const JOURS_NOUVELLES = 90; // les nouvelles erreurs viennent des parties
 export const NOUVELLES_PAR_JOUR = 10;
 export const SEUIL_GAGNANT = 80; // chances de gain (%) à partir desquelles une position est « à convertir »
 
-export const couleurDe = (game, user) => {
-  const u = String(user ?? '').trim().toLowerCase();
-  if (!u) return null;
-  return game?.white?.name?.toLowerCase() === u ? 'w' : game?.black?.name?.toLowerCase() === u ? 'b' : null;
-};
+export { couleurDe };
 
 export function coupsDe(game) {
   const chess = new Chess();

@@ -2,7 +2,8 @@
 // Onglets : Profil, Connexions, Moteur, Interface, Application. Sur mobile : liste puis détail.
 import { $, esc, local, toast } from '../core/ui.js';
 import { cfg, test, syncNow, state, onSync } from '../core/sync.js';
-import { getUser, changeUser } from './analyse.js';
+import { getUser, changeUser, getProfilLichess, changeLichess } from './analyse.js';
+import { PERIODES_LICHESS } from '../core/lichess.js';
 import { lichessCfg, setToken, forgetToken } from '../core/lichess.js';
 import { fmtAgo } from '../core/format.js';
 import { engineFields } from './analyse.js';
@@ -12,7 +13,7 @@ import { erreursReglages, SEUILS_ERREURS } from '../core/manu/erreurs.js';
 import { backupTab } from './settings-backup.js';
 
 const SECTIONS = [
-  ['profile', 'Profil', 'Pseudo chess.com'],
+  ['profile', 'Profil', 'Pseudos chess.com et Lichess'],
   ['connection', 'Connexions', 'GitHub (synchro) et Lichess'],
   ['engine', 'Moteur d’analyse', 'Stockfish, profondeur, Maia'],
   ['interface', 'Interface', 'Échiquier et coordonnées'],
@@ -66,7 +67,34 @@ function profile(el) {
       <button id="user-save" class="btn primary">Enregistrer</button>
     </div>
     <p id="user-msg" class="muted small"></p>
+  </section>
+  <section class="card">
+    <h2>Parties Lichess</h2>
+    <p class="muted">Facultatif. Avec votre pseudo Lichess, vos parties standard terminées contre des humains rejoignent l'historique,
+      la révision et les statistiques. Il peut différer de votre pseudo chess.com. Aucun jeton n'est demandé pour ce réglage.</p>
+    <div class="row">
+      <input id="li-user" aria-label="Pseudo Lichess" value="${esc(getProfilLichess().pseudo)}" placeholder="${esc(lichessCfg.user || 'Votre pseudo Lichess')}" autocomplete="off" spellcheck="false" autocapitalize="off">
+      <select id="li-jours" aria-label="Période à importer">${PERIODES_LICHESS.map((j) => `<option value="${j}"${j === getProfilLichess().jours ? ' selected' : ''}>${j} derniers jours</option>`).join('')}</select>
+      <button id="li-save" class="btn primary">Enregistrer</button>
+      <button id="li-retirer" class="btn${getProfilLichess().pseudo ? '' : ' hidden'}">Retirer</button>
+    </div>
+    <p id="li-profil-msg" class="muted small" role="status"></p>
   </section>`;
+  const direLi = (cls, html) => { $('#li-profil-msg').className = cls + ' small'; $('#li-profil-msg').innerHTML = html; };
+  $('#li-save').onclick = async () => {
+    const p = $('#li-user').value.trim();
+    if (!/^[A-Za-z0-9_-]{2,30}$/.test(p)) { direLi('err', p ? 'Pseudo Lichess invalide.' : 'Indiquez un pseudo.'); return; }
+    await changeLichess(p, Number($('#li-jours').value));
+    $('#li-retirer').classList.remove('hidden');
+    direLi('ok', 'Enregistré. Le résultat de la récupération s’affiche dans <a href="#/games">l’historique</a>.');
+  };
+  $('#li-user').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#li-save').click(); });
+  $('#li-retirer').onclick = async () => {
+    await changeLichess('', Number($('#li-jours').value));
+    $('#li-user').value = '';
+    $('#li-retirer').classList.add('hidden');
+    direLi('muted', 'Parties Lichess retirées de l’historique et des statistiques. Leurs analyses sont gardées.');
+  };
   const save = async () => {
     const u = $('#user').value.trim();
     if (!u) { $('#user-msg').className = 'err small'; $('#user-msg').textContent = 'Indiquez un pseudo.'; return; }

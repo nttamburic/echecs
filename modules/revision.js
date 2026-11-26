@@ -12,6 +12,7 @@ import { JOURS_NOUVELLES, NOUVELLES_PAR_JOUR, evaluer, noteDe, occasionsConversi
 import { chargerFile, lireConversions, noterErreur, prendreSeance, retirerConversion } from '../core/revision-store.js';
 import { BOOK, figSan, getUser, stashGamePly } from './analyse.js';
 import { stashPlay } from './play.js';
+import { aUnPseudo } from '../core/joueur.js';
 
 const NOM_PIECE = { k: 'le Roi', q: 'la Dame', r: 'la Tour', b: 'le Fou', n: 'le Cavalier', p: 'un pion' };
 const plural = (n, un, plusieurs = un + 's') => `${n} ${n > 1 ? plusieurs : un}`;
@@ -36,7 +37,7 @@ async function rendreAccueil() {
   const seq = ++H.seq;
   const user = getUser();
   const entete = '<h1 class="page-title">Révision</h1>';
-  if (!user) {
+  if (!aUnPseudo(user)) {
     H.el.innerHTML = `${entete}<p class="muted">Indiquez votre pseudo chess.com dans <a href="#/settings/profile">Paramètres → Profil</a>, puis analysez des parties.</p>`;
     return;
   }

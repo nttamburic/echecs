@@ -7,6 +7,7 @@
 import { Chess } from '../vendor/chess.js';
 import { classifyGame, winPct } from '../analysis.js';
 import { estTactique } from './manu/erreurs.js';
+import { couleurDe } from './joueur.js';
 
 export const MISTAKE_CLASSES = ['blunder', 'mistake', 'miss'];
 export const CLASS_LABEL = { blunder: 'Gaffe', mistake: 'Erreur', miss: 'Occasion manquée' };
@@ -31,9 +32,8 @@ function playableLine(fen, pv, max = MAX_PLAYER_MOVES) {
 // book : table des ouvertures (openings.json) pour ne pas compter les coups de théorie. Renvoie une liste de puzzles.
 function candidats(a, user, book) {
   if (!a || !a.game || !a.positions || !a.game.pgn) return { out: [] };
-  const u = String(user || '').toLowerCase();
   const g = a.game;
-  const color = (g.white && g.white.name || '').toLowerCase() === u ? 'w' : (g.black && g.black.name || '').toLowerCase() === u ? 'b' : null;
+  const color = couleurDe(g, user);
   if (!color) return { out: [] };
   let mv;
   try {

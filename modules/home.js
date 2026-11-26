@@ -19,9 +19,9 @@ import { BOOK, getGames, getUser, isLoadingGames, ouvrirAnalyseStrategique } fro
 import { miniBoard } from './setup.js';
 import { chargerFile } from '../core/revision-store.js';
 import { TITRES } from '../core/axes.js';
+import { aUnPseudo, nomsJoueur, nomCadence } from '../core/joueur.js';
 import { axesActuels, constatAxe } from './stats.js';
 
-const CADENCES = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapide', daily: 'Par jour' };
 const ISSUES = { win: 'Victoire', draw: 'Nulle', loss: 'Défaite' };
 const plural = (n, s) => `${n} ${s}${n > 1 ? 's' : ''}`;
 
@@ -29,7 +29,7 @@ const plural = (n, s) => `${n} ${s}${n > 1 ? 's' : ''}`;
 const H = { el: null, seq: 0, timer: null, offStore: null, offSync: null, revision: 0, axes: null, axesSeq: 0 };
 
 async function compterRevision(user) {
-  const n = user ? await lire(async () => { const f = await chargerFile(user, BOOK); return f.dues.length + f.nouvelles.length; }, 0) : 0;
+  const n = aUnPseudo(user) ? await lire(async () => { const f = await chargerFile(user, BOOK); return f.dues.length + f.nouvelles.length; }, 0) : 0;
   if (n === H.revision) return;
   H.revision = n;
   if (H.el) rafraichir();
@@ -38,7 +38,7 @@ async function compterRevision(user) {
 // Comme la révision : le premier calcul des axes peut être long, la page s'affiche sans l'attendre.
 async function calculerAxes(user, jeux) {
   const seq = ++H.axesSeq;
-  const axes = user && jeux.length ? await lire(() => axesActuels(user, jeux), null) : null;
+  const axes = aUnPseudo(user) && jeux.length ? await lire(() => axesActuels(user, jeux), null) : null;
   if (seq !== H.axesSeq || JSON.stringify(axes) === JSON.stringify(H.axes)) return;
   H.axes = axes;
   if (H.el) rafraichir();
@@ -74,7 +74,7 @@ async function woodpeckerResume() {
 }
 
 async function erreursStrategiques(jeux, user, periode) {
-  if (!user) return null;
+  if (!aUnPseudo(user)) return null;
   const [analyses, travaux] = await Promise.all([store.all('analysis'), store.all('strategyWork')]);
   const { groupes } = grouperStrategie(analyses, jeux, travaux, user, BOOK, erreursReglages(local.get), periode);
   return Object.values(groupes).reduce((n, l) => n + l.length, 0);
@@ -92,11 +92,11 @@ async function charger() {
     lire(listStudies, []),
     lire(() => erreursStrategiques(jeux, user, periode), null),
   ]);
-  return { user, jeux, index, ouvertures, cartes, woodpecker, stats, etudes, erreurs, periode, chargement: isLoadingGames() };
+  return { user, joueur: aUnPseudo(user), jeux, index, ouvertures, cartes, woodpecker, stats, etudes, erreurs, periode, chargement: isLoadingGames() };
 }
 
 // Rien d'enregistré et aucun pseudo : on accueille au lieu d'afficher des compteurs vides.
-const premiereFois = (d) => !d.user && !d.etudes.length && !d.ouvertures?.repertoires && !d.cartes.size && !d.woodpecker;
+const premiereFois = (d) => !d.joueur && !d.etudes.length && !d.ouvertures?.repertoires && !d.cartes.size && !d.woodpecker;
 
 function ligneSync() {
   if (!cfg.configured) return 'Données enregistrées sur cet appareil';
@@ -140,8 +140,8 @@ function blocTaches(d) {
     ouvertures: d.ouvertures,
     puzzles: puzzlesDus(d.cartes),
     woodpecker: d.woodpecker,
-    erreurs: d.user ? H.revision : 0,
-    parties: d.user && !d.chargement ? aAnalyser(d.jeux, d.index) : 0,
+    erreurs: d.joueur ? H.revision : 0,
+    parties: d.joueur && !d.chargement ? aAnalyser(d.jeux, d.index) : 0,
   });
   const corps = liste.length ? `<ul class="ac-lignes">${liste.map((t, i) => {
     const cls = `ac-action${i === 0 ? ' primaire' : ''}`;
@@ -170,7 +170,7 @@ function blocAxes() {
 
 function blocParties(d) {
   let corps;
-  if (!d.user) corps = '<p class="ac-vide muted">Indiquez votre pseudo chess.com dans <a href="#/settings/profile">Paramètres → Profil</a> pour voir vos parties.</p>';
+  if (!d.joueur) corps = '<p class="ac-vide muted">Indiquez votre pseudo chess.com dans <a href="#/settings/profile">Paramètres → Profil</a> pour voir vos parties.</p>';
   else if (!d.jeux.length || d.chargement) {
     corps = `<p class="ac-vide muted" role="status">${d.chargement ? 'Récupération de vos parties…' : 'Aucune partie récupérée pour le moment. <a href="#/games">Ouvrir l’historique</a>'}</p>`;
   } else {
@@ -178,7 +178,7 @@ function blocParties(d) {
       <li><a class="ac-partie" href="#/game/${encodeURIComponent(p.id)}">
         <b class="ac-${p.issue}">${ISSUES[p.issue]}</b>
         <span class="ac-adv"><i class="color-dot ${p.camp}" role="img" aria-label="${p.camp === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}"></i><span>${esc(p.adversaire)}</span></span>
-        <span class="muted small ac-cad">${CADENCES[p.cadence] || esc(p.cadence)} · ${fmtGameDate(p.end * 1000)}</span>
+        <span class="muted small ac-cad">${esc(nomCadence(p.cadence))} · ${fmtGameDate(p.end * 1000)}</span>
         <span class="small ac-prec">${p.precision == null ? '<span class="ac-todo">à analyser</span>' : fmtPct(p.precision, 1)}</span></a></li>`).join('')}</ul>`;
   }
   return `<section class="ac-bloc ac-parties" aria-labelledby="ac-parties-t">
@@ -211,9 +211,9 @@ const jauge = (titre, droite, pct, label, cls = '') => `<div><div class="ac-mesu
 const chiffre = (valeur, nom) => `<div class="ac-chiffre"><b>${valeur}</b><span class="small">${nom}</span></div>`;
 
 function blocProgression(d) {
-  const elo = d.user && !d.chargement ? dernierElo(d.jeux, d.user) : null;
+  const elo = d.joueur && !d.chargement ? dernierElo(d.jeux, d.user) : null;
   let html = '';
-  const chiffres = [d.stats && chiffre(d.stats.elo, 'Niveau puzzles'), elo && chiffre(esc(elo.elo), `Elo ${CADENCES[elo.cadence] || esc(elo.cadence)}`)].filter(Boolean);
+  const chiffres = [d.stats && chiffre(d.stats.elo, 'Niveau puzzles'), elo && chiffre(esc(elo.elo), `Elo ${esc(nomCadence(elo.cadence))}`)].filter(Boolean);
   if (chiffres.length) html += `<div class="ac-chiffres">${chiffres.join('')}</div>`;
   if (elo) {
     const r = resultatsRecents(d.jeux, d.user);
@@ -240,7 +240,7 @@ function blocModules(d) {
     ['strategy', 'Erreurs stratégiques', d.erreurs ? `${plural(d.erreurs, 'erreur')} sur les ${d.periode} derniers jours` : 'Les plans manqués dans vos parties'],
     ['endgames', 'Finales', '120 études, puzzles, vos finales'],
     ['stats', 'Statistiques', 'Votre progression sur 30 ou 90 jours'],
-    ['games', 'Historique des parties', 'Vos parties chess.com'],
+    ['games', 'Historique des parties', 'Vos parties chess.com et Lichess'],
   ];
   return `<section aria-labelledby="ac-modules-t"><h2 id="ac-modules-t" class="ac-h2">Tous les modules</h2>
     <div class="ac-modules">${modules.map(([k, nom, desc]) => {
@@ -255,11 +255,11 @@ function page(d) {
   return `
     <header class="ac-head">
       <div><h1 class="page-title">Accueil</h1>
-        <p class="muted"><span class="ac-date">${date}</span>${d.user ? ` · ${esc(d.user)}` : ''} · <span id="ac-sync">${ligneSync()}</span></p></div>
+        <p class="muted"><span class="ac-date">${date}</span>${d.joueur ? ` · ${esc(nomsJoueur(d.user))}` : ''} · <span id="ac-sync">${ligneSync()}</span></p></div>
       <div class="ac-boutons"><a class="btn" href="#/free">Analyse libre</a><a class="btn" href="#/play">Jouer contre Maia</a></div>
     </header>
     <div class="ac-colonnes">
-      <div class="ac-gauche">${blocTaches(d)}${d.user && !d.chargement ? blocAxes() : ''}${blocParties(d)}</div>
+      <div class="ac-gauche">${blocTaches(d)}${d.joueur && !d.chargement ? blocAxes() : ''}${blocParties(d)}</div>
       <div class="ac-droite">${blocReprendre(d)}${blocProgression(d)}</div>
     </div>
     ${blocModules(d)}`;

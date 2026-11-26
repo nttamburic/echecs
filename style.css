@@ -1692,6 +1692,7 @@ a.pz-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px;
 .st-barre { display: flex; gap: 2px; height: 10px; }
 .st-barre span { border-radius: 2px; }
 .st-chiffres { white-space: nowrap; }
+.csite { display: block; font-size: var(--fs-label); }
 .page .st .st-axes { list-style: none; margin: 0; padding: 0; }
 .page .st .st-axes li { display: flex; gap: var(--s-3); padding: 12px 0; border-top: 1px solid var(--line-soft); }
 .st-rang { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--bg); display: grid; place-items: center; }

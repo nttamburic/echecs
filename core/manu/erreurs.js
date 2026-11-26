@@ -1,6 +1,7 @@
 import { Chess } from '../../vendor/chess.js';
 import { classifyGame, epd, materialTrace } from '../../analysis.js';
 import { uciOf } from '../ui.js';
+import { couleurDe } from '../joueur.js';
 import { detecterThemes, themeFiable } from './zero/themes.js';
 
 export const SEUILS_ERREURS = Object.freeze({ seuilCp: 150, fourchetteCp: 300 });
@@ -65,9 +66,8 @@ export function erreursReglages(lire) {
 
 export function releverErreurs(analysis, user, book = {}, { seuilCp = 150, fourchetteCp = 300 } = {}) {
   const game = analysis?.game;
-  const pseudo = String(user ?? '').trim().toLowerCase();
-  if (!game?.pgn || !pseudo || !Array.isArray(analysis.positions)) return [];
-  const color = game.white?.name?.toLowerCase() === pseudo ? 'w' : game.black?.name?.toLowerCase() === pseudo ? 'b' : null;
+  if (!game?.pgn || !Array.isArray(analysis.positions)) return [];
+  const color = couleurDe(game, user);
   if (!color) return [];
   const chess = new Chess();
   try { chess.loadPgn(game.pgn); } catch { return []; }

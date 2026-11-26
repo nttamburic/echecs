@@ -5,6 +5,7 @@
 import { Chess } from '../vendor/chess.js';
 import { classifyGame } from '../analysis.js';
 import { uciOf } from './ui.js';
+import { couleurDe } from './joueur.js';
 import { phase, scoreJoueur } from './manu/erreurs.js';
 import { dansPeriode, periodeStrategie } from './manu/strategie.js';
 
@@ -24,9 +25,8 @@ export function typeFinale(fen) {
 
 export function releverFinales(analysis, user, book = {}) {
   const game = analysis?.game;
-  const pseudo = String(user ?? '').trim().toLowerCase();
-  if (!game?.pgn || !pseudo || !Array.isArray(analysis.positions)) return [];
-  const color = game.white?.name?.toLowerCase() === pseudo ? 'w' : game.black?.name?.toLowerCase() === pseudo ? 'b' : null;
+  if (!game?.pgn || !Array.isArray(analysis.positions)) return [];
+  const color = couleurDe(game, user);
   if (!color) return [];
   const chess = new Chess();
   try { chess.loadPgn(game.pgn); } catch { return []; }
