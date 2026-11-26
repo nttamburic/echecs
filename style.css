@@ -114,7 +114,7 @@ a.btn { text-decoration: none; }
 #more { margin-top: 10px; }
 
 /* ---- vue partie (façon chess.com) : échiquier au centre, barre d'évaluation à gauche, panneau à droite ---- */
-#game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view, #endgame-view { display: flex; gap: 16px; padding: 12px 16px; align-items: flex-start; justify-content: center; }
+#game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view, #endgame-view, #endgamepz-view { display: flex; gap: 16px; padding: 12px 16px; align-items: flex-start; justify-content: center; }
 .left { width: calc(var(--board) + var(--eval-w) + 8px); max-width: 100%; flex: none; }
 .player { padding: 6px 2px 6px calc(var(--eval-w) + 8px); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 44px; }
 .avatar-sm { width: 32px; height: 32px; border-radius: 4px; display: grid; place-items: center; background: var(--light); flex: none; }
@@ -330,14 +330,14 @@ a.btn { text-decoration: none; }
 
 /* empilé : mobile et tablette en portrait (le mobile paysage est exclu plus bas) */
 @media (max-width: 760px), (max-width: 1279px) and (orientation: portrait) {
-  #game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view, #endgame-view { flex-direction: column; align-items: stretch; gap: 8px; }
+  #game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view, #endgame-view, #endgamepz-view { flex-direction: column; align-items: stretch; gap: 8px; }
   .left { margin: 0 auto; }
   .panel { width: 100%; max-width: 640px; margin: 0 auto; height: auto; position: static; overflow: visible; }
   .pmoves, #moves { flex: none; max-height: 260px; min-height: 0; }
   /* barre des coups : toujours accessible au pouce, fixée en bas */
   .navbar { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 30; order: 0; margin: 0; border-top: 1px solid var(--line); border-bottom: 0; border-radius: 0;
     padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); }
-  body[data-view="game"] #content, body[data-view="play"] #content, body[data-view="rep"] #content, body[data-view="train"] #content, body[data-view="puzzle"] #content, body[data-view="puzzletheme"] #content, body[data-view="puzzlerec"] #content, body[data-view="endgame"] #content {
+  body[data-view="game"] #content, body[data-view="play"] #content, body[data-view="rep"] #content, body[data-view="train"] #content, body[data-view="puzzle"] #content, body[data-view="puzzletheme"] #content, body[data-view="puzzlerec"] #content, body[data-view="endgame"] #content, body[data-view="endgamepz"] #content {
     padding-bottom: calc(68px + env(safe-area-inset-bottom)); }
 }
 @media (max-width: 1279px) {
@@ -375,7 +375,7 @@ a.btn { text-decoration: none; }
   /* « Analyser plusieurs parties » en feuille du bas */
   #multi-dlg { margin: auto 0 0; max-height: 88vh; overflow-y: auto; width: 100%; max-width: none; border-radius: var(--r-sheet) var(--r-sheet) 0 0; padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
   #multi-dlg .btn { min-height: var(--tap); }
-  #game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view, #endgame-view { padding: 6px 4px; }
+  #game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view, #endgame-view, #endgamepz-view { padding: 6px 4px; }
   .pmoves { max-height: 220px; }
   #moves { max-height: 220px; }
   .player { font-size: 13px; min-height: 38px; }
@@ -397,7 +397,7 @@ a.btn { text-decoration: none; }
     border-bottom: 0; border-right: 1px solid var(--line-soft); box-sizing: border-box; }
   #topbar .brand span { display: none; }
   #content { margin-left: 48px; }
-  #game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view, #endgame-view { flex-direction: row; align-items: flex-start; justify-content: center; padding: 4px 8px; gap: 8px; }
+  #game-view, #play-view, #rep-view, #train-view, #model-view, #puzzle-view, #puzzletheme-view, #puzzlerec-view, #endgame-view, #endgamepz-view { flex-direction: row; align-items: flex-start; justify-content: center; padding: 4px 8px; gap: 8px; }
   .left { margin: 0; }
   .panel { width: var(--panel-w); height: calc(100dvh - 8px); top: 4px; position: sticky; max-width: none; margin: 0; overflow-y: auto; }
   .navbar { position: sticky; bottom: 0; top: auto; left: auto; right: auto; order: 0; }
@@ -1535,29 +1535,8 @@ a.pz-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px;
 #setup-turn-seg .chip[aria-checked="true"] { background: #45423e; color: var(--text-strong); font-weight: 700; }
 .setup-side .msg[hidden] { display: none; }
 
-.eg-familles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
-.page ul.eg-familles, .page ul.eg-lecons { list-style: none; padding: 0; margin: 0; }
-.page .eg-familles li { margin: 0; background: var(--surface-2); border-radius: var(--r); padding: 8px 12px; display: flex; flex-direction: column; }
-.eg-familles b { font-size: 18px; color: var(--text-strong); }
-.page .eg-lecons li { margin: 0; border-top: 1px solid var(--line-soft); }
-.eg-lecons a { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; min-height: var(--tap); padding: 4px; color: var(--text); text-decoration: none; }
-@media (hover: hover) { .eg-lecons a:hover { background: var(--surface-2); } }
-.eg-titre { flex: 1 1 200px; }
-.eg-etat { display: inline-block; width: 18px; text-align: center; font-weight: 800; }
-.eg-etat.decouvrir { color: var(--text-muted); } .eg-etat.encours { color: var(--mastery-wip); } .eg-etat.maitrisee { color: var(--mastery-ok); }
-.eg-steps[hidden], .eg-state[hidden], .eg-lesson[hidden], .eg-goal[hidden], .eg-correction[hidden], .pz-panel > .tmsg[hidden], .pz-panel .tactions.eg-actions[hidden] { display: none; }
-.eg-steps button { flex: 1; padding: 8px 4px; white-space: nowrap; }
-.eg-steps button[aria-pressed="true"] { color: var(--text-strong); border-bottom-color: var(--accent); }
-.eg-state { margin: 0; padding: 10px 14px 0; color: var(--text-muted); }
-.eg-lesson { padding: 10px 14px 14px; flex: none; }
-.eg-lesson p { margin: 0 0 12px; line-height: 22px; }
-.eg-but b { font-size: 20px; color: var(--text-strong); }
+.eg-goal[hidden], .eg-correction[hidden], .pz-panel > .tmsg[hidden], .pz-panel .tactions.eg-actions[hidden] { display: none; }
 .eg-suite { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-.eg-suite .btn { flex: 1 1 140px; min-height: 48px; }
-.eg-ligne { padding: 12px 0 0; }
-.eg-ligne button.eg-coup { background: none; border: 0; border-radius: var(--r); color: var(--text); font: inherit; padding: 4px 6px; cursor: pointer; }
-.eg-ligne button.eg-coup.cur { background: var(--cur); }
-@media (max-width: 1279px) { .eg-ligne button.eg-coup { min-height: var(--tap); min-width: var(--tap); } }
 #eg-board .sq.light.hl { background: var(--sq-blue-light); }
 #eg-board .sq.dark.hl { background: var(--sq-blue-dark); }
 .eg-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
@@ -1565,6 +1544,7 @@ a.pz-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px;
 .page .eg-themes li { margin: 0; display: flex; }
 .eg-themes a { flex: 1; display: flex; flex-direction: column; gap: 2px; min-height: var(--tap); padding: 10px 12px; background: var(--surface-2); border-radius: var(--r); color: var(--text); text-decoration: none; }
 @media (hover: hover) { .eg-themes a:hover { box-shadow: inset 0 0 0 1px var(--accent); } }
-#eg-serie { margin: 0; padding: 10px 14px 0; }
-#eg-serie[hidden] { display: none; }
-#eg-serie:not([hidden]) + .eg-state { padding-top: 2px; }
+#eg-mes-finales .strategy-toolbar { margin-top: 12px; }
+.eg-onglets button { white-space: nowrap; }
+@media (max-width: 760px) { .eg-onglets button { padding-inline: 8px; } #eg-mes-finales .strategy-tabs { overflow-x: auto; } }
+@media (max-width: 480px) { #eg-mes-finales .strategy-tabs { gap: 0; justify-content: space-between; } #eg-mes-finales .strategy-tabs button { padding-inline: 3px; font-size: 13px; } #eg-mes-finales .strategy-count { margin-left: .15em; } }

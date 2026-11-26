@@ -1,7 +1,7 @@
 // Service worker : permet d'installer l'appli et de l'ouvrir hors connexion.
 // - code de l'appli : réseau d'abord (toujours la dernière version), cache si hors ligne ;
 // - gros fichiers qui ne changent pas (moteur, pièces, ouvertures) : cache d'abord.
-const VERSION = 'v101';
+const VERSION = 'v103';
 const CACHE = 'echecs-' + VERSION;
 const SHELL = [
   './', 'index.html', 'tokens.css', 'style.css', 'main.js', 'manifest.webmanifest',
@@ -10,7 +10,7 @@ const SHELL = [
   'modules/analyse.js', 'modules/settings.js', 'modules/soon.js', 'modules/play.js', 'modules/setup.js',
   'modules/openings.js', 'modules/openings-ui.js', 'modules/openings-train.js', 'modules/openings-coverage.js', 'modules/openings-autofill.js', 'modules/openings-model.js',
   'core/maia.js', 'core/maia-worker.js',
-  'modules/strategy.js', 'modules/endgames.js', 'core/finales.js', 'core/finales-cours.js', 'core/finales-progres.js', 'core/manu/erreurs.js', 'core/manu/strategie.js',
+  'modules/strategy.js', 'modules/endgames.js', 'modules/endgames-puzzles.js', 'modules/liste-erreurs.js', 'core/finales-puzzles.js', 'core/finales-erreurs.js', 'core/finales.js', 'core/manu/erreurs.js', 'core/manu/strategie.js',
   'core/manu/zero/themes.js', 'core/manu/zero/commun.js', 'core/manu/zero/geometry.js',
   'vendor/chess.js', 'vendor/stockfish/stockfish-19-lite-single.js', 'vendor/stockfish/stockfish-19-lite-single.wasm',
   'openings.json', 'modules/opening-names.js', 'icons/icon-192.png', 'icons/icon-512.png',

@@ -18,8 +18,9 @@ import * as ptheme from './modules/puzzles-theme.js';
 import * as prec from './modules/puzzles-recommend.js';
 import * as strategy from './modules/strategy.js';
 import * as endgames from './modules/endgames.js';
+import * as endgamePuzzles from './modules/endgames-puzzles.js';
 
-const VIEWS = ['home', 'game', 'play', 'free', 'setup', 'openings', 'rep', 'train', 'model', 'puzzles', 'puzzle', 'puzzletheme', 'puzzlerec', 'strategy', 'endgames', 'endgame', 'settings'];
+const VIEWS = ['home', 'game', 'play', 'free', 'setup', 'openings', 'rep', 'train', 'model', 'puzzles', 'puzzle', 'puzzletheme', 'puzzlerec', 'strategy', 'endgames', 'endgame', 'endgamepz', 'settings'];
 const MODULES = []; // modules pas encore livrés
 
 export function showView(v, tab = v === 'home' || v === 'game' ? 'games' : v === 'setup' ? 'free' : v) {
@@ -41,6 +42,8 @@ function route() {
   if (!/^#\/puzzles\/theme\/./.test(h)) ptheme.leave();
   if (!/^#\/puzzles\/recommend\/./.test(h)) prec.leave();
   if (!/^#\/strategy/.test(h)) strategy.leave();
+  if (!/^#\/endgames\/?$/.test(h)) endgames.leave();
+  if (!/^#\/endgames\/puzzles\/./.test(h)) endgamePuzzles.leave();
   if (m) { showView('game'); analyse.openGame(decodeURIComponent(m[1])); return; }
   const [, name, sub] = /^#\/([^/]*)\/?(.*)$/.exec(h) || [];
   if (name === 'play') { showView('play'); play.show(); return; }
@@ -73,8 +76,7 @@ function route() {
   if (name === 'endgames') {
     if (sub === 'setup') { showView('setup', 'endgames'); endgames.editeur($('#setup-view')); return; }
     if (sub === 'play') { showView('endgame', 'endgames'); endgames.jouerVue($('#endgame-view')); return; }
-    if (sub.startsWith('serie/')) { showView('endgame', 'endgames'); endgames.serieVue($('#endgame-view'), sub.slice(6)); return; }
-    if (sub.startsWith('lecon/')) { showView('endgame', 'endgames'); endgames.leconVue($('#endgame-view'), sub.slice(6)); return; }
+    if (sub.startsWith('puzzles/')) { showView('endgamepz', 'endgames'); endgamePuzzles.demarrer($('#endgamepz-view'), sub.slice(8)); return; }
     showView('endgames'); endgames.show($('#endgames-view')); return;
   }
   if (MODULES.includes(name)) { showView(name); soon($(`#${name}-view`), name); return; }
