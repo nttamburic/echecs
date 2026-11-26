@@ -101,12 +101,39 @@ export async function removeAll(col) {
 export const recordsOfFile = (file) => tx('records', 'readonly', (s) => req2p(s.index('file').getAll(file)));
 export const allRecords = () => tx('records', 'readonly', (s) => req2p(s.getAll()));
 export const rawGet = (key) => tx('records', 'readonly', (s) => req2p(s.get(key)));
+// Écrit des enregistrements reçus de GitHub, sauf ceux dont la version locale est devenue plus
+// récente depuis leur lecture. Renvoie le nombre d'enregistrements ainsi laissés de côté.
 export async function rawPutMany(recs) {
-  if (!recs.length) return;
-  await tx('records', 'readwrite', (s) => { for (const r of recs) s.put(r); });
-  const cols = new Set(recs.map((r) => r.col));
+  if (!recs.length) return 0;
+  const written = [];
+  await tx('records', 'readwrite', async (s) => {
+    for (const r of recs) {
+      const cur = await req2p(s.get(r.key));
+      if (cur && (cur.updatedAt || 0) > r.updatedAt) continue;
+      s.put(r);
+      written.push(r);
+    }
+  });
+  const cols = new Set(written.map((r) => r.col));
   for (const col of cols) emit({ col, remote: true });
+  return recs.length - written.length;
 }
+
+// Liste des fichiers à envoyer. Elle n'est jamais réécrite à partir d'une copie en mémoire : chaque
+// ajout ou retrait la relit dans la même transaction, pour ne pas effacer une saisie faite entre-temps.
+export const markDirty = (files) => tx('meta', 'readwrite', async (m) => {
+  const dirty = (await req2p(m.get('dirty'))) || [];
+  const added = files.filter((f) => !dirty.includes(f));
+  if (added.length) m.put([...dirty, ...added], 'dirty');
+});
+
+// Retire « file » de la liste après un envoi, seulement si ses enregistrements donnent toujours le
+// contenu envoyé (« serialize » le reconstruit). Sinon il a changé pendant l'envoi et reste à envoyer.
+export const clearDirty = (file, sent, serialize) => tx(['records', 'meta'], 'readwrite', async (s, m) => {
+  if (serialize(await req2p(s.index('file').getAll(file))) !== sent) return;
+  const dirty = (await req2p(m.get('dirty'))) || [];
+  m.put(dirty.filter((f) => f !== file), 'dirty');
+});
 
 export const metaGet = (k) => tx('meta', 'readonly', (s) => req2p(s.get(k)));
 export const metaSet = (k, v) => tx('meta', 'readwrite', (s) => { s.put(v, k); });

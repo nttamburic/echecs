@@ -124,7 +124,8 @@ async function mergeRemote(file, remoteRecs, since = 0) {
     else if (lt > rt) localNewer = true;
   }
   for (const lr of localRecs) if (!seen.has(lr.key)) localNewer = true;
-  await store.rawPutMany(toWrite);
+  // Une saisie faite pendant la fusion n'est pas écrasée : on recommence avec les données à jour.
+  if (await store.rawPutMany(toWrite)) return mergeRemote(file, remoteRecs, since);
   if (held) { await store.metaSet('conflicts', conflicts); state.conflicts = Object.values(conflicts); }
   return localNewer;
 }
@@ -146,10 +147,37 @@ export async function loadConflicts() {
   notify();
 }
 
-async function buildFile(file) {
-  const recs = await store.recordsOfFile(file);
-  recs.sort((a, b) => (a.key < b.key ? -1 : 1));
-  return JSON.stringify({ version: 1, records: recs.map(({ col, id, data, updatedAt, deleted }) => (deleted ? { col, id, updatedAt, deleted: true } : { col, id, data, updatedAt })) });
+function serializeFile(recs) {
+  const sorted = [...recs].sort((a, b) => (a.key < b.key ? -1 : 1));
+  return JSON.stringify({ version: 1, records: sorted.map(({ col, id, data, updatedAt, deleted }) => (deleted ? { col, id, updatedAt, deleted: true } : { col, id, data, updatedAt })) });
+}
+const buildFile = async (file) => serializeFile(await store.recordsOfFile(file));
+
+// Empreinte que git (et donc GitHub) donne à un fichier ayant ce contenu.
+async function blobSha(content) {
+  const bytes = new TextEncoder().encode(content);
+  const head = new TextEncoder().encode(`blob ${bytes.length}\0`);
+  const all = new Uint8Array(head.length + bytes.length);
+  all.set(head); all.set(bytes, head.length);
+  const digest = await crypto.subtle.digest('SHA-1', all);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Fichiers à envoyer en plus de ceux déjà notés : jamais envoyés, ou différents de la version GitHub
+// alors que celle-ci a déjà été fusionnée ici. Le second cas rattrape les modifications qu'une
+// ancienne version de l'appli retirait par erreur de la liste d'envoi.
+async function unsentFiles(remote, shas, dirty) {
+  const byFile = new Map();
+  for (const r of await store.allRecords()) {
+    if (!byFile.has(r.file)) byFile.set(r.file, []);
+    byFile.get(r.file).push(r);
+  }
+  const out = [];
+  for (const [file, recs] of byFile) {
+    if (dirty.has(file)) continue;
+    if (!remote[file] || (shas[file] === remote[file] && await blobSha(serializeFile(recs)) !== remote[file])) out.push(file);
+  }
+  return out;
 }
 
 async function fetchBlob(sha) {
@@ -171,8 +199,11 @@ async function doSync() {
   state.running = true; state.error = null; state.offline = false; notify();
   try {
     const since = state.lastSync;
+    // La date retenue est celle du début : une saisie faite pendant la synchro compte comme
+    // postérieure, et un conflit sur ce répertoire sera bien détecté la fois suivante.
+    const startedAt = Date.now();
     const shas = (await store.metaGet('shas')) || {};
-    const dirty = new Set((await store.metaGet('dirty')) || []);
+    const dirtyFiles = async () => new Set((await store.metaGet('dirty')) || []);
 
     // 1) Ce qui a changé sur GitHub depuis la dernière fois.
     const tree = await gh(`${repoPath()}/git/trees/HEAD?recursive=1`);
@@ -185,25 +216,24 @@ async function doSync() {
     for (const [file, sha] of Object.entries(remote)) {
       if (shas[file] === sha) continue;
       const recs = parseFile(await fetchBlob(sha));
-      if (await mergeRemote(file, recs, since)) dirty.add(file);
+      if (await mergeRemote(file, recs, since)) await store.markDirty([file]); // noté avant le sha : rien n'est oublié si la suite échoue
       shas[file] = sha;
       await store.metaSet('shas', shas);
     }
-    // fichiers locaux jamais envoyés
-    for (const r of await store.allRecords()) if (!remote[r.file]) dirty.add(r.file);
+    await store.markDirty(await unsentFiles(remote, shas, await dirtyFiles()));
 
     // 2) Envoi des fichiers modifiés localement (un à la fois : chaque envoi est un commit).
     const heldFiles = async () => new Set(Object.values((await store.metaGet('conflicts')) || {}).map((c) => c.file));
     state.conflicts = Object.values((await store.metaGet('conflicts')) || {});
-    for (const file of [...dirty]) {
-      let skip = false, pushed = false;
+    for (const file of await dirtyFiles()) {
+      let skip = false, pushed = false, sent = '';
       for (let attempt = 0; attempt < 3; attempt++) {
         if ((await heldFiles()).has(file)) { skip = true; break; } // en attente de la décision de l'utilisateur : on n'écrase pas l'autre appareil
         const content = await buildFile(file);
         const body = { message: `Sync ${file}`, content: b64encode(content) };
         if (shas[file]) body.sha = shas[file];
         const r = await gh(`${repoPath()}/contents/${file.split('/').map(encodeURIComponent).join('/')}`, { method: 'PUT', body });
-        if (r.ok) { shas[file] = r.body.content.sha; pushed = true; break; }
+        if (r.ok) { shas[file] = r.body.content.sha; pushed = true; sent = content; break; }
         if (r.status === 409 || r.status === 422) {
           // Le fichier a changé sur GitHub entre-temps (autre appareil) : on relit, fusionne et réessaie.
           const cur = await gh(`${repoPath()}/contents/${file.split('/').map(encodeURIComponent).join('/')}`);
@@ -217,11 +247,13 @@ async function doSync() {
       }
       if (skip) { state.conflicts = Object.values((await store.metaGet('conflicts')) || {}); continue; }
       if (!pushed) { await store.metaSet('shas', shas); throw new Error('GitHub a refusé l\'envoi de ' + file + ' (le fichier change sans cesse). Nouvel essai à la prochaine synchronisation.'); }
-      dirty.delete(file);
       await store.metaSet('shas', shas);
-      await store.metaSet('dirty', [...dirty]);
+      await store.clearDirty(file, sent, serializeFile);
     }
-    state.lastSync = Date.now();
+    // Saisies faites pendant cette synchro : on les envoie sans attendre le passage périodique.
+    const held = await heldFiles();
+    if ([...await dirtyFiles()].some((f) => !held.has(f))) schedule();
+    state.lastSync = startedAt;
     local.set('lastSync', String(state.lastSync));
     return true;
   } catch (e) {
@@ -235,11 +267,11 @@ async function doSync() {
 
 // ------------------------------------------------------------------ déclenchement automatique
 let timer = null;
-store.onChange((info) => {
-  if (!info.local || !cfg.configured) return;
+function schedule() {
   clearTimeout(timer);
-  timer = setTimeout(syncNow, 20000); // regroupe les modifications rapprochées
-});
+  timer = setTimeout(() => { timer = null; syncNow(); }, 20000); // regroupe les modifications rapprochées
+}
+store.onChange((info) => { if (info.local && cfg.configured) schedule(); });
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden' && timer) { clearTimeout(timer); timer = null; syncNow(); }
   if (document.visibilityState === 'visible' && Date.now() - state.lastSync > 120000) syncNow();
