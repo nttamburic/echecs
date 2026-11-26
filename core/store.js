@@ -119,6 +119,20 @@ export async function rawPutMany(recs) {
   return recs.length - written.length;
 }
 
+// Restauration d'une sauvegarde, en une seule transaction (tout ou rien). « decide(saved, current) »
+// renvoie l'enregistrement à écrire, ou null ; chaque fichier touché est noté à envoyer.
+export const restoreRecords = (saved, decide) => tx(['records', 'meta'], 'readwrite', async (s, m) => {
+  const files = new Set();
+  for (const r of saved) {
+    const rec = decide(r, await req2p(s.get(`${r.col}/${r.id}`)));
+    if (!rec) continue;
+    s.put(rec);
+    files.add(rec.file);
+  }
+  const dirty = (await req2p(m.get('dirty'))) || [];
+  m.put([...new Set([...dirty, ...files])], 'dirty');
+});
+
 // Liste des fichiers à envoyer. Elle n'est jamais réécrite à partir d'une copie en mémoire : chaque
 // ajout ou retrait la relit dans la même transaction, pour ne pas effacer une saisie faite entre-temps.
 export const markDirty = (files) => tx('meta', 'readwrite', async (m) => {

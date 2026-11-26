@@ -363,7 +363,7 @@ async function clearHistory() {
   const ok = confirm(`Effacer l'historique ?\n\n`
     + `• La liste des parties est vidée (cliquez ensuite sur « Actualiser » pour la récupérer à nouveau depuis chess.com).\n`
     + `• ${n ? `Les ${n} analyse(s) enregistrée(s) sont supprimées` : 'Toutes les analyses enregistrées sont supprimées'} de cet appareil ET de votre dépôt GitHub, donc aussi de vos autres appareils.\n\n`
-    + `Cette action est définitive.`);
+    + `Cette action est définitive. Pour pouvoir revenir en arrière, annulez et téléchargez d'abord une sauvegarde (Paramètres → Sauvegarde).`);
   if (!ok) return;
   const btn = $('#clear-hist');
   btn.disabled = true;

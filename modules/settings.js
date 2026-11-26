@@ -9,12 +9,14 @@ import { engineFields } from './analyse.js';
 import { applyBoardPrefs } from '../board.js';
 import { MAIA_MODELS, maiaModel } from '../core/maia.js';
 import { erreursReglages, SEUILS_ERREURS } from '../core/manu/erreurs.js';
+import { backupTab } from './settings-backup.js';
 
 const SECTIONS = [
   ['profile', 'Profil', 'Pseudo chess.com'],
   ['connection', 'Connexions', 'GitHub (synchro) et Lichess'],
   ['engine', 'Moteur d’analyse', 'Stockfish, profondeur, Maia'],
   ['interface', 'Interface', 'Échiquier et coordonnées'],
+  ['backup', 'Sauvegarde', 'Télécharger, restaurer, PGN'],
   ['app', 'Application', 'Installation, hors ligne, crédits'],
 ];
 const BOARDS = [['tournoi', 'Vert tournoi', '#ebecd0', '#779556'], ['ardoise', 'Ardoise', '#dee3e6', '#8ca2ad'], ['sable', 'Sable', '#f0d9b5', '#b58863'],
@@ -50,7 +52,7 @@ export function render(el, sub) {
   };
   const body = $('#settings-pane', el);
   if (unsub) { unsub(); unsub = null; }
-  ({ profile, connection, engine, interface: interfaceTab, app })[cur](body);
+  ({ profile, connection, engine, interface: interfaceTab, backup: backupTab, app })[cur](body);
 }
 
 // ------------------------------------------------------------------ profil
