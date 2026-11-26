@@ -1,8 +1,9 @@
-// Module Puzzles : écran d'accueil. Chaque mode a sa propre vue (puzzles-rush.js, puis thèmes et recommandés).
+// Module Puzzles : écran d'accueil. Chaque mode a sa propre vue (puzzles-woodpecker.js, puis thèmes et recommandés).
 import { $, esc, local } from '../core/ui.js';
 import { getStats } from '../core/puzzle-stats.js';
 import { loadManifest } from '../core/puzzle-data.js';
 import { groupThemes } from '../core/puzzle-themes.js';
+import { NB_CYCLES, bilanJeu, jeuActif, lireWoodpecker } from '../core/woodpecker.js';
 
 const themeSummary = (s) => {
   const t = Object.values(s.themes || {});
@@ -11,24 +12,34 @@ const themeSummary = (s) => {
 };
 
 const ICON = {
-  rush: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 3h6"/></svg>',
+  woodpecker: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.5-4.6M4 13a8 8 0 0 0 14.500 4.600"/><path d="M5 2.500v4.200h4.200M19 21.500v-4.200h-4.200"/></svg>',
   theme: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
   recommend: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.5 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/></svg>',
 };
 
+async function woodpeckerSummary() {
+  try {
+    const { jeux, essais } = await lireWoodpecker();
+    const jeu = jeuActif(jeux, essais);
+    if (!jeu) return 'Aucun jeu en cours';
+    const c = bilanJeu(jeu, essais).courant;
+    return `Cycle <b>${c.n} / ${NB_CYCLES}</b> · ${c.faits} / ${c.total} puzzles`;
+  } catch { return 'Progression indisponible'; }
+}
+
 export async function show(el) {
   const tt = document.getElementById('topbar-soon'); if (tt) tt.textContent = 'Puzzles';
   el.innerHTML = '<h1 class="page-title">Puzzles</h1><p class="muted">Chargement…</p>';
-  const s = await getStats();
+  const [s, wp] = await Promise.all([getStats(), woodpeckerSummary()]);
   el.innerHTML = `
   <h1 class="page-title">Puzzles</h1>
   <p class="pz-lead">Entraînez votre vision tactique. Niveau actuel : <b>${s.elo}</b>.</p>
   <div class="pz-cards">
-    <a class="pz-card" href="#/puzzles/rush">
-      <span class="pz-ico">${ICON.rush}</span>
-      <span class="pz-name">Puzzles rush</span>
-      <span class="pz-desc">Résolvez-en le plus possible en 120 secondes. Chaque erreur coûte 5 secondes.</span>
-      <span class="pz-meta">${s.rush.plays ? `Record : <b>${s.rush.best}</b> · ${s.rush.plays} partie${s.rush.plays > 1 ? 's' : ''}` : 'Pas encore joué'}</span>
+    <a class="pz-card" href="#/puzzles/woodpecker">
+      <span class="pz-ico">${ICON.woodpecker}</span>
+      <span class="pz-name">Woodpecker</span>
+      <span class="pz-desc">Un même jeu de puzzles, refait en ${NB_CYCLES} cycles de plus en plus rapides.</span>
+      <span class="pz-meta">${wp}</span>
     </a>
     <a class="pz-card" href="#/puzzles/theme">
       <span class="pz-ico">${ICON.theme}</span>

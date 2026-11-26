@@ -1,5 +1,5 @@
 // Moteur commun des puzzles : déroulement d'un puzzle et classement Elo. Aucun accès au DOM :
-// l'échiquier, le chrono et les modes (rush, thèmes, recommandé) se branchent par-dessus.
+// l'échiquier, le chrono et les modes (Woodpecker, thèmes, recommandé) se branchent par-dessus.
 //
 // Un puzzle (format de core/puzzle-data.js) : { id, fen, moves: [uci…], rating, … }. La position `fen`
 // est celle AVANT le premier coup de l'adversaire. moves[0] est donc joué automatiquement, puis le
@@ -26,8 +26,18 @@ export class PuzzleRun {
     this.puzzle = puzzle;
     this.chess = new Chess(puzzle.fen);
     this.idx = 0; // prochain coup attendu dans puzzle.moves
-    this.status = 'ready'; // ready -> playing -> solved | failed
+    this.status = 'ready'; // ready -> playing -> solved | failed (abandon)
     this.mistakes = 0;
+    this.line = []; // coups joués depuis la position de départ du puzzle (UCI)
+    this.verdict = null; // résultat compté (true : réussi, false : raté), fixé une seule fois
+  }
+
+  // Fixe le résultat compté du puzzle. Seul le premier appel compte : après une erreur, le puzzle reste
+  // raté même s'il est résolu ensuite. Renvoie true si cet appel a fixé le résultat (à enregistrer).
+  settle(success) {
+    if (this.verdict !== null) return false;
+    this.verdict = !!success;
+    return true;
   }
 
   // Joue le coup de l'adversaire. Renvoie l'état à afficher : le joueur joue la couleur qui a le trait ensuite.
@@ -35,6 +45,7 @@ export class PuzzleRun {
     const first = playUci(this.chess, this.puzzle.moves[0]);
     if (!first) throw new Error(`Puzzle ${this.puzzle.id} invalide : coup ${this.puzzle.moves[0]}`);
     this.idx = 1;
+    this.line = [uciOf(first)];
     this.status = 'playing';
     this.color = this.chess.turn(); // couleur du joueur
     return { fen: this.chess.fen(), lastMove: [first.from, first.to], color: this.color };
@@ -46,7 +57,7 @@ export class PuzzleRun {
   get expected() { return this.puzzle.moves[this.idx] || null; }
 
   // Coup du joueur, depuis l'échiquier. Résultat :
-  //   { ok: false, expected }                     : mauvais coup (le puzzle est échoué, la position n'a pas changé)
+  //   { ok: false, expected }                     : mauvais coup (la position n'a pas changé, on peut réessayer)
   //   { ok: true, done, fen, lastMove, reply }    : bon coup ; `reply` est la réponse de l'adversaire
   //                                                 ({ uci, fen, lastMove }) ou null si le puzzle est terminé.
   move(from, to, promotion) {
@@ -62,11 +73,11 @@ export class PuzzleRun {
     const isSolution = uciOf(m) === want;
     const isAlt = this.idx === 1 && Array.isArray(this.puzzle.alt) && this.puzzle.alt.includes(uciOf(m));
     if (!isSolution && !isAlt && !probe.isCheckmate()) {
-      this.status = 'failed';
       this.mistakes++;
       return { ok: false, expected: want };
     }
     this.chess = probe;
+    this.line.push(uciOf(m));
     this.idx++;
     const out = { ok: true, fen: this.chess.fen(), lastMove: [m.from, m.to], done: false, reply: null };
     if (!isSolution || this.idx >= this.puzzle.moves.length) {
@@ -78,6 +89,7 @@ export class PuzzleRun {
     const r = playUci(this.chess, replyUci);
     if (!r) throw new Error(`Puzzle ${this.puzzle.id} invalide : coup ${replyUci}`);
     this.idx++;
+    this.line.push(uciOf(r));
     out.reply = { uci: replyUci, fen: this.chess.fen(), lastMove: [r.from, r.to] };
     return out;
   }

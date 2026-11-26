@@ -1,14 +1,14 @@
 // Mode Puzzles par thème : une série de puzzles d'un même motif, au niveau choisi, sans chrono.
-// Un mauvais coup montre la bonne réponse et compte le puzzle comme raté ; on passe au suivant à la demande.
-import { Chess } from '../vendor/chess.js';
+// Un mauvais coup compte le puzzle comme raté, mais on peut réessayer ; « Suivant » apparaît une fois le puzzle résolu.
 import { Board, announce } from '../board.js';
 import { $, esc } from '../core/ui.js';
 import { loadPack, pickByRating } from '../core/puzzle-data.js';
 import { getStats, recordTheme } from '../core/puzzle-stats.js';
 import { themeLabel } from '../core/puzzle-themes.js';
+import { reprise } from '../core/puzzle-reprise.js';
 import { PuzzleRun, updateElo } from './puzzles-engine.js';
+import { analyserPuzzle } from './puzzles-analyse.js';
 import { themeLevel, themeCount } from './puzzles.js';
-import { figSan } from './analyse.js';
 
 const REPLY_DELAY = 350;
 const S = { seq: 0, board: null, timer: null, phase: 'idle' };
@@ -35,6 +35,7 @@ function build(el) {
     <div id="theme-msg" class="tmsg" aria-live="polite"></div>
     <div class="tactions">
       <button id="theme-hint" class="btn" type="button">💡 Indice</button>
+      <button id="theme-analyse" class="btn" type="button">Analyser la position</button>
       <button id="theme-next" class="btn primary" type="button">Suivant →</button>
     </div>
     <div class="tstats pz-stats" id="theme-stats"></div>
@@ -43,6 +44,7 @@ function build(el) {
   S.board = new Board($('#theme-board', el), { onMove: (from, to, promo) => userMove(from, to, promo) });
   $('#theme-hint', el).onclick = hint;
   $('#theme-next', el).onclick = () => next();
+  $('#theme-analyse', el).onclick = analyse;
   document.addEventListener('keydown', (e) => {
     if (document.body.dataset.view !== 'puzzletheme' || document.querySelector('dialog[open]')) return;
     if (['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'A'].includes(e.target.tagName)) return;
@@ -68,6 +70,8 @@ function renderStats() {
 export async function start(el, theme) {
   if (!el.dataset.built) { build(el); el.dataset.built = '1'; }
   leave();
+  const retour = reprise(location.hash);
+  if (retour) { retour(); return; }
   const seq = S.seq;
   S.theme = theme;
   S.phase = 'loading';
@@ -76,6 +80,7 @@ export async function start(el, theme) {
   $('#theme-summary').innerHTML = '';
   $('#theme-hint').classList.remove('hidden');
   $('#theme-next').classList.add('hidden');
+  $('#theme-analyse').classList.add('hidden');
   S.board.interactive = false;
   setMsg('', 'Chargement des puzzles…');
   try {
@@ -106,11 +111,13 @@ function nextPuzzle() {
   S.run = new PuzzleRun(S.queue[S.idx]);
   const st = S.run.start();
   S.hinted = false;
+  S.reply = null;
   S.phase = 'playing';
   S.board.setOrientation(st.color);
   S.board.setPosition(st.fen, { lastMove: st.lastMove });
   S.board.interactive = true;
   $('#theme-hint').classList.remove('hidden');
+  $('#theme-analyse').classList.remove('hidden');
   $('#theme-next').classList.add('hidden');
   $('#theme-sub').textContent = `Puzzle ${S.idx + 1} / ${S.queue.length} · trait aux ${st.color === 'w' ? 'Blancs' : 'Noirs'}`;
   setMsg('', `Trouvez le meilleur coup pour les ${st.color === 'w' ? 'Blancs' : 'Noirs'}.`);
@@ -128,58 +135,65 @@ function hint() {
   setMsg('hint', 'Déplacez la pièce mise en évidence.');
 }
 
-function sanOf(fen, uci) {
-  try {
-    const c = new Chess(fen);
-    const m = c.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
-    return figSan(m.san, m.color);
-  } catch { return esc(uci); }
-}
-
-async function resolve(success) {
-  S.phase = 'resolved';
-  S.board.interactive = false;
+// Compte le résultat du puzzle, une seule fois (première erreur, analyse ou réussite).
+async function record(success) {
+  if (!S.run.settle(success)) return;
   if (success) S.ok++; else S.ko++;
   S.elo = updateElo(S.elo, S.run.puzzle.rating, success).user;
   renderStats();
+  try { await recordTheme({ theme: S.theme, success, elo: S.elo }); } catch { /* stockage indisponible */ }
+}
+
+function solved() {
+  S.phase = 'resolved';
+  record(true); // sans effet si le puzzle est déjà compté raté
+  S.board.interactive = false;
+  if (S.run.verdict) setMsg('ok', S.hinted ? 'Résolu (avec indice).' : 'Bien joué !');
+  else setMsg('ok', 'Trouvé ! Ce puzzle reste compté comme raté.');
+  announce('Puzzle résolu.');
   $('#theme-hint').classList.add('hidden');
-  const last = S.idx + 1 >= S.queue.length;
   const btn = $('#theme-next');
-  btn.textContent = last ? 'Terminer' : 'Suivant →';
+  btn.textContent = S.idx + 1 >= S.queue.length ? 'Terminer' : 'Suivant →';
   btn.classList.remove('hidden');
   btn.focus();
-  try { await recordTheme({ theme: S.theme, success, elo: S.elo }); } catch { /* stockage indisponible */ }
 }
 
 function userMove(from, to, promo) {
   if (S.phase !== 'playing' || !S.run) return;
-  const seq = S.seq;
-  const fenBefore = S.run.fen;
   const res = S.run.move(from, to, promo);
   if (res.illegal) return;
   S.board.hl.clear();
   if (!res.ok) {
-    const want = res.expected;
-    S.board.setArrows([{ from: want.slice(0, 2), to: want.slice(2, 4), color: '#81b64c' }]);
-    setMsg('wrong', `Raté. Le bon coup était <b>${sanOf(fenBefore, want)}</b>`);
-    announce('Raté.');
-    resolve(false);
+    record(false);
+    S.board.render();
+    setMsg('wrong', 'Ce n’est pas le bon coup. Réessayez. Le puzzle est compté comme raté.');
+    announce('Mauvais coup. Réessayez.');
     return;
   }
   S.board.setPosition(res.fen, { lastMove: res.lastMove });
-  if (res.done) {
-    setMsg('ok', S.hinted ? 'Résolu (avec indice).' : 'Bien joué !');
-    announce('Puzzle résolu.');
-    resolve(true);
-    return;
-  }
+  if (res.done) { solved(); return; }
   S.board.interactive = false;
-  S.timer = setTimeout(() => {
-    if (seq !== S.seq || S.phase !== 'playing') return;
-    S.board.setPosition(res.reply.fen, { lastMove: res.reply.lastMove });
-    S.board.interactive = true;
-    setMsg('ok', 'Bon coup, continuez.');
-  }, REPLY_DELAY);
+  S.reply = res.reply;
+  S.timer = setTimeout(playReply, REPLY_DELAY);
+}
+
+function playReply() {
+  if (S.phase !== 'playing' || !S.reply) return;
+  S.board.setPosition(S.reply.fen, { lastMove: S.reply.lastMove });
+  S.reply = null;
+  S.board.interactive = true;
+  setMsg('ok', 'Bon coup, continuez.');
+}
+
+// Avant la solution, consulter le moteur revient à voir la réponse : le puzzle est compté raté.
+function analyse() {
+  if ((S.phase !== 'playing' && S.phase !== 'resolved') || !S.run) return;
+  const phase = S.phase;
+  if (phase === 'playing') {
+    record(false);
+    setMsg('info', 'Position analysée avant la solution : ce puzzle est compté comme raté. Trouvez le coup pour continuer.');
+  }
+  analyserPuzzle(S.run, { onglet: 'puzzles', reprendre: () => { S.phase = phase; playReply(); } });
 }
 
 function next() {

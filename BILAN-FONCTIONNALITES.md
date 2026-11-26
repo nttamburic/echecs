@@ -133,7 +133,7 @@ Légende : ✅ livré · 🚧 page « bientôt » (présentation seulement)
 
 ---
 
-## 7. Modules annoncés 🚧 (Puzzles est livré : rush, thèmes, recommandés)
+## 7. Modules annoncés 🚧 (Puzzles est livré : Woodpecker, thèmes, recommandés)
 
 Carte avec titre, « Ce module arrive bientôt. Au programme : » et liste.
 - **Étude stratégique** : « Trouve le plan », idées de milieu de jeu avec Leela Chess Zero.

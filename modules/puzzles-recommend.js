@@ -2,7 +2,6 @@
 //  - « erreurs » : vos gaffes, erreurs et occasions manquées des parties analysées, avec la meilleure ligne du moteur ;
 //  - « ouvertures » : des puzzles des ouvertures que vous jouez le plus (famille de tags Lichess).
 // Chaque puzzle tenté devient une carte de révision espacée : un puzzle raté revient, un puzzle réussi s'espace.
-import { Chess } from '../vendor/chess.js';
 import { Board, announce } from '../board.js';
 import { $, esc } from '../core/ui.js';
 import * as store from '../core/store.js';
@@ -11,8 +10,10 @@ import { getStats, saveStats } from '../core/puzzle-stats.js';
 import { mineAll, CLASS_LABEL } from '../core/puzzle-mine.js';
 import { allCards, gradePuzzle, isDue } from '../core/puzzle-cards.js';
 import { buildQueue } from '../core/puzzle-queue.js';
+import { reprise } from '../core/puzzle-reprise.js';
 import { PuzzleRun, updateElo } from './puzzles-engine.js';
-import { getUser, BOOK, figSan } from './analyse.js';
+import { analyserPuzzle } from './puzzles-analyse.js';
+import { getUser, BOOK } from './analyse.js';
 import { frOpening } from './opening-names.js';
 
 const SIZE = 10;
@@ -123,6 +124,7 @@ function build(el) {
     <div id="rec-msg" class="tmsg" aria-live="polite"></div>
     <div class="tactions">
       <button id="rec-hint" class="btn" type="button">💡 Indice</button>
+      <button id="rec-analyse" class="btn" type="button">Analyser la position</button>
       <button id="rec-next" class="btn primary" type="button">Suivant →</button>
     </div>
     <div class="tstats pz-stats" id="rec-stats"></div>
@@ -131,6 +133,7 @@ function build(el) {
   S.board = new Board($('#rec-board', el), { onMove: (from, to, promo) => userMove(from, to, promo) });
   $('#rec-hint', el).onclick = hint;
   $('#rec-next', el).onclick = () => next();
+  $('#rec-analyse', el).onclick = analyse;
   document.addEventListener('keydown', (e) => {
     if (document.body.dataset.view !== 'puzzlerec' || document.querySelector('dialog[open]')) return;
     if (['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'A'].includes(e.target.tagName)) return;
@@ -150,7 +153,7 @@ function renderStats() {
     <span><b>${S.ok}</b>réussis</span>
     <span><b>${S.ko}</b>ratés</span>
     <span><b>${S.elo}</b>niveau</span>
-    <span><b>${Math.max(0, S.queue.length - S.idx - (S.phase === 'resolved' ? 1 : 0))}</b>restants</span>`;
+    <span><b>${Math.max(0, S.queue.length - S.idx - (S.run && S.run.verdict !== null ? 1 : 0))}</b>restants</span>`;
 }
 
 function reasonHtml(p) {
@@ -166,6 +169,8 @@ function reasonHtml(p) {
 export async function start(el, srcKey) {
   if (!el.dataset.built) { build(el); el.dataset.built = '1'; }
   leave();
+  const retour = reprise(location.hash);
+  if (retour) { retour(); return; }
   const seq = S.seq;
   S.src = SRC_LABEL[srcKey] ? srcKey : 'mix';
   S.phase = 'loading';
@@ -173,6 +178,7 @@ export async function start(el, srcKey) {
   $('#rec-summary').innerHTML = '';
   $('#rec-hint').classList.remove('hidden');
   $('#rec-next').classList.add('hidden');
+  $('#rec-analyse').classList.add('hidden');
   $('#rec-title').textContent = SRC_LABEL[S.src];
   $('#rec-sub').textContent = '';
   S.board.interactive = false;
@@ -210,11 +216,13 @@ function nextPuzzle() {
   S.run = new PuzzleRun(p);
   const st = S.run.start();
   S.hinted = false;
+  S.reply = null;
   S.phase = 'playing';
   S.board.setOrientation(st.color);
   S.board.setPosition(st.fen, { lastMove: st.lastMove });
   S.board.interactive = true;
   $('#rec-hint').classList.remove('hidden');
+  $('#rec-analyse').classList.remove('hidden');
   $('#rec-next').classList.add('hidden');
   $('#rec-sub').innerHTML = `Puzzle ${S.idx + 1} / ${S.queue.length} · ${reasonHtml(p)}`;
   setMsg('', `Trouvez le meilleur coup pour les ${st.color === 'w' ? 'Blancs' : 'Noirs'}.`);
@@ -230,63 +238,73 @@ function hint() {
   setMsg('hint', 'Déplacez la pièce mise en évidence.');
 }
 
-function sanOf(fen, uci) {
-  try {
-    const m = new Chess(fen).move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
-    return figSan(m.san, m.color);
-  } catch { return esc(uci); }
-}
-
-async function resolve(success) {
-  S.phase = 'resolved';
-  S.board.interactive = false;
+// Compte le résultat du puzzle, une seule fois (première erreur, analyse ou réussite).
+async function record(success) {
+  if (!S.run.settle(success)) return;
   if (success) S.ok++; else S.ko++;
   const p = S.run.puzzle;
+  const hinted = S.hinted;
   S.elo = updateElo(S.elo, p.rating, success).user;
-  $('#rec-hint').classList.add('hidden');
-  const last = S.idx + 1 >= S.queue.length;
-  const btn = $('#rec-next');
-  btn.textContent = last ? 'Terminer' : 'Suivant →';
-  btn.classList.remove('hidden');
-  btn.focus();
+  const elo = S.elo;
   renderStats();
   try {
-    await gradePuzzle(p, { success, hinted: S.hinted });
+    await gradePuzzle(p, { success, hinted });
     const s = await getStats();
-    s.elo = S.elo;
+    s.elo = elo;
     await saveStats(s);
   } catch { /* stockage indisponible */ }
 }
 
+function solved() {
+  S.phase = 'resolved';
+  record(true); // sans effet si le puzzle est déjà compté raté
+  S.board.interactive = false;
+  if (S.run.verdict) setMsg('ok', S.hinted ? 'Résolu (avec indice).' : 'Bien joué !');
+  else setMsg('ok', 'Trouvé ! Ce puzzle reste compté comme raté et reviendra en révision.');
+  announce('Puzzle résolu.');
+  $('#rec-hint').classList.add('hidden');
+  const btn = $('#rec-next');
+  btn.textContent = S.idx + 1 >= S.queue.length ? 'Terminer' : 'Suivant →';
+  btn.classList.remove('hidden');
+  btn.focus();
+}
+
 function userMove(from, to, promo) {
   if (S.phase !== 'playing' || !S.run) return;
-  const seq = S.seq;
-  const fenBefore = S.run.fen;
   const res = S.run.move(from, to, promo);
   if (res.illegal) return;
   S.board.hl.clear();
   if (!res.ok) {
-    const want = res.expected;
-    S.board.setArrows([{ from: want.slice(0, 2), to: want.slice(2, 4), color: '#81b64c' }]);
-    setMsg('wrong', `Raté. Le bon coup était <b>${sanOf(fenBefore, want)}</b>`);
-    announce('Raté.');
-    resolve(false);
+    record(false);
+    S.board.render();
+    setMsg('wrong', 'Ce n’est pas le bon coup. Réessayez. Le puzzle est compté comme raté.');
+    announce('Mauvais coup. Réessayez.');
     return;
   }
   S.board.setPosition(res.fen, { lastMove: res.lastMove });
-  if (res.done) {
-    setMsg('ok', S.hinted ? 'Résolu (avec indice).' : 'Bien joué !');
-    announce('Puzzle résolu.');
-    resolve(true);
-    return;
-  }
+  if (res.done) { solved(); return; }
   S.board.interactive = false;
-  S.timer = setTimeout(() => {
-    if (seq !== S.seq || S.phase !== 'playing') return;
-    S.board.setPosition(res.reply.fen, { lastMove: res.reply.lastMove });
-    S.board.interactive = true;
-    setMsg('ok', 'Bon coup, continuez.');
-  }, REPLY_DELAY);
+  S.reply = res.reply;
+  S.timer = setTimeout(playReply, REPLY_DELAY);
+}
+
+function playReply() {
+  if (S.phase !== 'playing' || !S.reply) return;
+  S.board.setPosition(S.reply.fen, { lastMove: S.reply.lastMove });
+  S.reply = null;
+  S.board.interactive = true;
+  setMsg('ok', 'Bon coup, continuez.');
+}
+
+// Avant la solution, consulter le moteur revient à voir la réponse : le puzzle est compté raté.
+function analyse() {
+  if ((S.phase !== 'playing' && S.phase !== 'resolved') || !S.run) return;
+  const phase = S.phase;
+  if (phase === 'playing') {
+    record(false);
+    setMsg('info', 'Position analysée avant la solution : ce puzzle est compté comme raté. Trouvez le coup pour continuer.');
+  }
+  analyserPuzzle(S.run, { onglet: 'puzzles', reprendre: () => { S.phase = phase; playReply(); } });
 }
 
 function next() {

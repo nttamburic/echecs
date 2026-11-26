@@ -418,6 +418,7 @@ export function stashGamePly(id, ply) { gamePlyStash = { id, ply }; }
 
 export async function openGame(id) {
   stopAuto();
+  endForcedLive();
   const ply = gamePlyStash?.id === id ? gamePlyStash.ply : null;
   gamePlyStash = null;
   const afficher = g => {
@@ -484,10 +485,27 @@ function prepareGame(id, game, saved) {
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 let freeStash = null;
 // Prépare la prochaine analyse libre (position, coups déjà joués, orientation), ouverte par la route #/free/new.
+// Options : live (lignes du moteur affichées tout de suite, sans changer le réglage enregistré),
+// back : { label } (bouton de retour vers la page précédente), tab (module surligné dans la navigation).
 export function stashFree(x) { freeStash = x; }
+export const freeTab = () => freeStash?.tab || 'free';
+function forceLive() {
+  S.forcedLive = true;
+  S.live = true;
+  $('#live').checked = true;
+  selectTab('engine', false);
+}
+function endForcedLive() {
+  if (!S.forcedLive) return;
+  S.forcedLive = false;
+  S.live = local.get('liveEval', '0') === '1';
+  $('#live').checked = S.live;
+  restoreTab();
+}
 export function openFree() {
   stopAuto();
-  const { fen = START_FEN, ucis = [], orient = null } = freeStash || {};
+  endForcedLive();
+  const { fen = START_FEN, ucis = [], orient = null, live = false, back = null } = freeStash || {};
   freeStash = null;
   if (S.g) S.g.abort = true;
   if (S.batch && S.batch.cur) S.batch.cur.abort = true;
@@ -495,7 +513,7 @@ export function openFree() {
   for (const u of ucis) { try { c.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] }); } catch { break; } }
   const moves = c.history({ verbose: true });
   const g = {
-    id: 'free', free: true, custom: fen !== START_FEN,
+    id: 'free', free: true, custom: fen !== START_FEN, back,
     game: { white: { name: 'Blancs', rating: '' }, black: { name: 'Noirs', rating: '' }, end: Date.now() / 1000 },
     moves, startFen: fen, positions: new Array(moves.length).fill(null),
     ply: moves.length, var: null, analyzing: false, abort: false, playerColor: null,
@@ -506,6 +524,7 @@ export function openFree() {
   S.g = g;
   S.cycle = {};
   board.setOrientation(orient || fen.split(' ')[1]);
+  if (live) forceLive();
   renderGame();
   if (moves.length) startAnalysis(); // partie importée (module Jouer) : analyse complète
 }
@@ -723,7 +742,11 @@ function suivantLabel(g, review) {
 }
 
 // ----- onglets du panneau (Coups · Bilan · Moteur)
-function selectTab(name) {
+function restoreTab() {
+  const saved = local.get('gtab', 'moves');
+  selectTab(['moves', 'review', 'engine'].includes(saved) ? saved : 'moves');
+}
+function selectTab(name, remember = true) {
   document.querySelectorAll('#gpanel .ptabs [role=tab]').forEach((b) => {
     const on = b.dataset.tab === name;
     b.setAttribute('aria-selected', String(on));
@@ -732,7 +755,7 @@ function selectTab(name) {
     if (pane && pane.classList.contains('tabpane')) pane.classList.toggle('hidden', !on);
   });
   $('#gpanel').dataset.ptab = name;
-  try { if (name !== 'coach') local.set('gtab', name); } catch { /* ignoré */ }
+  try { if (remember && name !== 'coach') local.set('gtab', name); } catch { /* ignoré */ }
   if (name === 'moves') { const c = document.querySelector('#moves .mv.cur'); if (c) c.scrollIntoView({ block: 'nearest' }); }
 }
 function initPanelTabs() {
@@ -748,8 +771,7 @@ function initPanelTabs() {
       selectTab(tabs[n].dataset.tab); tabs[n].focus(); e.preventDefault(); e.stopPropagation();
     };
   });
-  const saved = local.get('gtab', 'moves');
-  selectTab(['moves', 'review', 'engine'].includes(saved) ? saved : 'moves');
+  restoreTab();
 }
 // Réglages locaux de l'analyse (onglet Moteur) : appliqués tout de suite.
 function initAnalysisSettings() {
@@ -909,7 +931,10 @@ function renderGame() {
   const ccUrl = /^https:\/\/[^\s]+$/i.test(g.game.url || '') ? g.game.url : '';
   if (ccUrl) $('#cc-link').href = ccUrl; else $('#cc-link').removeAttribute('href');
   $('#cc-link').classList.toggle('hidden', !!g.free || !ccUrl);
-  $('#back').title = g.free ? 'Retour à l\'analyse libre' : 'Retour à l\'historique des parties';
+  $('#back').title = g.back ? g.back.label : g.free ? 'Retour à l\'analyse libre' : 'Retour à l\'historique des parties';
+  $('#back').setAttribute('aria-label', g.back ? g.back.label : 'Retour');
+  $('#back-session').classList.toggle('hidden', !g.back);
+  if (g.back) $('#back-session').textContent = `← ${g.back.label}`;
   $('#reanalyze').parentElement.classList.toggle('hidden', !!g.free);
   const k = g.var ? g.var.basePly : g.ply;
   $('#opening').textContent = k === 0 && !g.var ? (g.custom ? 'Position définie' : 'Position de départ') : frOpening(g.openingAt[k] || g.openingAt[g.openingAt.length - 1]) || 'Ouverture inconnue';
@@ -1311,6 +1336,7 @@ export function engineFields(root, p, onChange = () => {}) {
 // ------------------------------------------------------------------ navigation
 export function leave() {
   stopAuto();
+  endForcedLive();
   if (!S.g) return;
   if (!S.batch || S.batch.cur !== S.g) S.g.abort = true; // la partie de l'analyse multiple continue
   S.g = null;
@@ -1346,7 +1372,10 @@ export async function init() {
     }
   };
   $('#astrip-stop').onclick = () => $('#stop').click();
-  $('#back').onclick = $('#tb-back').onclick = () => { location.hash = S.g && S.g.free ? '#/free' : '#/games'; };
+  // Analyse ouverte depuis une série de puzzles : le retour reprend la page précédente, là où on l'a laissée.
+  $('#back').onclick = $('#tb-back').onclick = $('#back-session').onclick = () => {
+    if (S.g && S.g.back) history.back(); else location.hash = S.g && S.g.free ? '#/free' : '#/games';
+  };
   $('#first').onclick = nav(() => setPly(0));
   $('#prev').onclick = nav(() => step(-1));
   $('#next').onclick = nav(() => step(1));

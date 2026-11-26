@@ -1,39 +1,27 @@
 // Progression du module Puzzles : un seul enregistrement `puzzleStats/main` dans le magasin, donc
 // synchronisé avec GitHub comme les autres données (fichier puzzles/stats.json).
 //
-// { version: 1, elo: 1200, rush: { best, plays, runs: [{ at, score, errors }] }, updatedAt }
+// { version: 1, elo: 1200, themes: { nom: { n, ok } } }
+// Les anciens résultats de Puzzle Rush (champ `rush`) ne sont plus affichés, mais restent dans l'enregistrement.
 import * as store from './store.js';
 import { ELO_START } from '../modules/puzzles-engine.js';
 
 const COL = 'puzzleStats';
 const ID = 'main';
 const FILE = 'puzzles/stats.json';
-const MAX_RUNS = 30;
 
-export const emptyStats = () => ({ version: 1, elo: ELO_START, rush: { best: 0, plays: 0, runs: [] }, themes: {} });
+export const emptyStats = () => ({ version: 1, elo: ELO_START, themes: {} });
 
 export async function getStats() {
   let s = null;
   try { s = await store.get(COL, ID); } catch { s = null; }
   const base = emptyStats();
   if (!s) return base;
-  return { ...base, ...s, rush: { ...base.rush, ...(s.rush || {}) }, themes: { ...(s.themes || {}) } };
+  return { ...base, ...s, themes: { ...(s.themes || {}) } };
 }
 
 export async function saveStats(s) {
   await store.put(COL, ID, s, { file: FILE });
-}
-
-// Enregistre une série de rush terminée. Renvoie { stats, record } (record : meilleur score battu).
-export async function recordRush({ score, errors, elo }) {
-  const s = await getStats();
-  const record = score > s.rush.best;
-  s.rush.best = Math.max(s.rush.best, score);
-  s.rush.plays++;
-  s.rush.runs = [...s.rush.runs, { at: Date.now(), score, errors }].slice(-MAX_RUNS);
-  s.elo = elo;
-  await saveStats(s);
-  return { stats: s, record };
 }
 
 // Enregistre un puzzle thématique (réussi ou raté) : taux par thème et niveau mis à jour.

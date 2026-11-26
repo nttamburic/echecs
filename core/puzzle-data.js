@@ -3,7 +3,6 @@
 // Les packs (générés par tools/puzzles/packs.mjs) sont des tableaux JSON compressés en gzip :
 //   manifest.json            description de l'ensemble
 //   theme/<thème>.json.gz    300 puzzles par tranche de 100 points, pour un thème
-//   rush/<tranche>.json.gz   puzzles courts d'une tranche de 100 points
 //   opening/<famille>.json.gz  puzzles d'une famille d'ouvertures (premier tag Lichess)
 //
 // Un pack n'est téléchargé qu'une fois : il est gardé en mémoire puis dans le Cache API. Ce cache
@@ -72,7 +71,7 @@ function once(rel, loader) {
 
 export const loadManifest = () => once('manifest.json', async () => (await fetchCached('manifest.json', { fresh: true })).json());
 
-// kind : 'theme' | 'rush' | 'opening' ; name : le nom de l'entrée du manifeste (pas du fichier).
+// kind : 'theme' | 'opening' ; name : le nom de l'entrée du manifeste (pas du fichier).
 export async function loadPack(kind, name) {
   const m = await loadManifest();
   const entry = (m[kind] || []).find((e) => e.name === name);
@@ -81,20 +80,6 @@ export async function loadPack(kind, name) {
 }
 
 // ------------------------------------------------------------------ choix de puzzles
-
-// Entrée du manifeste du pack rush dont la tranche est la plus proche du niveau demandé. Les tranches
-// presque vides (3100 : 14 puzzles) sont ignorées tant qu'une tranche fournie existe, sinon un rush
-// de 120 s tournerait en rond.
-export function rushEntryFor(manifest, elo, { minCount = 100 } = {}) {
-  let best = null;
-  const all = manifest.rush || [];
-  const usable = all.filter((e) => e.count >= minCount);
-  for (const e of usable.length ? usable : all) {
-    const d = elo < e.bandMin ? e.bandMin - elo : elo > e.bandMax ? elo - e.bandMax : 0;
-    if (!best || d < best.d || (d === best.d && e.count > best.e.count)) best = { e, d };
-  }
-  return best && best.e;
-}
 
 // Puzzles d'un pack dont le niveau est dans [elo - spread, elo + spread], hors `exclude` (ensemble d'id),
 // dans un ordre aléatoire. Si la fenêtre est trop étroite pour fournir `n` puzzles, elle s'élargit.

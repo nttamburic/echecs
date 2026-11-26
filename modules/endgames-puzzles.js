@@ -1,14 +1,14 @@
 // Onglet « Puzzles de finales » : puzzles de la base Lichess, un par un, au niveau de l'utilisateur.
-// Un mauvais coup montre la bonne réponse et compte le puzzle comme raté.
-import { Chess } from '../vendor/chess.js';
+// Un mauvais coup compte le puzzle comme raté, mais on peut réessayer ; « Puzzle suivant » apparaît une fois le puzzle résolu.
 import { Board, announce } from '../board.js';
 import { $, esc, toast } from '../core/ui.js';
 import * as store from '../core/store.js';
 import { loadPack } from '../core/puzzle-data.js';
 import { getStats } from '../core/puzzle-stats.js';
 import { bilanTheme, choisirPuzzle, nomTheme, THEMES_FINALES } from '../core/finales-puzzles.js';
+import { reprise } from '../core/puzzle-reprise.js';
 import { PuzzleRun } from './puzzles-engine.js';
-import { figSan } from './analyse.js';
+import { analyserPuzzle } from './puzzles-analyse.js';
 
 const COL = 'endgamePuzzles';
 const REPLY_DELAY = 350;
@@ -54,6 +54,7 @@ function construire(el) {
       <div id="egp-msg" class="tmsg" role="status" aria-live="polite"></div>
       <div class="tactions">
         <button id="egp-hint" class="btn" type="button">💡 Indice</button>
+        <button id="egp-analyse" class="btn" type="button">Analyser la position</button>
         <button id="egp-next" class="btn primary" type="button">Puzzle suivant →</button>
       </div>
       <div class="tstats pz-stats" id="egp-stats"></div>
@@ -61,6 +62,7 @@ function construire(el) {
   S.vue = el;
   S.board = new Board($('#egp-board', el), { onMove: (from, to, promo) => monCoup(from, to, promo) });
   $('#egp-hint', el).onclick = indice;
+  $('#egp-analyse', el).onclick = analyser;
   $('#egp-next', el).onclick = () => { if (S.phase === 'resolu') suivant(); };
   document.addEventListener('keydown', (e) => {
     if (document.body.dataset.view !== 'endgamepz' || document.querySelector('dialog[open]') || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -95,12 +97,15 @@ export async function demarrer(el, theme) {
   $('#topbar-soon').textContent = 'Finales';
   if (S.vue !== el) construire(el);
   leave();
+  const retour = reprise(location.hash);
+  if (retour) { retour(); return; }
   const seq = S.seq;
   Object.assign(S, { theme, pack: null, run: null, bilan: null, phase: 'chargement' });
   $('#egp-title', el).textContent = `Puzzles · ${nomTheme(theme)}`;
   $('#egp-sub', el).textContent = '';
   $('#egp-hint', el).classList.add('hidden');
   $('#egp-next', el).classList.add('hidden');
+  $('#egp-analyse', el).classList.add('hidden');
   S.board.interactive = false;
   statistiques();
   message('', 'Chargement des puzzles…');
@@ -123,11 +128,13 @@ function suivant() {
     st = S.run.start();
   } catch (err) { echec(err); return; }
   S.aide = false;
+  S.reponse = null;
   S.phase = 'jeu';
   S.board.setOrientation(st.color);
   S.board.setPosition(st.fen, { lastMove: st.lastMove });
   S.board.interactive = true;
   $('#egp-hint', S.vue).classList.remove('hidden');
+  $('#egp-analyse', S.vue).classList.remove('hidden');
   $('#egp-next', S.vue).classList.add('hidden');
   const camp = st.color === 'w' ? 'Blancs' : 'Noirs';
   $('#egp-sub', S.vue).textContent = `Trait aux ${camp}`;
@@ -144,16 +151,9 @@ function indice() {
   message('hint', 'Déplacez la pièce mise en évidence.');
 }
 
-function san(fen, uci) {
-  try {
-    const m = new Chess(fen).move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
-    return figSan(m.san, m.color);
-  } catch { return esc(uci); }
-}
-
-function conclure(reussi) {
-  S.phase = 'resolu';
-  S.board.interactive = false;
+// Compte le résultat du puzzle, une seule fois (première erreur, analyse ou réussite).
+function noter(reussi) {
+  if (!S.run.settle(reussi)) return;
   const resultat = !reussi ? 'rate' : S.aide ? 'aide' : 'reussi';
   const at = Date.now();
   const essai = { theme: S.theme, puzzle: S.run.puzzle.id, note: S.run.puzzle.rating, depart: S.bilan.niveau, resultat, at };
@@ -163,41 +163,57 @@ function conclure(reussi) {
   statistiques();
   const ecart = S.bilan.niveau - avant;
   if (ecart) $('#egp-sub', S.vue).textContent = `Niveau ${ecart > 0 ? '+' : '−'}${Math.abs(ecart)}`;
-  $('#egp-hint', S.vue).classList.add('hidden');
-  const bouton = $('#egp-next', S.vue);
-  bouton.classList.remove('hidden');
-  bouton.focus({ preventScroll: true });
   store.put(COL, `${essai.theme}-${essai.puzzle}-${at}`, essai, { file: 'endgames/puzzles.json' })
     .catch(() => toast('Enregistrement du puzzle impossible.', { type: 'err' }));
 }
 
+function resolu() {
+  S.phase = 'resolu';
+  noter(true); // sans effet si le puzzle est déjà compté raté
+  S.board.interactive = false;
+  if (S.run.verdict) message('ok', S.aide ? 'Résolu (avec indice).' : 'Bien joué !');
+  else message('ok', 'Trouvé ! Ce puzzle reste compté comme raté.');
+  announce('Puzzle résolu.');
+  $('#egp-hint', S.vue).classList.add('hidden');
+  const bouton = $('#egp-next', S.vue);
+  bouton.classList.remove('hidden');
+  bouton.focus({ preventScroll: true });
+}
+
 function monCoup(from, to, promo) {
   if (S.phase !== 'jeu') return;
-  const seq = S.seq;
-  const avant = S.run.fen;
   const res = S.run.move(from, to, promo);
   if (res.illegal) return;
   S.board.hl.clear();
   if (!res.ok) {
-    const bon = res.expected;
-    S.board.setArrows([{ from: bon.slice(0, 2), to: bon.slice(2, 4), color: '#81b64c' }]);
-    message('wrong', `Raté. Le bon coup était <b>${san(avant, bon)}</b>`);
-    announce('Raté.');
-    conclure(false);
+    noter(false);
+    S.board.render();
+    message('wrong', 'Ce n’est pas le bon coup. Réessayez. Le puzzle est compté comme raté.');
+    announce('Mauvais coup. Réessayez.');
     return;
   }
   S.board.setPosition(res.fen, { lastMove: res.lastMove });
-  if (res.done) {
-    message('ok', S.aide ? 'Résolu (avec indice).' : 'Bien joué !');
-    announce('Puzzle résolu.');
-    conclure(true);
-    return;
-  }
+  if (res.done) { resolu(); return; }
   S.board.interactive = false;
-  S.timer = setTimeout(() => {
-    if (seq !== S.seq || S.phase !== 'jeu') return;
-    S.board.setPosition(res.reply.fen, { lastMove: res.reply.lastMove });
-    S.board.interactive = true;
-    message('ok', 'Bon coup, continuez.');
-  }, REPLY_DELAY);
+  S.reponse = res.reply;
+  S.timer = setTimeout(jouerReponse, REPLY_DELAY);
+}
+
+function jouerReponse() {
+  if (S.phase !== 'jeu' || !S.reponse) return;
+  S.board.setPosition(S.reponse.fen, { lastMove: S.reponse.lastMove });
+  S.reponse = null;
+  S.board.interactive = true;
+  message('ok', 'Bon coup, continuez.');
+}
+
+// Avant la solution, consulter le moteur revient à voir la réponse : le puzzle est compté raté.
+function analyser() {
+  if ((S.phase !== 'jeu' && S.phase !== 'resolu') || !S.run) return;
+  const phase = S.phase;
+  if (phase === 'jeu') {
+    noter(false);
+    message('info', 'Position analysée avant la solution : ce puzzle est compté comme raté. Trouvez le coup pour continuer.');
+  }
+  analyserPuzzle(S.run, { onglet: 'endgames', reprendre: () => { $('#topbar-soon').textContent = 'Finales'; S.phase = phase; jouerReponse(); } });
 }

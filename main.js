@@ -13,12 +13,13 @@ import * as openingsUi from './modules/openings-ui.js';
 import * as train from './modules/openings-train.js';
 import * as model from './modules/openings-model.js';
 import * as puzzles from './modules/puzzles.js';
-import * as rush from './modules/puzzles-rush.js';
+import * as woodpecker from './modules/puzzles-woodpecker.js';
 import * as ptheme from './modules/puzzles-theme.js';
 import * as prec from './modules/puzzles-recommend.js';
 import * as strategy from './modules/strategy.js';
 import * as endgames from './modules/endgames.js';
 import * as endgamePuzzles from './modules/endgames-puzzles.js';
+import { oublierSiAilleurs } from './core/puzzle-reprise.js';
 
 const VIEWS = ['home', 'game', 'play', 'free', 'setup', 'openings', 'rep', 'train', 'model', 'puzzles', 'puzzle', 'puzzletheme', 'puzzlerec', 'strategy', 'endgames', 'endgame', 'endgamepz', 'settings'];
 const MODULES = []; // modules pas encore livrés
@@ -33,12 +34,13 @@ export function showView(v, tab = v === 'home' || v === 'game' ? 'games' : v ===
 
 function route() {
   const h = location.hash || '#/games';
+  oublierSiAilleurs(h);
   const m = /^#\/game\/(.+)$/.exec(h);
   if (!m) analyse.leave();
   if (!/^#\/openings\/./.test(h) || /^#\/openings\/(train|model)/.test(h)) openingsUi.leaveRepertoire();
   if (!/^#\/openings\/model/.test(h)) model.leave();
   if (!/^#\/openings\/train/.test(h)) train.leave();
-  if (!/^#\/puzzles\/rush/.test(h)) rush.leave();
+  if (!/^#\/puzzles\/woodpecker\/jouer$/.test(h)) woodpecker.leave();
   if (!/^#\/puzzles\/theme\/./.test(h)) ptheme.leave();
   if (!/^#\/puzzles\/recommend\/./.test(h)) prec.leave();
   if (!/^#\/strategy/.test(h)) strategy.leave();
@@ -48,7 +50,7 @@ function route() {
   const [, name, sub] = /^#\/([^/]*)\/?(.*)$/.exec(h) || [];
   if (name === 'play') { showView('play'); play.show(); return; }
   if (name === 'free') {
-    if (sub === 'new') { showView('game', 'free'); analyse.openFree(); return; }
+    if (sub === 'new') { showView('game', analyse.freeTab()); analyse.openFree(); return; }
     if (sub === 'setup') { showView('setup'); setup.renderEditor($('#setup-view')); return; }
     showView('free'); setup.renderHome($('#free-view')); return;
   }
@@ -65,7 +67,9 @@ function route() {
     showView('openings'); openingsUi.renderHome($('#openings-view')); return;
   }
   if (name === 'puzzles') {
-    if (sub === 'rush') { showView('puzzle', 'puzzles'); rush.start($('#puzzle-view')); return; }
+    if (sub === 'rush') { location.replace('#/puzzles/woodpecker'); return; } // ancien mode, remplacé
+    if (sub === 'woodpecker/jouer') { showView('puzzle', 'puzzles'); woodpecker.start($('#puzzle-view')); return; }
+    if (sub === 'woodpecker') { showView('puzzles'); woodpecker.show($('#puzzles-view')); return; }
     if (sub.startsWith('theme/')) { showView('puzzletheme', 'puzzles'); ptheme.start($('#puzzletheme-view'), decodeURIComponent(sub.slice(6))); return; }
     if (sub.startsWith('recommend/')) { showView('puzzlerec', 'puzzles'); prec.start($('#puzzlerec-view'), sub.slice(10)); return; }
     if (sub === 'recommend') { showView('puzzles'); prec.show($('#puzzles-view')); return; }
