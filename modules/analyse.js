@@ -18,6 +18,7 @@ import * as chesscom from '../core/chesscom.js';
 import { scanGames, setBook, DRAWS } from './openings.js';
 import { exerciceDe } from '../core/revision.js';
 import { demanderSeance } from '../core/revision-store.js';
+import { tempsDePartie, pendule, repere, reperesDe, REPERES, fmtDuree, fmtPendule } from '../core/temps.js';
 
 const TIME_FR = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapide', daily: 'Par jour' };
 
@@ -477,6 +478,7 @@ function prepareGame(id, game, saved) {
     positions: saved && saved.positions && saved.positions.length === moves.length ? saved.positions : new Array(moves.length).fill(null),
     ply: 0, var: null, analyzing: false, abort: false, playerColor,
     ratings: { w: game.white.rating, b: game.black.rating },
+    temps: tempsDePartie(c, game), // null : partie sans pendule
   };
   computeOpenings(g);
   recompute(g);
@@ -913,10 +915,15 @@ function renderGame() {
   const top = flipped ? 'w' : 'b';
   const bot = flipped ? 'b' : 'w';
   const mat = material(fen);
+  const shownPly = g.var ? g.var.basePly : g.ply;
+  const clock = (c) => {
+    const s = g.temps ? pendule(g.temps, g.moves, shownPly, c) : null;
+    return s == null ? '' : `<span class="clk" role="timer" aria-label="Pendule des ${c === 'w' ? 'Blancs' : 'Noirs'}">${fmtPendule(s)}</span>`;
+  };
   const pl = (c) => {
     const p = c === 'w' ? g.game.white : g.game.black;
     return `<span class="avatar-sm ${c}"><img src="pieces/${c}P.svg" alt=""></span>
-      <span class="pinfo"><span><b>${esc(p.name)}</b>${p.rating ? ` <span class="muted">(${esc(p.rating)})</span>` : ''}</span>${capturedHtml(mat, c)}</span>`;
+      <span class="pinfo"><span><b>${esc(p.name)}</b>${p.rating ? ` <span class="muted">(${esc(p.rating)})</span>` : ''}</span>${capturedHtml(mat, c)}</span>${clock(c)}`;
   };
   $('#player-top').innerHTML = pl(top);
   $('#player-bottom').innerHTML = pl(bot);
@@ -951,6 +958,7 @@ function renderGame() {
   renderFoot(g);
   renderSummary(g, review);
   renderGraph(g, review);
+  renderTimes(g, review);
   renderNav();
 }
 
@@ -1096,6 +1104,8 @@ function renderCoach(g, d, review) {
         const bad = ['blunder', 'mistake', 'miss', 'inaccuracy'].filter((c) => n(c)).map((c) => `${n(c)} ${CLASSES[c].label.toLowerCase()}${n(c) > 1 && !/s$/.test(CLASSES[c].label) ? 's' : ''}`);
         html += `<p>${bad.length ? `De votre côté : ${bad.join(', ')}.` : 'Aucune erreur de votre côté : bravo !'}</p>`;
       }
+      const flags = reperesJoueur(g);
+      if (flags.length) html += `<p>Temps : parmi vos fautes, ${comptes(flags)}.</p>`;
       html += '<p class="muted">Cliquez sur « Suivant » pour revoir la partie coup par coup.</p>';
       const n = fautesDe(g).length;
       if (n) html += `<button type="button" class="btn coach-exo" data-exo="toutes">↺ Trouvez mieux : ${n > 1 ? `mes ${n} fautes` : 'ma faute'}</button>`;
@@ -1112,6 +1122,7 @@ function renderCoach(g, d, review) {
   }
   const ex = explainMove({ fenBefore: d.fenBefore, san: d.san, uci: d.uci, color: d.color, r: d.r, pos: d.pos, openingName: frOpening(g.openingAt[g.ply]), playerColor: g.playerColor });
   html += `<div class="coach-title">${badge(d.r.cls)} <span>${esc(ex.title)}</span><span class="score${/^[−-]/.test(fmtScore(d.pos.played.score)) ? ' neg' : ''}">${fmtScore(d.pos.played.score)}</span></div>`;
+  if (!d.inVar) html += coachTime(g, g.ply - 1);
   const open = S.coachOpen === g.ply + ':' + (g.var ? g.var.idx : '');
   html += ex.paras.map((p, i) => `<p${!open && i === 2 ? ' class="clamp"' : ''}${!open && i > 2 ? ' hidden' : ''}>${esc(p)}</p>`).join('');
   if (ex.paras.length > 3) html += `<button type="button" class="link coach-more" id="coach-more" aria-expanded="${open}">${open ? 'Réduire' : 'Lire la suite'}</button>`;
@@ -1143,6 +1154,24 @@ function ouvrirExercices(g, quoi) {
   stopAuto();
   demanderSeance({ exercices, retour: { href: '#/game/' + encodeURIComponent(g.id), texte: 'Retour au bilan' } });
   location.hash = '#/revision/seance';
+}
+
+// ----- gestion du temps : les repères ne concernent que les fautes du joueur.
+const optionsRepere = (g) => ({ cadence: g.game.timeClass, book: BOOK });
+const repereJoueur = (g, ply) => (g.temps && g.moves[ply]?.color === g.playerColor
+  ? repere(g.temps, g.moves, ply, { ...optionsRepere(g), classe: g.results[ply]?.cls }) : null);
+const reperesJoueur = (g) => (g.temps && g.playerColor ? reperesDe(g.temps, g.moves, g.results, g.playerColor, optionsRepere(g)) : []);
+function comptes(flags) {
+  return Object.entries(REPERES).map(([k, r]) => {
+    const n = flags.filter((f) => f.repere === k).length;
+    return n ? `${n} ${n > 1 ? r.court.replace('jouée', 'jouées') : r.court}` : '';
+  }).filter(Boolean).join(', ');
+}
+function coachTime(g, ply) {
+  const passe = g.temps?.passe[ply];
+  if (passe == null) return '';
+  const flag = repereJoueur(g, ply);
+  return `<div class="coach-temps">⏱ ${fmtDuree(passe)} sur ce coup · ${fmtPendule(g.temps.apres[ply])} à la pendule${flag ? ` <span class="tflag">${REPERES[flag].label}</span>` : ''}</div>`;
 }
 
 const coachWrap = (html) => `<div class="coach-wrap"><div class="avatar"><img src="pieces/wN.svg" alt=""></div><div class="bubble">${html}</div></div>`;
@@ -1194,7 +1223,7 @@ function renderMoves(g, review) {
       const cur = !g.var && g.ply === j + 1 ? ' cur' : g.var && g.var.basePly === j + 1 ? ' base' : '';
       const icon = keys && r && (NOTABLE.includes(r.cls) || (r.cls === 'book' && lastBook[m.color] === j));
       const col = keys && r && NOTABLE.includes(r.cls) ? ` style="color:${CLASSES[r.cls].color}"` : '';
-      html += `<span class="mv${cur}" role="button" tabindex="0" data-ply="${j + 1}"${r ? ` title="${CLASSES[r.cls].label}"` : ''}><span class="ico">${icon ? badge(r.cls, true) : ''}</span><span class="san"${col}>${figSan(m.san, m.color)}</span></span>`;
+      html += `<span class="mv${cur}" role="button" tabindex="0" data-ply="${j + 1}"${r ? ` title="${CLASSES[r.cls].label}"` : ''}><span class="ico">${icon ? badge(r.cls, true) : ''}</span><span class="san"${col}>${figSan(m.san, m.color)}</span>${g.temps?.passe[j] != null ? `<span class="mtime">${fmtDuree(g.temps.passe[j])}</span>` : ''}</span>`;
     }
     html += '</div>';
   }
@@ -1274,6 +1303,51 @@ function renderGraph(g, review) {
     stopAuto();
     setPly(Math.round((e.clientX - rect.left) / rect.width * n));
   };
+}
+
+// Temps par coup : Blancs au-dessus de la ligne, Noirs en dessous. Visible même sans analyse ;
+// les fautes et les repères s'ajoutent une fois la partie analysée.
+function renderTimes(g, review) {
+  const box = $('#times');
+  const n = g.moves.length;
+  const max = g.temps ? Math.max(0, ...g.temps.passe.filter((s) => s != null)) : 0;
+  box.classList.toggle('hidden', !max);
+  if (!max) { $('#time-graph').innerHTML = ''; $('#time-note').innerHTML = ''; return; }
+  const W = 600, H = 100, mid = H / 2, w = W / n;
+  const flags = review ? reperesJoueur(g) : [];
+  const flagged = new Set(flags.map((f) => f.ply));
+  let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Temps passé sur chaque coup">`;
+  g.temps.passe.forEach((s, i) => {
+    const cls = review && g.moves[i].color === g.playerColor && FAUTES.includes(g.results[i]?.cls) ? g.results[i].cls : null;
+    const x = (i * w).toFixed(2);
+    if (flagged.has(i)) svg += `<rect x="${x}" y="0" width="${w.toFixed(2)}" height="${H}" style="fill:${CLASSES[cls].color}" fill-opacity=".28"/>`;
+    if (s == null) return;
+    const h = Math.max(1.5, s / max * (mid - 2));
+    const fill = cls ? CLASSES[cls].color : g.moves[i].color === 'w' ? 'var(--time-white)' : 'var(--time-black)';
+    svg += `<rect x="${x}" y="${(g.moves[i].color === 'w' ? mid - h : mid).toFixed(2)}" width="${Math.max(1, w * 0.8).toFixed(2)}" height="${h.toFixed(2)}" style="fill:${fill}"/>`;
+  });
+  svg += `<line x1="0" y1="${mid}" x2="${W}" y2="${mid}" style="stroke:var(--line)" stroke-width="1"/>`;
+  const k = g.var ? g.var.basePly : g.ply;
+  if (k) svg += `<rect x="${((k - 1) * w).toFixed(2)}" y="0" width="${w.toFixed(2)}" height="${H}" style="fill:var(--accent)" fill-opacity=".3"/>`;
+  const graph = $('#time-graph');
+  graph.innerHTML = svg + '</svg>';
+  graph.onclick = (e) => {
+    const rect = graph.getBoundingClientRect();
+    stopAuto();
+    setPly(Math.min(n, Math.max(1, Math.floor((e.clientX - rect.left) / rect.width * n) + 1)));
+  };
+  let note = `<p class="muted small">Blancs en haut, Noirs en bas · coup le plus long : ${fmtDuree(max)}.</p>`;
+  if (flags.length) {
+    note += '<ul class="tlist">' + flags.map((f) => {
+      const m = g.moves[f.ply];
+      return `<li><button type="button" class="link" data-tply="${f.ply + 1}">${m.before.split(' ')[5]}${m.color === 'w' ? '.' : '…'} ${esc(frSan(m.san))}</button> ${REPERES[f.repere].court} (${fmtDuree(g.temps.passe[f.ply] ?? 0)}, il restait ${fmtPendule(g.temps.avant[f.ply])})</li>`;
+    }).join('') + '</ul>';
+  } else if (review && g.playerColor) {
+    note += '<p class="muted small">Aucune de vos fautes n\'est repérée en manque de temps ou jouée trop vite.</p>';
+  }
+  const el = $('#time-note');
+  el.innerHTML = note;
+  el.querySelectorAll('[data-tply]').forEach((b) => { b.onclick = () => { stopAuto(); setPly(+b.dataset.tply); }; });
 }
 
 const PLAY_SVG = '<svg viewBox="0 0 24 24"><path class="fill" d="M8 5l11 7-11 7z"/></svg>';

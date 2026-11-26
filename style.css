@@ -263,6 +263,24 @@ a.btn { text-decoration: none; }
 #stats h3, .areg h2, .areg h3 { margin: 0 0 8px; font-size: 15px; }
 #stats p { margin: 8px 0 0; }
 
+/* ---- vue partie : gestion du temps ---- */
+:root { --time-white: #d9d6d1; --time-black: #77736d; }
+#game-view .player .pinfo { flex: 1 1 0; }
+.mv .mtime { margin-left: auto; padding-left: 4px; font-size: 11px; color: var(--muted); font-weight: 400; white-space: nowrap; }
+.coach-temps { margin: 4px 0; font-size: 13px; color: var(--muted); }
+.tflag { display: inline-block; padding: 1px 7px; border-radius: var(--r-sm); background: var(--panel2); color: var(--text-strong); font-weight: 700; }
+.bubble .coach-temps { color: inherit; opacity: .85; }
+.bubble .tflag { background: #e4e1dc; color: #1b1b1b; }
+#times { flex: none; margin: 12px 12px 0; }
+#times.hidden { display: none; }
+#times h3 { margin: 0 0 6px; font-size: 15px; }
+#time-graph { height: 90px; cursor: pointer; border-radius: 4px; overflow: hidden; background: var(--panel2); }
+#time-graph svg { width: 100%; height: 100%; display: block; stroke: none; }
+#time-note p { margin: 6px 0 0; }
+.tlist { margin: 6px 0 0; padding: 0; list-style: none; font-size: 13px; }
+.tlist li { padding: 3px 0; }
+@media (pointer: coarse), (max-width: 760px) { .tlist button { min-height: var(--tap); min-width: var(--tap); } }
+
 .badge { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 4px; border-radius: 11px; color: var(--text-strong); font-weight: 800; font-size: 12px; vertical-align: middle; }
 .badge.small { min-width: 17px; height: 17px; font-size: 10px; border-radius: 9px; margin-left: 4px; padding: 0 3px; }
 
