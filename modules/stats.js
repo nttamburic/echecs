@@ -9,8 +9,9 @@ import {
   PERIODES_STATS, MINIMUM, bornes, jeuxDe, cadencesJouees, resultats, grouperResultats, seriesElo, parSemaine,
   lirePartie, ouvertureDe, familleOuverture, tempsParPhase, mesurePartie, agreger, moyenneTemps, ecart,
 } from '../core/stats.js';
+import { TITRES, trouverAxes } from '../core/axes.js';
 import { frOpening } from './opening-names.js';
-import { BOOK, getGames, getUser, isLoadingGames, ouvrirAnalyseStrategique } from './analyse.js';
+import { BOOK, getGames, getUser, isLoadingGames, ouvrirAnalyseStrategique, stashGamePly } from './analyse.js';
 
 const CADENCES = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapide', daily: 'Par jour' };
 const NOMS_PHASES = { ouverture: 'Ouverture', milieu: 'Milieu de jeu', finale: 'Finale' };
@@ -184,6 +185,71 @@ function blocTemps(d, actuel, precedent, tempsJeux) {
   return bloc('temps', 'Gestion du temps', corps, 'Un repère ne prouve pas que le temps est la cause de la faute.');
 }
 
+// ------------------------------------------------------------------ mes 3 axes de travail
+const nombre = (v) => fr1(v).replace(/,0$/, '');
+const points = (v) => `${nombre(v)} point${v >= 2 ? 's' : ''}`;
+const CATEGORIES = { tactique: 'était tactique', position: 'n’était pas tactique', finale: 'a eu lieu en finale' };
+
+// Le constat en une phrase (texte brut), repris par l'accueil.
+export function constatAxe(a) {
+  if (CATEGORIES[a.cle]) return `Dans ${plural(a.n, 'partie non gagnée', 'parties non gagnées')}, votre faute la plus coûteuse ${CATEGORIES[a.cle]}.`;
+  if (a.cle === 'conversion') return `${plural(a.n, 'partie')} non gagnée${a.n > 1 ? 's' : ''} sur ${a.sur} où vous étiez nettement gagnant.`;
+  if (a.cle === 'manque') return `${a.n} de vos ${a.sur} parties non gagnées : défaite au temps, ou faute la plus coûteuse jouée en manque de temps (défaites au temps : ${a.drapeaux}).`;
+  if (a.cle === 'vite') return `Dans ${a.n} de vos ${a.sur} parties non gagnées en rapide ou blitz, la faute la plus coûteuse a été jouée trop vite.`;
+  if (a.cle === 'ouverture') return `${frOpening(a.famille)} avec les ${a.camp === 'w' ? 'Blancs' : 'Noirs'} : score de ${pct(a.score)} sur ${a.n} parties, contre ${pct(a.scoreAutres)} dans vos autres parties.`;
+  return `Vous avez sauvé ${pct(a.pct)} de vos ${a.sur} parties très mal engagées, contre ${pct(a.pctAvant)} la période précédente.`;
+}
+
+const coutAxe = (a) => (a.cle === 'ouverture' || a.cle === 'defense'
+  ? `Écart estimé : ${points(a.points)}, soit <b>${nombre(a.sur10)} sur 10 parties</b>.`
+  : `Points non marqués dans ces parties : ${nombre(a.points)}, soit <b>${nombre(a.sur10)} sur 10 parties analysées</b>.`);
+
+const ACTIONS = {
+  tactique: [['#/puzzles/recommend/mistake', 'Puzzles tirés de mes erreurs']],
+  position: [['#/revision', 'Rejouer mes erreurs'], ['#/strategy', 'Voir mes erreurs stratégiques']],
+  finale: [['#/endgames/mes-finales', 'Mes finales'], ['#/revision', 'Rejouer mes erreurs']],
+  conversion: [['#/revision', 'Convertir l’avantage']],
+  ouverture: [['#/openings', 'Travailler mon répertoire']],
+};
+const CONSEILS = {
+  manque: 'Gardez une réserve : jouez plus vite les coups évidents et les reprises, et vérifiez votre pendule à mi-partie.',
+  vite: 'Avant de jouer, regardez les échecs, les prises et les menaces de l’adversaire en réponse à votre coup.',
+  defense: 'Dans une position très mauvaise, cherchez d’abord la menace adverse, évitez les échanges qui simplifient la tâche et créez du contre-jeu.',
+};
+
+function exemples(a, parId, user) {
+  const liens = a.exemples.map((x) => {
+    const g = parId.get(x.id);
+    if (!g) return '';
+    const adversaire = (couleurDe(g, user) === 'w' ? g.black : g.white)?.name ?? 'adversaire';
+    return `<a href="#/game/${encodeURIComponent(x.id)}" data-partie="${esc(x.id)}"${x.ply == null ? '' : ` data-ply="${x.ply}"`}>${esc(adversaire)} <span class="muted">· ${jourCourt(g.end * 1000)}</span></a>`;
+  }).join('');
+  return liens ? `<div class="st-exemples small"><span class="muted">À revoir :</span>${liens}</div>` : '';
+}
+
+function blocAxes(d, r) {
+  const parId = new Map(d.actuels.map((g) => [g.id, g]));
+  const peu = r.assez ? '' : `<p class="muted">Il faut au moins ${MINIMUM} parties analysées sur la période pour juger votre jeu (${r.analysees} pour l’instant).</p>`;
+  if (!r.axes.length) return bloc('axes', 'Mes 3 axes de travail', peu || '<p class="muted">Aucun point faible ne se détache assez sur cette période.</p>');
+  const liste = `<ol class="st-axes">${r.axes.map((a, i) => `<li>
+    <b class="st-rang" aria-hidden="true">${i + 1}</b>
+    <div class="st-axe-corps">
+      <h3>${TITRES[a.cle]}</h3>
+      <p>${esc(constatAxe(a))}</p>
+      <p class="small">${coutAxe(a)}${a.avant == null ? '' : ` ${tendance(a.sur10 - a.avant, { sens: -1, unite: '', decimales: 1 })}`}</p>
+      ${CONSEILS[a.cle] ? `<p class="small muted">${CONSEILS[a.cle]}</p>` : ''}
+      ${ACTIONS[a.cle] ? `<div class="st-agir">${ACTIONS[a.cle].map(([href, texte], j) => `<a class="btn${j ? '' : ' primary'}" href="${href}">${texte}</a>`).join('')}</div>` : ''}
+      ${exemples(a, parId, d.user)}
+    </div></li>`).join('')}</ol>`;
+  const explication = `Classés selon les points que vous n’avez pas marqués. Dans une partie non gagnée, seule la faute qui a fait perdre le plus de chances de gain désigne le domaine. Cela ne prouve pas qu’elle a coûté la partie à elle seule, et les axes peuvent se recouper.`;
+  return bloc('axes', r.axes.length === 1 ? 'Mon axe de travail' : `Mes ${r.axes.length} axes de travail`, peu + liste, explication);
+}
+
+const axesDe = (d, calculs) => {
+  const de = (jeux) => jeux.map((g) => calculs.mesures.get(g.id)).filter(Boolean);
+  return trouverAxes({ mesures: de(d.actuels), precedentes: de(d.precedents), jeux: d.actuels, user: d.user, ouvertures: calculs.ouvertures });
+};
+
 function tuiles(d, actuel, precedent, calcule) {
   const r = resultats(d.actuels, d.user), avant = resultats(d.precedents, d.user);
   let html = tuile('Score', pct(r.score), `${plural(r.total, 'partie')} · ${r.win} V ${r.draw} N ${r.loss} D`, comparaison(r.score, avant.score, r.total, avant.total));
@@ -223,7 +289,7 @@ function page(d, calculs) {
   let corps;
   if (!d.actuels.length) corps = `<p class="card">Aucune partie ${d.cadence ? 'dans cette cadence ' : ''}sur les ${d.jours} derniers jours.</p>`;
   else {
-    corps = couverture(d, actuel, precedent, !!calculs) + tuiles(d, actuel, precedent, !!calculs) + blocElo(d) + blocResultats(d, calculs?.ouvertures)
+    corps = couverture(d, actuel, precedent, !!calculs) + (calculs ? blocAxes(d, axesDe(d, calculs)) : '') + tuiles(d, actuel, precedent, !!calculs) + blocElo(d) + blocResultats(d, calculs?.ouvertures)
       + (calculs ? blocPrecision(d, mesures) + blocPhases(actuel, precedent) + blocTemps(d, actuel, precedent, calculs.temps) : calcul);
   }
   return `<header><h1 class="page-title">Statistiques</h1><p class="muted">${esc(d.user)} · ${d.jours} derniers jours, comparés aux ${d.jours} jours précédents</p></header>${filtres(d)}${corps}`;
@@ -238,6 +304,7 @@ function afficher(d, calculs) {
   el.querySelectorAll('[data-jours]').forEach((b) => { b.onclick = () => { local.set('statsPeriod', b.dataset.jours); rendre(); }; });
   const choix = $('#st-cadence', el);
   if (choix) choix.onchange = () => { local.set('statsCadence', choix.value || 'toutes'); rendre(); };
+  el.querySelectorAll('[data-ply]').forEach((a) => { a.onclick = () => stashGamePly(a.dataset.partie, Number(a.dataset.ply) + 1); });
   const analyser = $('[data-analyser]', el);
   if (analyser) analyser.onclick = () => ouvrirAnalyseStrategique(d.jours);
   brancherCourbes(el);
@@ -257,6 +324,23 @@ async function rendre() {
   const index = Object.fromEntries((await store.all('analysisIndex').catch(() => [])).map((r) => [r.id, r.data]));
   if (seq !== S.seq || !S.el) return;
 
+  const d = { ...contexte(user, jeux), index };
+  // Le premier calcul peut durer : la page montre où il en est.
+  // Les résultats et l'Elo, qui ne demandent aucune lecture, s'affichent d'abord.
+  const vue = `${user}|${d.jours}|${d.cadence}`;
+  const calculs = await calculer(d, lignes, (i, total) => {
+    if (seq !== S.seq || !S.el) return false;
+    if (S.vue !== vue || !S.el.querySelector('.st-tuiles')) { afficher(d, null); S.vue = vue; }
+    S.el.querySelectorAll('.st-calcul').forEach((p) => { p.textContent = `Calcul en cours : ${i} sur ${total} parties…`; });
+    return true;
+  });
+  if (!calculs || seq !== S.seq || !S.el) return;
+  afficher(d, calculs);
+  S.vue = vue;
+}
+
+// Période et cadence choisies sur la page, et les parties correspondantes.
+function contexte(user, jeux) {
   const jours = PERIODES_STATS.includes(Number(local.get('statsPeriod'))) ? Number(local.get('statsPeriod')) : PERIODES_STATS[0];
   const courante = bornes(jours);
   const deuxPeriodes = { debut: bornes(jours, courante.fin, 1).debut, fin: courante.fin };
@@ -264,33 +348,39 @@ async function rendre() {
   // Par défaut, la cadence la plus jouée : mélanger les cadences brouille la précision et les temps.
   const voulue = local.get('statsCadence');
   const choisie = voulue === 'toutes' ? '' : jouees.some((c) => c.cadence === voulue) ? voulue : jouees[0]?.cadence ?? '';
-  const d = {
-    user, jours, jouees, cadence: choisie, index, bornes: courante,
+  return {
+    user, jours, jouees, cadence: choisie, bornes: courante,
     actuels: jeuxDe(jeux, user, courante, choisie),
     precedents: jeuxDe(jeux, user, bornes(jours, courante.fin, 1), choisie),
   };
+}
 
+// Mesures des deux périodes. La main est rendue toutes les 4 parties lues ; « pas » renvoie false pour
+// abandonner (le résultat est alors null).
+async function calculer(d, lignes, pas = () => true) {
   const parId = new Map(lignes.map((r) => [r.id, r]));
   const todo = [...d.actuels, ...d.precedents];
   const calculs = { mesures: new Map(), ouvertures: new Map(), temps: new Map() };
-  // Le premier calcul peut durer : la page rend la main toutes les 4 parties et montre où elle en est.
-  // Les résultats et l'Elo, qui ne demandent aucune lecture, s'affichent d'abord.
-  const vue = `${user}|${jours}|${choisie}`;
   let neufs = 0;
   for (const [i, game] of todo.entries()) {
-    const { m, neuf } = mesurer(game, parId.get(game.id), user);
+    const { m, neuf } = mesurer(game, parId.get(game.id), d.user);
     if (m.mesure) calculs.mesures.set(game.id, m.mesure);
     if (m.ouverture) calculs.ouvertures.set(game.id, m.ouverture);
     if (m.temps) calculs.temps.set(game.id, m.temps);
     if (neuf && ++neufs % 4 === 0) {
-      if (S.vue !== vue || !S.el.querySelector('.st-tuiles')) { afficher(d, null); S.vue = vue; }
-      S.el.querySelectorAll('.st-calcul').forEach((p) => { p.textContent = `Calcul en cours : ${i + 1} sur ${todo.length} parties…`; });
+      if (!pas(i + 1, todo.length)) return null;
       await new Promise((r) => setTimeout(r));
-      if (seq !== S.seq || !S.el) return;
+      if (!pas(i + 1, todo.length)) return null;
     }
   }
-  afficher(d, calculs);
-  S.vue = vue;
+  return calculs;
+}
+
+// Les axes pour l'accueil, avec la période et la cadence de la page Statistiques.
+export async function axesActuels(user, jeux) {
+  const d = contexte(user, jeux);
+  const calculs = await calculer(d, await store.all('analysis'));
+  return { ...axesDe(d, calculs), jours: d.jours, cadence: d.cadence ? CADENCES[d.cadence] || d.cadence : 'Toutes les cadences' };
 }
 
 const rafraichir = () => { clearTimeout(S.timer); S.timer = setTimeout(rendre, 1500); };

@@ -14,21 +14,33 @@ import { JOURS_RECENTS, aAnalyser, dernierElo, dernieresParties, puzzlesDus, res
 import { listRepertoires, listEvents, reachableEdges, computeMastery, masterySummary } from './openings.js';
 import { buildDueTargets } from './openings-train.js';
 import { listStudies } from './study-model.js';
+import { MINIMUM } from '../core/stats.js';
 import { BOOK, getGames, getUser, isLoadingGames, ouvrirAnalyseStrategique } from './analyse.js';
 import { miniBoard } from './setup.js';
 import { chargerFile } from '../core/revision-store.js';
+import { TITRES } from '../core/axes.js';
+import { axesActuels, constatAxe } from './stats.js';
 
 const CADENCES = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapide', daily: 'Par jour' };
 const ISSUES = { win: 'Victoire', draw: 'Nulle', loss: 'Défaite' };
 const plural = (n, s) => `${n} ${s}${n > 1 ? 's' : ''}`;
 
 // revision : nombre d'erreurs à rejouer. Le calcul peut être long la première fois : la page ne l'attend pas.
-const H = { el: null, seq: 0, timer: null, offStore: null, offSync: null, revision: 0 };
+const H = { el: null, seq: 0, timer: null, offStore: null, offSync: null, revision: 0, axes: null, axesSeq: 0 };
 
 async function compterRevision(user) {
   const n = user ? await lire(async () => { const f = await chargerFile(user, BOOK); return f.dues.length + f.nouvelles.length; }, 0) : 0;
   if (n === H.revision) return;
   H.revision = n;
+  if (H.el) rafraichir();
+}
+
+// Comme la révision : le premier calcul des axes peut être long, la page s'affiche sans l'attendre.
+async function calculerAxes(user, jeux) {
+  const seq = ++H.axesSeq;
+  const axes = user && jeux.length ? await lire(() => axesActuels(user, jeux), null) : null;
+  if (seq !== H.axesSeq || JSON.stringify(axes) === JSON.stringify(H.axes)) return;
+  H.axes = axes;
   if (H.el) rafraichir();
 }
 
@@ -144,6 +156,18 @@ function blocTaches(d) {
     <div class="ac-titre"><h2 id="ac-faire-t">À faire aujourd’hui</h2>${liste.length ? `<span class="muted small">${plural(liste.length, 'activité')}</span>` : ''}</div>${corps}</section>`;
 }
 
+// Résumé des axes de la page Statistiques ; le détail et les exercices sont là-bas.
+function blocAxes() {
+  const r = H.axes;
+  if (!r || !r.parties) return '';
+  const corps = r.axes.length ? `<ol class="ac-lignes">${r.axes.map((a, i) => `
+      <li><a class="ac-axe" href="#/stats"><b class="ac-num" aria-hidden="true">${i + 1}</b>
+        <span class="ac-texte"><b>${TITRES[a.cle]}</b><span class="muted small">${esc(constatAxe(a))}</span></span><span class="muted" aria-hidden="true">›</span></a></li>`).join('')}</ol>`
+    : `<p class="ac-vide muted">${r.assez ? 'Aucun point faible ne se détache assez.' : `Analysez au moins ${MINIMUM} parties pour les voir (${r.analysees} pour l’instant).`}</p>`;
+  return `<section class="ac-bloc ac-axes" aria-labelledby="ac-axes-t">
+    <div class="ac-titre"><h2 id="ac-axes-t">Mes axes de travail</h2><span class="muted small">${esc(r.cadence)} · ${r.jours} jours</span></div>${corps}</section>`;
+}
+
 function blocParties(d) {
   let corps;
   if (!d.user) corps = '<p class="ac-vide muted">Indiquez votre pseudo chess.com dans <a href="#/settings/profile">Paramètres → Profil</a> pour voir vos parties.</p>';
@@ -235,7 +259,7 @@ function page(d) {
       <div class="ac-boutons"><a class="btn" href="#/free">Analyse libre</a><a class="btn" href="#/play">Jouer contre Maia</a></div>
     </header>
     <div class="ac-colonnes">
-      <div class="ac-gauche">${blocTaches(d)}${blocParties(d)}</div>
+      <div class="ac-gauche">${blocTaches(d)}${d.user && !d.chargement ? blocAxes() : ''}${blocParties(d)}</div>
       <div class="ac-droite">${blocReprendre(d)}${blocProgression(d)}</div>
     </div>
     ${blocModules(d)}`;
@@ -248,7 +272,7 @@ async function rendre() {
   if (seq !== H.seq || !H.el) return;
   const focus = H.el.contains(document.activeElement) ? document.activeElement.getAttribute('href') : null;
   H.el.innerHTML = `<div class="ac">${page(d)}</div>`;
-  if (!d.chargement) compterRevision(d.user);
+  if (!d.chargement) { compterRevision(d.user); calculerAxes(d.user, d.jeux); }
   const analyser = $('[data-analyser]', H.el);
   if (analyser) analyser.onclick = () => ouvrirAnalyseStrategique(JOURS_RECENTS);
   if (focus) H.el.querySelector(`[href="${CSS.escape(focus)}"]`)?.focus({ preventScroll: true });

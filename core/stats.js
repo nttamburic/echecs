@@ -3,7 +3,8 @@
 import { Chess } from '../vendor/chess.js';
 import { classifyGame, summarize, winPct, epd } from '../analysis.js';
 import { issue } from './accueil.js';
-import { phase, PHASES } from './manu/erreurs.js';
+import { phase, PHASES, estTactique } from './manu/erreurs.js';
+import { uciOf } from './ui.js';
 import { couleurDe, SEUIL_GAGNANT } from './revision.js';
 import { tempsDePartie, reperesDe, SEUILS_VITE } from './temps.js';
 
@@ -120,6 +121,27 @@ function situation(coups, positions, camp, test) {
   return coups.some((c, i) => c.color === camp && vrai(i) && (i + 2 >= coups.length || vrai(i + 2)));
 }
 
+// La faute du joueur qui fait perdre le plus de chances de gain ; null sans faute.
+// categorie : 'finale' d'après la phase, sinon 'tactique' ou 'position' (même règle que les puzzles).
+function fauteDecisive(coups, phases, positions, classes, camp) {
+  let pire = null;
+  coups.forEach((c, i) => {
+    if (c.color !== camp || !FAUTES.includes(classes[i]?.cls)) return;
+    const avant = positions[i]?.lines?.[0]?.score, apres = positions[i]?.played?.score;
+    if (!avant || !apres) return;
+    const perte = winPct(avant, camp) - winPct(apres, camp);
+    if (perte > (pire?.perte ?? 0)) pire = { ply: i, perte };
+  });
+  if (!pire) return null;
+  let categorie = 'finale';
+  if (phases[pire.ply] !== 'finale') {
+    const meilleure = positions[pire.ply].lines[0].pv ?? [];
+    const refutation = [uciOf(coups[pire.ply]), ...(positions[pire.ply + 1]?.lines?.[0]?.pv ?? [])];
+    categorie = estTactique(coups[pire.ply].before, meilleure, refutation, coups[pire.ply - 1]).tactique ? 'tactique' : 'position';
+  }
+  return { ...pire, categorie, repere: null };
+}
+
 // Mesures d'une partie entièrement analysée, du point de vue du joueur. null sinon.
 export function mesurePartie(data, user, book = {}, partie = lirePartie(data.game)) {
   const game = data.game;
@@ -137,12 +159,16 @@ export function mesurePartie(data, user, book = {}, partie = lirePartie(data.gam
   });
   const resultat = issue(game, user);
   const temps = tempsDePartie(partie.chess, game);
+  const decisive = fauteDecisive(coups, phases, positions, classes, camp);
   let pendule = null;
   if (temps) {
     const reperes = reperesDe(temps, coups, classes, camp, { cadence: game.timeClass, book });
     // seules les fautes dont on connaît le temps comptent au dénominateur
     const connues = coups.filter((c, i) => c.color === camp && FAUTES.includes(classes[i]?.cls) && temps.avant[i] != null).length;
+    if (decisive) decisive.repere = reperes.find((r) => r.ply === decisive.ply)?.repere ?? null;
     pendule = {
+      drapeau: (camp === 'w' ? game.white : game.black)?.result === 'timeout', // perdue au temps
+      vitePossible: !!SEUILS_VITE[game.timeClass],
       fautes: connues,
       manque: reperes.filter((r) => r.repere === 'manque').length,
       vite: reperes.filter((r) => r.repere === 'vite').length,
@@ -153,7 +179,7 @@ export function mesurePartie(data, user, book = {}, partie = lirePartie(data.gam
     id: game.id, end: game.end, precision: Number.isFinite(precision) ? precision : null, coups: joues, fautes,
     gagnante: situation(coups, positions, camp, (w) => w >= SEUIL_GAGNANT), gagnee: resultat === 'win',
     mauvaise: situation(coups, positions, camp, (w) => w <= SEUIL_MAUVAIS), sauvee: resultat !== 'loss',
-    pendule,
+    pendule, decisive,
   };
 }
 

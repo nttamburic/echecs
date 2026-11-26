@@ -1692,6 +1692,16 @@ a.pz-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px;
 .st-barre { display: flex; gap: 2px; height: 10px; }
 .st-barre span { border-radius: 2px; }
 .st-chiffres { white-space: nowrap; }
+.page .st .st-axes { list-style: none; margin: 0; padding: 0; }
+.page .st .st-axes li { display: flex; gap: var(--s-3); padding: 12px 0; border-top: 1px solid var(--line-soft); }
+.st-rang { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--bg); display: grid; place-items: center; }
+.st-axe-corps { flex: 1; min-width: 0; }
+.st .st-axe-corps h3 { margin: 3px 0 4px; }
+.st-axe-corps p { margin: 0 0 6px; }
+.st-agir { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: 8px; }
+.st-agir .btn { flex: 0 0 auto; min-height: var(--tap); display: inline-flex; align-items: center; padding: 0 14px; text-decoration: none; }
+.st-exemples { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--s-4); margin-top: 6px; }
+.st-exemples a { min-height: var(--tap); display: inline-flex; align-items: center; gap: 4px; }
 .page .st .st-phases li { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 4px var(--s-3); align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
 .st-phases .st-jauge { height: 10px; background: var(--bg); border-radius: 4px; }
 .st-phases .st-jauge span { display: block; height: 100%; background: var(--accent); border-radius: 0 4px 4px 0; }
@@ -1700,6 +1710,7 @@ a.pz-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px;
   .page .st .st-res li { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .st-filtres .segctl, .st-filtres label, .st-filtres select { flex: 1 1 100%; width: 100%; }
   .st-couv .btn { width: 100%; }
+  .st-agir .btn { flex: 1 1 100%; justify-content: center; }
   .st-filtres .segctl .chip { min-height: var(--tap); }
   .st-fig { grid-template-columns: 40px minmax(0, 1fr); column-gap: 6px; }
   .page .st .st-phases li { grid-template-columns: minmax(0, 1fr); }
