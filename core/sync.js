@@ -72,12 +72,19 @@ export async function test() {
 }
 
 // ------------------------------------------------------------------ fusion
-function parseFile(text) {
+// Renvoie null si le fichier est illisible ou d'un autre format. Il ne doit surtout pas être traité
+// comme vide : il serait ensuite réécrit avec les seules données de cet appareil.
+export function parseFile(text) {
   try {
     const j = JSON.parse(text);
-    return Array.isArray(j.records) ? j.records : [];
-  } catch { return []; }
+    if ((j.version ?? 1) !== 1 || !Array.isArray(j.records)) return null;
+    return j.records.every((r) => r && typeof r.col === 'string' && r.id != null) ? j.records : null;
+  } catch { return null; }
 }
+export const unreadableMessage = (files) => (files.length > 1 ? 'Fichiers illisibles sur GitHub, laissés intacts : ' : 'Fichier illisible sur GitHub, laissé intact : ')
+  + files.join(', ') + '. Vérifiez le dépôt ; si un autre appareil utilise une version plus récente de l’application, rechargez celle-ci.';
+// Fichier qui contient les seules données pouvant entrer en conflit (les répertoires).
+const CONFLICT_FILE = 'openings/repertoires.json';
 
 // Seuls les répertoires peuvent entrer en conflit (notes comprises : elles sont dans les arêtes).
 // Parties et analyses sont en ajout seul : la version la plus récente gagne sans discussion.
@@ -213,9 +220,12 @@ async function doSync() {
     } else if (tree.status !== 409 && tree.status !== 404) throw new Error(explain(tree.status, tree.body));
     // 409 / 404 : dépôt encore vide.
 
+    // Fichiers distants illisibles : ni fusionnés ni réécrits ; le reste est synchronisé normalement.
+    const unreadable = new Set();
     for (const [file, sha] of Object.entries(remote)) {
       if (shas[file] === sha) continue;
       const recs = parseFile(await fetchBlob(sha));
+      if (!recs) { unreadable.add(file); continue; } // sha non retenu : relu à la prochaine synchro
       if (await mergeRemote(file, recs, since)) await store.markDirty([file]); // noté avant le sha : rien n'est oublié si la suite échoue
       shas[file] = sha;
       await store.metaSet('shas', shas);
@@ -226,6 +236,7 @@ async function doSync() {
     const heldFiles = async () => new Set(Object.values((await store.metaGet('conflicts')) || {}).map((c) => c.file));
     state.conflicts = Object.values((await store.metaGet('conflicts')) || {});
     for (const file of await dirtyFiles()) {
+      if (unreadable.has(file)) continue; // reste à envoyer
       let skip = false, pushed = false, sent = '';
       for (let attempt = 0; attempt < 3; attempt++) {
         if ((await heldFiles()).has(file)) { skip = true; break; } // en attente de la décision de l'utilisateur : on n'écrase pas l'autre appareil
@@ -238,7 +249,9 @@ async function doSync() {
           // Le fichier a changé sur GitHub entre-temps (autre appareil) : on relit, fusionne et réessaie.
           const cur = await gh(`${repoPath()}/contents/${file.split('/').map(encodeURIComponent).join('/')}`);
           if (cur.ok) {
-            await mergeRemote(file, parseFile(await fetchBlob(cur.body.sha)), since);
+            const recs = parseFile(await fetchBlob(cur.body.sha));
+            if (!recs) { unreadable.add(file); skip = true; break; }
+            await mergeRemote(file, recs, since);
             shas[file] = cur.body.sha;
           } else delete shas[file];
           continue;
@@ -252,10 +265,13 @@ async function doSync() {
     }
     // Saisies faites pendant cette synchro : on les envoie sans attendre le passage périodique.
     const held = await heldFiles();
-    if ([...await dirtyFiles()].some((f) => !held.has(f))) schedule();
-    state.lastSync = startedAt;
-    local.set('lastSync', String(state.lastSync));
-    return true;
+    if ([...await dirtyFiles()].some((f) => !held.has(f) && !unreadable.has(f))) schedule();
+    if (!unreadable.has(CONFLICT_FILE)) {
+      state.lastSync = startedAt;
+      local.set('lastSync', String(state.lastSync));
+    }
+    if (unreadable.size) state.error = unreadableMessage([...unreadable]);
+    return !unreadable.size;
   } catch (e) {
     state.error = navigator.onLine === false || e.network ? 'Pas de connexion Internet.' : (e.message || String(e));
     state.offline = state.error === 'Pas de connexion Internet.';

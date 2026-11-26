@@ -51,7 +51,8 @@ async function lancer(fen, camp) {
 
 // ------------------------------------------------------------------ page d’accueil
 function monterAccueil(el) {
-  el.innerHTML = `<h1 class="page-title">Finales</h1>
+  el.innerHTML = `<div class="eg-entete"><h1 class="page-title">Finales</h1>
+      <a class="btn" href="#/endgames/setup" title="Placez une finale (7 pièces au plus) et jouez-la contre la table de finales">Jouer une position</a></div>
     <div class="ptabs eg-onglets" role="tablist" aria-label="Parties du module">${ONGLETS.map(([k, nom]) =>
       `<button type="button" role="tab" id="eg-tab-${k}" aria-controls="eg-panel-${k}" data-k="${k}">${nom}</button>`).join('')}</div>
     <section role="tabpanel" id="eg-panel-cours" aria-labelledby="eg-tab-cours"></section>

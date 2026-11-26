@@ -1609,3 +1609,7 @@ a.pz-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px;
 .eg-onglets button { white-space: nowrap; }
 @media (max-width: 760px) { .eg-onglets button { padding-inline: 8px; } #eg-mes-finales .strategy-tabs { overflow-x: auto; } }
 @media (max-width: 480px) { #eg-mes-finales .strategy-tabs { gap: 0; justify-content: space-between; } #eg-mes-finales .strategy-tabs button { padding-inline: 3px; font-size: 13px; } #eg-mes-finales .strategy-count { margin-left: .15em; } }
+
+/* Finales : titre et accès à la position libre contre la table de finales */
+.eg-entete { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.eg-entete .btn { min-height: 44px; display: inline-flex; align-items: center; }

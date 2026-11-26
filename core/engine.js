@@ -12,6 +12,9 @@ import { fetchJson, local, isMobile } from './ui.js';
 export const DEPTH_PC = 18;
 const MULTIPV = 2;
 const SEARCH_TIMEOUT_MS = 45000;
+const HANG_TIMEOUT_MS = 15000; // délai de réponse au-delà duquel un moteur est considéré comme mort
+const LOAD_TIMEOUT_MS = 90000;
+const DEAD_MESSAGE = 'Le moteur d’analyse du navigateur s’est arrêté. Réessayez.';
 
 // ------------------------------------------------------------------ utilitaires
 const sideToMove = (fen) => fen.split(' ')[1];
@@ -114,6 +117,7 @@ class WasmEngine {
   constructor() {
     this.queue = Promise.resolve();
     this.onLine = null;
+    this.dead = false;
     this.ready = this.start();
   }
   start() {
@@ -122,17 +126,27 @@ class WasmEngine {
       const line = String(e.data || '').trim();
       if (this.onLine) this.onLine(line);
     };
-    this.worker.onerror = () => { if (this.onLine) this.onLine('__exit__'); };
+    this.worker.onerror = () => this.kill();
     return this.init();
   }
+  // Moteur planté ou muet : il est arrêté, et la recherche en attente est libérée.
+  kill() {
+    if (this.dead) return;
+    this.dead = true;
+    this.worker.terminate();
+    if (this.onLine) this.onLine('__exit__');
+  }
+  alive() { if (this.dead) throw Object.assign(new Error(DEAD_MESSAGE), { engineDead: true }); }
   send(cmd) { this.worker.postMessage(cmd); }
-  waitFor(pred) {
+  waitFor(pred, timeout = HANG_TIMEOUT_MS) {
+    if (this.dead) return Promise.resolve('__exit__');
     return new Promise((resolve) => {
-      this.onLine = (line) => { if (line === '__exit__' || pred(line)) { this.onLine = null; resolve(line); } };
+      const timer = setTimeout(() => this.kill(), timeout);
+      this.onLine = (line) => { if (line === '__exit__' || pred(line)) { clearTimeout(timer); this.onLine = null; resolve(line); } };
     });
   }
   async init() {
-    const p = this.waitFor((l) => l === 'uciok');
+    const p = this.waitFor((l) => l === 'uciok', LOAD_TIMEOUT_MS); // premier chargement : le téléchargement peut être long
     this.send('uci');
     await p;
     this.send('setoption name Hash value 32');
@@ -143,10 +157,12 @@ class WasmEngine {
   search(fen, { depth, multipv = 1, searchmoves = null, nodes = null, movetime = 0 } = {}) {
     const job = async () => {
       await this.ready;
+      this.alive();
       this.send(`setoption name MultiPV value ${multipv}`);
       const r = this.waitFor((l) => l === 'readyok');
       this.send('isready');
       await r;
+      this.alive();
       this.send(`position fen ${fen}`);
       const exact = new Map();
       const bounded = new Map();
@@ -159,10 +175,13 @@ class WasmEngine {
           } else if (line.startsWith('bestmove')) { this.onLine = null; resolve(); }
         };
       });
-      const timer = setTimeout(() => this.send('stop'), SEARCH_TIMEOUT_MS);
+      let hang = null;
+      const timer = setTimeout(() => { this.send('stop'); hang = setTimeout(() => this.kill(), HANG_TIMEOUT_MS); }, SEARCH_TIMEOUT_MS);
       this.send((nodes ? `go nodes ${nodes}` : `go depth ${depth}`) + (movetime ? ` movetime ${movetime}` : '') + (searchmoves ? ` searchmoves ${searchmoves.join(' ')}` : ''));
       await done;
       clearTimeout(timer);
+      clearTimeout(hang);
+      this.alive(); // un résultat partiel ou vide ne doit pas être gardé en cache
       const out = [];
       for (let k = 1; k <= multipv; k++) {
         const v = exact.get(k) || bounded.get(k);
@@ -176,7 +195,7 @@ class WasmEngine {
   }
 }
 
-class WasmPool {
+export class WasmPool {
   constructor(n) {
     this.n = n;
     this.retired = false;
@@ -190,19 +209,37 @@ class WasmPool {
   }
   acquire(priority) {
     this.ensure();
-    if (this.free.length) return Promise.resolve(this.free.pop());
+    if (this.free.length) {
+      const e = this.free.pop();
+      // un moteur peut aussi mourir au repos : il est remplacé avant d'être confié à une recherche
+      return Promise.resolve(e.dead ? this.replace(e) : e);
+    }
     return new Promise((resolve) => { if (priority) this.waiting.unshift(resolve); else this.waiting.push(resolve); });
   }
+  // La réserve garde toujours le même nombre de moteurs.
+  replace(dead) {
+    const e = new WasmEngine();
+    this.engines = this.engines.map((x) => (x === dead ? e : x));
+    return e;
+  }
   release(e) {
+    if (e.dead) {
+      if (this.retired && !this.waiting.length) return;
+      e = this.replace(e);
+    }
     const next = this.waiting.shift();
     if (next) next(e);
     else if (this.retired) e.worker.terminate(); // ancien réglage : le moteur s'arrête une fois sa recherche finie
     else this.free.push(e);
   }
   retire() { this.retired = true; for (const e of this.free) e.worker.terminate(); this.free = []; }
-  async run(fn, priority = false) {
+  // Si le moteur meurt pendant la recherche, elle est relancée une fois sur un moteur neuf.
+  async run(fn, priority = false, retry = true) {
     const e = await this.acquire(priority);
-    try { return await fn(e); } finally { this.release(e); }
+    try { return await fn(e); } catch (err) {
+      if (!retry || !err.engineDead) throw err;
+    } finally { this.release(e); }
+    return this.run(fn, true, false);
   }
 }
 

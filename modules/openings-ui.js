@@ -274,7 +274,8 @@ function bindImport(el, reps) {
   function renderPv() {
     const err = $('#pgn-err', el);
     status.classList.toggle('hidden', !pv);
-    if (pv) status.innerHTML = `<span class="ok" aria-hidden="true">✓</span><span>${pv.name ? `« ${esc(pv.name)} » · ` : ''}${plural(pv.games, 'chapitre')} · ${plural(pv.total, 'coup')}</span>`;
+    if (pv) status.innerHTML = `<span class="ok" aria-hidden="true">✓</span><span>${pv.name ? `« ${esc(pv.name)} » · ` : ''}${plural(pv.games, 'chapitre')} · ${plural(pv.total, 'coup')}${pv.errors.length
+      ? `<br><span class="err">Attention : ${pv.errors.length > 1 ? 'lignes interrompues aux coups illisibles' : 'ligne interrompue au coup illisible'} ${pv.errors.map(esc).join(', ')}. La suite ${pv.errors.length > 1 ? 'de ces lignes' : 'de cette ligne'} ne sera pas importée.</span>` : ''}</span>`;
     dlg.querySelectorAll('[data-sub]').forEach((sp) => {
       const id = sp.dataset.sub;
       if (!id) { sp.textContent = 'Nom et couleur à choisir'; return; }
@@ -302,7 +303,7 @@ function bindImport(el, reps) {
     if (!fresh.added) { err.textContent = fresh.errors.length ? `Aucun coup d'échecs reconnu (premier coup refusé : « ${fresh.errors[0]} »).` : 'Aucun coup trouvé dans ce PGN.'; err.dataset.kind = 'pv'; return; }
     const adds = {};
     for (const rep of reps) adds[rep.id] = importPgn(structuredClone(rep), r.text).added;
-    pv = { name: r.studyName || (r.fileName || '').replace(/\.[^.]+$/, ''), games: fresh.games, total: fresh.added, adds };
+    pv = { name: r.studyName || (r.fileName || '').replace(/\.[^.]+$/, ''), games: fresh.games, total: fresh.added, adds, errors: fresh.errors };
     if (!touched) { // propose le répertoire qui recoupe le plus l'import
       let best = '', ov = 0;
       for (const rep of reps) { const o = fresh.added - adds[rep.id]; if (o > ov) { ov = o; best = rep.id; } }

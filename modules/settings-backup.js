@@ -43,6 +43,7 @@ export function backupTab(el) {
       Il ne contient ni vos jetons ni les réglages propres à cet appareil. Gardez-le pour vous : il contient vos parties.</p>
     <div class="row"><button type="button" id="bk-save" class="btn primary">Télécharger la sauvegarde</button></div>
     <p id="bk-save-msg" class="muted small" role="status">${esc(lastBackupText())}</p>
+    <p id="bk-persist" class="muted small" role="status"></p>
   </section>
   <section class="card">
     <h2>Restaurer une sauvegarde</h2>
@@ -65,6 +66,9 @@ export function backupTab(el) {
   </section>`;
 
   const say = (id, text, cls = 'muted') => { const p = $(id, el); if (p) { p.className = cls + ' small'; p.textContent = text; } };
+  navigator.storage?.persisted?.().then((ok) => say('#bk-persist', ok
+    ? 'Stockage protégé : le navigateur n’effacera pas ces données de lui-même pour libérer de la place.'
+    : 'Stockage non protégé : le navigateur pourrait effacer ces données s’il manque de place. Installer l’application aide à obtenir la protection ; gardez une sauvegarde.')).catch(() => {});
   const guard = (msgId, fn) => async (e) => {
     const button = e.currentTarget;
     button.disabled = true;

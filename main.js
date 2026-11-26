@@ -175,6 +175,8 @@ async function init() {
   $('#menu-btn').onclick = () => (document.body.classList.contains('menu-open') ? closeMenu() : openMenu());
   $('#scrim').onclick = closeMenu;
   applyBoardPrefs();
+  // Demande au navigateur de ne pas effacer les données de l'appli quand l'appareil manque de place.
+  navigator.storage?.persist?.().catch(() => {});
   $('#skip').onclick = (e) => { e.preventDefault(); $('#content').focus(); };
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
   onSync(markSync);

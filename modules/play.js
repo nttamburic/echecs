@@ -1,5 +1,6 @@
 // Module « Jouer » : parties contre Maia3, un bot qui joue comme un humain du niveau choisi (600 à 2800 Elo).
-// Les parties ne sont jamais sauvegardées. Stockfish (Boost PC ou navigateur) sert à l'aide, aux flèches et à la barre d'évaluation.
+// Les parties n'entrent pas dans l'historique ; seule la partie en cours est gardée sur l'appareil, pour la
+// reprendre après un rechargement. Stockfish (Boost PC ou navigateur) sert à l'aide, aux flèches et à la barre d'évaluation.
 import { Chess } from '../vendor/chess.js';
 import { Board } from '../board.js';
 import { fmtScore, winPct, epd } from '../analysis.js';
@@ -11,6 +12,7 @@ import { BOOK, figSan, material, capturedHtml, stashFree } from './analyse.js';
 import { frOpening } from './opening-names.js';
 import { put } from '../core/store.js';
 import { scoreJoueur } from '../core/manu/erreurs.js';
+import { CLE_PARTIE, partieAGarder, relirePartie } from '../core/play-reprise.js';
 
 const P = {
   phase: 'setup', // setup | play | over
@@ -326,8 +328,19 @@ function showHint(fen, res) {
   P.hint = { fen, uci: u, san, score: res.lines[0].score };
 }
 
+// ------------------------------------------------------------------ reprise
+// La partie en cours est enregistrée à chaque affichage, et quand la page est masquée ou fermée.
+function garder() { local.set(CLE_PARTIE, partieAGarder(P)); }
+function reprendre() {
+  const s = relirePartie(local.get(CLE_PARTIE));
+  if (!s) return;
+  Object.assign(P, s, { phase: 'play', result: null, last: Date.now() });
+  board.setOrientation(P.user);
+}
+
 // ------------------------------------------------------------------ rendu
 function render() {
+  garder();
   renderSetup();
   const fen = P.phase === 'setup' ? new Chess().fen() : fenAt(P.ply);
   const last = P.phase !== 'setup' && P.ply > 0 ? P.moves[P.ply - 1] : null;
@@ -487,12 +500,18 @@ export function show() {
     return;
   }
   render();
+  // partie reprise après un rechargement, au trait de Maia : elle joue dès que l'écran est affiché
+  if (P.phase === 'play' && !P.thinking && !P.botErr && P.chess.turn() !== P.user) botMove();
 }
 
 export function init() {
   board = new Board($('#play-board'), { onMove: onBoardMove });
   if (local.get('playEval') == null) local.set('playEval', '1');
   if (local.get('playArrows') == null) local.set('playArrows', '0');
+  reprendre(); // avant le premier affichage, qui sinon effacerait la partie gardée
+  const quitter = () => { if (P.phase === 'play') { if (document.body.dataset.view === 'play') tickClock(); garder(); } };
+  window.addEventListener('pagehide', quitter);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') quitter(); });
   $('#play-elo').min = ELO_MIN; $('#play-elo').max = ELO_MAX;
   $('#play-elo').oninput = () => { local.set('playElo', $('#play-elo').value); render(); };
   $('#play-presets').onclick = (e) => {
