@@ -20,6 +20,7 @@ import {
   STUDY, CHAPTER, listStudies, getStudy, createStudy, addChapters, saveStudy, saveChapter, removeChapter, removeStudy,
   emptyChapter, openChapter,
 } from './study-model.js';
+import { GLYPH_CLASS, moveNo, treeHtml, showInList } from '../core/tree-view.js';
 
 const plural = (n, s) => `${n} ${s}${n > 1 ? 's' : ''}`;
 const MAX_FILE = 5 * 1048576;
@@ -27,8 +28,6 @@ const SAVE_DELAY = 600;
 const LONG_PRESS = 500;
 const BRUSH_FR = { G: 'Vert', R: 'Rouge', B: 'Bleu', Y: 'Jaune' };
 const GLYPH_GROUPS = [['move', 'Coup'], ['position', 'Évaluation'], ['observation', 'Remarque']];
-// Couleur du symbole de coup dans la liste (mêmes familles que Lichess).
-const GLYPH_CLASS = { 1: 'g-good', 2: 'g-mistake', 3: 'g-brilliant', 4: 'g-blunder', 5: 'g-interesting', 6: 'g-dubious' };
 const TAGS = [['White', 'Blancs'], ['WhiteElo', 'Elo des Blancs'], ['Black', 'Noirs'], ['BlackElo', 'Elo des Noirs'], ['Tournament', 'Tournoi'], ['Site', 'Lieu'], ['Date', 'Date'], ['Result', 'Résultat'], ['ECO', 'ECO'], ['Opening', 'Ouverture'], ['Annotator', 'Annotateur']];
 
 const ICON = {
@@ -254,7 +253,7 @@ function build(el) {
       <button type="button" id="st-settings" class="icon-btn" title="Réglages de l’étude" aria-label="Réglages de l’étude">${ICON.gear}</button>
     </div>
     <div class="st-count" id="st-count"></div>
-    <ol id="st-chapters"></ol>
+    <ol id="st-chapters" class="st-chapters"></ol>
     <button type="button" id="st-addchap" class="st-addchap">＋ Ajouter un chapitre</button>
   </aside>
   <div class="st-center">
@@ -418,7 +417,6 @@ function remove(node) {
   });
 }
 
-const moveNo = (node) => { const f = node.parent.fen.split(' '); return `${f[5]}${f[1] === 'w' ? '.' : '…'}`; };
 const glyphText = (node) => node.nags.map((n) => glyphOf(n)?.sym || '').filter(Boolean);
 const label = (node) => `${moveNo(node)}${frSan(node.san)}`;
 
@@ -486,62 +484,18 @@ const commentHtml = (node, text, cls = '') => {
   const i = S.nodes.push(node) - 1;
   return `<span class="st-com ${cls}" data-i="${i}">${esc(text)}</span>`;
 };
-// Une variante : suite de coups sur une ligne ; ses propres embranchements sont entre parenthèses.
-function inlineLine(first) {
-  let out = '';
-  let node = first, force = true;
-  let siblings = []; // variantes du coup en cours d'écriture, écrites juste après lui
-  while (node) {
-    if (node.before) { out += commentHtml(node, node.before, 'before'); force = true; }
-    const white = node.parent.fen.split(' ')[1] === 'w';
-    if (white || force) out += `<span class="st-vno">${moveNo(node)}</span>`;
-    out += moveButton(node, 'inline');
-    force = false;
-    if (node.comment) { out += commentHtml(node, node.comment); force = true; }
-    for (const alt of siblings) { out += `<span class="st-par">(${inlineLine(alt)})</span> `; force = true; }
-    siblings = node.children.slice(1);
-    node = node.children[0];
-  }
-  return out;
-}
-
-function treeHtml(root) {
-  let out = '';
-  if (root.comment) out += `<div class="st-block">${commentHtml(root, root.comment)}</div>`;
-  let row = null; // rangée en cours : { no, cells: [] }
-  const close = () => {
-    if (!row) return;
-    while (row.cells.length < 2) row.cells.push('<span class="st-gap"></span>');
-    out += `<div class="st-row"><span class="mno">${row.no}</span>${row.cells.join('')}</div>`;
-    row = null;
-  };
-  let p = root;
-  while (p.children.length) {
-    const [main, ...alts] = p.children;
-    const [turn, no] = [main.parent.fen.split(' ')[1], main.parent.fen.split(' ')[5]];
-    if (main.before) { close(); out += `<div class="st-block">${commentHtml(main, main.before, 'before')}</div>`; }
-    if (turn === 'w') { close(); row = { no, cells: [] }; }
-    else if (!row) row = { no, cells: ['<span class="st-gap">…</span>'] };
-    row.cells.push(moveButton(main));
-    if (main.comment || alts.length) {
-      if (turn === 'w' && main.children.length) row.cells.push('<span class="st-gap">…</span>');
-      close();
-      if (main.comment) out += `<div class="st-block">${commentHtml(main, main.comment)}</div>`;
-      if (alts.length) out += `<div class="st-vars">${alts.map((a) => `<div class="st-var">${inlineLine(a)}</div>`).join('')}</div>`;
-    } else if (turn === 'b') close();
-    p = main;
-  }
-  close();
+function movesHtml(root) {
+  const out = treeHtml(root, { move: moveButton, comment: commentHtml });
   const result = S.ch.headers.Result;
-  if (result && result !== '*') out += `<div class="st-result">${esc(result)}</div>`;
-  return out || '<p class="muted pad">Jouez un coup sur l’échiquier pour commencer le chapitre.</p>';
+  const end = result && result !== '*' ? `<div class="st-result">${esc(result)}</div>` : '';
+  return out + end || '<p class="muted pad">Jouez un coup sur l’échiquier pour commencer le chapitre.</p>';
 }
 
 function renderTree() {
   S.nodes = [];
   const box = $('#st-tree');
   const top = box.scrollTop;
-  box.innerHTML = treeHtml(S.ch.root);
+  box.innerHTML = movesHtml(S.ch.root);
   box.scrollTop = top;
   markCurrent();
 }
@@ -556,9 +510,7 @@ function markCurrent() {
   });
   // défilement de la seule liste, jamais de la page
   if (!cur) { if (!S.node.parent) box.scrollTop = 0; return; }
-  const r = cur.getBoundingClientRect(), b = box.getBoundingClientRect();
-  if (r.top < b.top + 8) box.scrollTop -= b.top - r.top + b.height / 3;
-  else if (r.bottom > b.bottom - 8) box.scrollTop += r.bottom - b.bottom + b.height / 3;
+  showInList(box, cur);
 }
 
 // Embranchement : les coups possibles depuis la position affichée.

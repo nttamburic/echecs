@@ -20,14 +20,14 @@
 .st-cardchaps span::before { content: "◦ "; color: var(--text-muted); }
 
 /* ------------------------------------------------------------------ atelier */
-#study-view {
+:is(#study-view, .eg-lecteur) {
   --st-side-w: 250px;
   --panel-w: clamp(320px, 26vw, 460px);
   --board: clamp(288px, min(100dvh - 170px, 100vw - var(--side) - var(--st-side-w) - var(--panel-w) - 110px), 840px);
   display: flex; gap: 14px; padding: 12px 14px; align-items: flex-start; justify-content: center;
 }
 .st-center { width: calc(var(--board) + var(--eval-w) + 8px); max-width: 100%; flex: none; }
-#study-view .board-wrap:has(> .evalbar.hidden) { padding-left: calc(var(--eval-w) + 8px); }
+:is(#study-view, .eg-lecteur) .board-wrap:has(> .evalbar.hidden) { padding-left: calc(var(--eval-w) + 8px); }
 #st-board { flex: 1; min-width: 0; }
 .st-player { min-height: 26px; padding: 2px 2px 2px calc(var(--eval-w) + 8px); display: flex; align-items: center; gap: 6px; font-size: 14px; }
 .st-player:empty { min-height: 6px; padding-top: 0; padding-bottom: 0; }
@@ -39,21 +39,21 @@
 .st-sidehead h2 { flex: 1; min-width: 0; margin: 0; font-size: 15px; line-height: 20px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .st-sidehead svg, .st-chedit svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .st-count { padding: 8px 12px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); border-bottom: 3px solid var(--accent); align-self: flex-start; }
-#st-chapters { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1 1 auto; min-height: 60px; border-top: 1px solid var(--line); }
-#st-chapters li { display: flex; align-items: stretch; border-bottom: 1px solid var(--line-soft); }
-#st-chapters li.active { background: var(--cur); }
-@media (hover: hover) { #st-chapters li:not(.active):hover { background: var(--hover); } }
+.st-chapters { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1 1 auto; min-height: 60px; border-top: 1px solid var(--line); }
+.st-chapters li { display: flex; align-items: stretch; border-bottom: 1px solid var(--line-soft); }
+.st-chapters li.active { background: var(--cur); }
+@media (hover: hover) { .st-chapters li:not(.active):hover { background: var(--hover); } }
 .st-chap { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 7px 6px 7px 0; background: none; border: 0; color: var(--text); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
 .st-no { width: 30px; flex: none; text-align: center; color: var(--text-muted); font-size: 13px; }
-#st-chapters li.active .st-no { color: var(--accent); font-weight: 700; }
+.st-chapters li.active .st-no { color: var(--accent); font-weight: 700; }
 .st-chname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .st-chedit { color: var(--text-muted); padding: 0 8px; }
-@media (hover: hover) { #st-chapters li:not(.active):not(:hover) .st-chedit:not(:focus-visible) { opacity: 0; } }
+@media (hover: hover) { .st-chapters li:not(.active):not(:hover) .st-chedit:not(:focus-visible) { opacity: 0; } }
 .st-addchap { flex: none; padding: 11px 12px; background: none; border: 0; border-top: 1px solid var(--line); color: var(--link); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
 @media (hover: hover) { .st-addchap:hover { background: var(--hover); } }
 
 /* moteur */
-#st-panel { overflow: hidden; height: calc(100dvh - 24px); }
+:is(#st-panel, .eg-coups) { overflow: hidden; height: calc(100dvh - 24px); }
 .st-eng { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--line); }
 .st-eng .switch { height: 18px; min-height: 0; }
 .st-eng b { font-size: 18px; min-width: 0; }
@@ -145,18 +145,18 @@
 /* ------------------------------------------------------------------ écrans moyens et petits */
 /* Moins de 1280 px en paysage : la liste des chapitres passe sous l'échiquier et les coups. */
 @media (min-width: 761px) and (max-width: 1279px) and (orientation: landscape) {
-  #study-view { flex-wrap: wrap; --panel-w: clamp(300px, 34vw, 420px); --board: clamp(288px, min(100dvh - 150px, 100vw - var(--rail) - var(--panel-w) - 90px), 840px); }
+  :is(#study-view, .eg-lecteur) { flex-wrap: wrap; --panel-w: clamp(300px, 34vw, 420px); --board: clamp(288px, min(100dvh - 150px, 100vw - var(--rail) - var(--panel-w) - 90px), 840px); }
   .st-center { order: 1; }
-  #st-panel { order: 2; }
+  :is(#st-panel, .eg-coups) { order: 2; }
   .st-side { order: 3; position: static; width: 100%; max-height: 320px; }
 }
 @media (max-width: 760px), (max-width: 1279px) and (orientation: portrait) {
-  #study-view { flex-direction: column; align-items: stretch; gap: 8px; --board: min(100vw - 16px - var(--eval-w) - 8px, 640px); }
+  :is(#study-view, .eg-lecteur) { flex-direction: column; align-items: stretch; gap: 8px; --board: min(100vw - 16px - var(--eval-w) - 8px, 640px); }
   .st-center { margin: 0 auto; order: 1; }
-  #st-panel { order: 2; width: 100%; max-width: 640px; margin: 0 auto; height: auto; position: static; overflow: visible; }
+  :is(#st-panel, .eg-coups) { order: 2; width: 100%; max-width: 640px; margin: 0 auto; height: auto; position: static; overflow: visible; }
   .st-side { order: 3; position: static; width: 100%; max-width: 640px; margin: 0 auto; max-height: 360px; }
   .pmoves.st-tree { flex: none; min-height: 0; max-height: 300px; }
   .st-tools, .st-under { margin-left: 0; }
   .st-chap, .st-mv:not(.inline) { min-height: 40px; }
-  body[data-view="study"] #content { padding-bottom: calc(68px + env(safe-area-inset-bottom)); }
+  body[data-view="study"] #content, body[data-view="endgames"] #content:has(#eg-panel-cours:not([hidden]) .eg-lecteur:not([hidden])) { padding-bottom: calc(68px + env(safe-area-inset-bottom)); }
 }

@@ -1,30 +1,69 @@
 import { Board } from '../board.js';
 import { $, $$, esc, fetchJson } from '../core/ui.js';
+import { BRUSHES, chessAt } from '../core/study-pgn.js';
+import { GLYPH_CLASS, moveNo, treeHtml, showInList } from '../core/tree-view.js';
+import { figSan } from './analyse.js';
+import { miniBoard } from './setup.js';
 
 const COURS = '#/endgames/cours';
-const COULEURS = { G: '#548f26', Y: '#ddb735', R: '#ce4141', B: '#3783c4' };
 const ANNOTATIONS = /\[%(csl|cal) ([^\]]*)\]/g;
 const RUBRIQUES = { VERDICT: 'Verdict', 'RÈGLE CLÉ': 'Règle clé', PLAN: 'Plan', ATTENTION: 'Attention' };
+const SYMBOLES = { '!': 1, '?': 2, '!!': 3, '??': 4, '!?': 5, '?!': 6 };
 const texte = (commentaire) => commentaire.replace(ANNOTATIONS, '').trim();
 
 const titre = ({ code, name }) => `${code} — ${name}`;
 const lien = ({ id }) => `${COURS}/${id}`;
-const boutonCoup = (action, symbole, label) =>
-  `<button type="button" class="btn${action === 'next' ? ' primary' : ''}" data-action="${action}" aria-label="${label}">${symbole}</button>`;
+const ICONES = {
+  prev: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
+  first: '<svg viewBox="0 0 24 24"><path d="M6 5v14M18 5l-8 7 8 7"/></svg>',
+  next: '<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',
+  last: '<svg viewBox="0 0 24 24"><path d="M18 5v14M6 5l8 7-8 7"/></svg>',
+};
+const boutonCoup = (action, icone, label) =>
+  `<button type="button" class="btn" data-action="${action}" title="${label}" aria-label="${label}">${ICONES[icone]}</button>`;
 
-function annotations(commentaire) {
-  const highlights = [], arrows = [];
+function dessins(commentaire) {
+  const circles = [], arrows = [];
   for (const [, type, marques] of commentaire.matchAll(ANNOTATIONS)) {
     for (const marque of marques.split(',')) {
       const m = /^([GYRB])([a-h][1-8])([a-h][1-8])?$/.exec(marque.trim());
       if (!m) continue;
       const [, teinte, from, to] = m;
-      const color = COULEURS[teinte];
-      if (type === 'csl' && !to) highlights.push({ sq: from, color });
-      if (type === 'cal' && to && from !== to) arrows.push({ from, to, color, opacity: .78 });
+      const color = BRUSHES[teinte];
+      if (type === 'csl' && !to) circles.push({ sq: from, color });
+      if (type === 'cal' && to && from !== to) arrows.push({ from, to, color });
     }
   }
-  return { highlights, arrows };
+  return { circles, arrows };
+}
+
+// Les rubriques des explications (VERDICT, PLAN…) deviennent des intertitres.
+function explication(commentaire) {
+  const [intro, ...rubriques] = commentaire.split(/\b(VERDICT|RÈGLE CLÉ|PLAN|ATTENTION)\s*:\s*/g);
+  let out = esc(intro.trim());
+  for (let i = 0; i < rubriques.length; i += 2) {
+    out += `<span class="eg-rubrique"><strong>${RUBRIQUES[rubriques[i]]}</strong>${esc(rubriques[i + 1].trim())}</span>`;
+  }
+  return out;
+}
+
+// Nœuds enregistrés (tableau, liens par numéro) → arbre au format de core/tree-view.js.
+function arbre(etude) {
+  const noeuds = etude.nodes.map((n, id) => ({ id, fen: n.fen, comment: texte(n.comment), before: '' }));
+  noeuds.forEach((n, id) => {
+    n.parent = id ? noeuds[etude.nodes[id].parent] : null;
+    n.children = etude.nodes[id].children.map((c) => noeuds[c]);
+  });
+  return noeuds;
+}
+
+// Coup en notation figurine, avec son symbole (« !, ?… ») repris du libellé.
+function coupHtml(etude, noeud) {
+  const { uci, label } = etude.nodes[noeud.id];
+  const color = noeud.parent.fen.split(' ')[1];
+  const sym = (/[!?]+$/.exec(label) || [''])[0];
+  const { san } = chessAt(noeud.parent.fen).move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+  return { classe: GLYPH_CLASS[SYMBOLES[sym]] || '', html: `<span class="san">${figSan(san, color)}</span>${sym ? `<span class="gl">${sym}</span>` : ''}` };
 }
 
 export function monterCours(zone) {
@@ -34,64 +73,82 @@ export function monterCours(zone) {
       <h2 id="eg-cours-title">100 finales à connaître</h2>
       <div class="eg-cours-sommaire"><p class="muted" role="status">Chargement…</p></div>
     </section>
-    <section class="eg-cours-reader" aria-labelledby="eg-etude-title" hidden>
-      <a class="btn eg-cours-back" href="${COURS}">← Sommaire</a>
-      <h2 id="eg-etude-title" tabindex="-1"></h2>
-      <div class="eg-cours-layout">
-        <div>
-          <div id="eg-etude-board"></div>
-          <div class="eg-cours-board-controls">
-            <span class="muted" id="eg-etude-turn"></span>
-            <button type="button" class="btn" data-action="flip">⇅ Retourner</button>
-          </div>
+    <section class="eg-lecteur" aria-labelledby="eg-etude-title" hidden>
+      <aside class="st-side" aria-label="Études de la partie">
+        <div class="st-sidehead">
+          <a href="${COURS}" class="icon-btn" title="Sommaire" aria-label="Sommaire">${ICONES.prev}</a>
+          <h2 id="eg-groupe-title"></h2>
         </div>
-        <div class="eg-cours-panel">
-          <div class="eg-cours-head"><h3>Explications</h3><span class="muted" id="eg-etude-label"></span></div>
-          <div class="eg-cours-notes" aria-live="polite"></div>
-          <div class="eg-cours-score">
-            <h3>Coups et variantes</h3>
-            <div class="eg-cours-moves"></div>
-            <div class="eg-cours-controls" role="group" aria-label="Navigation dans les coups">
-              ${boutonCoup('first', '|‹', 'Position de départ')}
-              ${boutonCoup('back', '‹', 'Coup précédent')}
-              ${boutonCoup('next', '›', 'Coup suivant')}
-              ${boutonCoup('last', '›|', 'Dernier coup de la ligne')}
-            </div>
-          </div>
+        <div class="st-count" id="eg-groupe-count"></div>
+        <ol class="st-chapters"></ol>
+        <div class="st-actions">
+          <button type="button" class="btn small" data-action="previous-study" aria-label="Étude précédente">← Précédente</button>
+          <button type="button" class="btn small" data-action="next-study" aria-label="Étude suivante">Suivante →</button>
         </div>
+      </aside>
+      <div class="st-center">
+        <div class="st-player"></div>
+        <div class="board-wrap"><div id="eg-etude-board"></div></div>
+        <div class="st-player"><span class="color-dot" id="eg-etude-dot" aria-hidden="true"></span><span class="muted" id="eg-etude-turn"></span></div>
       </div>
-      <div class="eg-cours-neighbors">
-        <button type="button" class="btn" data-action="previous-study">← Étude précédente</button>
-        <button type="button" class="btn" data-action="next-study">Étude suivante →</button>
+      <div class="panel eg-coups">
+        <div class="st-chaphead">
+          <h2 id="eg-etude-title" tabindex="-1"></h2>
+          <button type="button" class="btn small" data-action="flip" title="Retourner l’échiquier (F)" aria-label="Retourner l’échiquier">⇅</button>
+        </div>
+        <div class="pmoves st-tree" tabindex="0" role="region" aria-label="Coups, variantes et explications"></div>
+        <div class="st-forks"></div>
+        <div class="navbar four" role="group" aria-label="Navigation dans les coups">
+          ${boutonCoup('first', 'first', 'Position de départ')}
+          ${boutonCoup('back', 'prev', 'Coup précédent')}
+          ${boutonCoup('next', 'next', 'Coup suivant')}
+          ${boutonCoup('last', 'last', 'Dernier coup de la ligne')}
+        </div>
       </div>
     </section>`;
 
   const index = $('.eg-cours-index', zone);
   const sommaire = $('.eg-cours-sommaire', zone);
-  const reader = $('.eg-cours-reader', zone);
+  const reader = $('.eg-lecteur', zone);
   const etudeTitre = $('#eg-etude-title', zone);
   const boardEl = $('#eg-etude-board', zone);
   const tour = $('#eg-etude-turn', zone);
-  const label = $('#eg-etude-label', zone);
-  const notes = $('.eg-cours-notes', zone);
-  const moves = $('.eg-cours-moves', zone);
+  const pastille = $('#eg-etude-dot', zone);
+  const liste = $('.st-chapters', zone);
+  const moves = $('.st-tree', zone);
+  const forks = $('.st-forks', zone);
   const controles = Object.fromEntries($$('[data-action]', zone).map((b) => [b.dataset.action, b]));
-  let groupes, etudes, chargement, board, etude;
+  let groupes, etudes, chargement, board, etude, noeuds;
   let ply = 0;
   let ligne = [0];
 
+  const groupeDe = (s) => groupes.find((g) => g.studies.includes(s));
+
   function afficherSommaire(retour) {
-    const id = retour?.id ?? etudes[0].id;
     index.hidden = false;
     reader.hidden = true;
-    sommaire.innerHTML = groupes.map(({ name, studies }) => `
-      <details class="eg-cours-group"${studies.some((s) => s.id === id) ? ' open' : ''}>
-        <summary>${esc(name)} <span class="muted">${studies.length} études</span></summary>
-        ${studies.map((s) => `<a class="eg-cours-study" href="${lien(s)}" data-study="${s.id}">
-          <span class="muted">${esc(s.code)}</span><span>${esc(s.name)}</span><span class="muted" aria-hidden="true">›</span>
-        </a>`).join('')}
-      </details>`).join('');
-    if (retour) $(`[data-study="${id}"]`, sommaire).focus();
+    sommaire.innerHTML = `<ul class="st-grid">${groupes.map(({ name, studies }, i) => {
+      const [premiere] = studies;
+      return `<li class="card st-card"><a href="${lien(premiere)}" data-groupe="${i}">
+        ${miniBoard(premiere.nodes[0].fen.split(' ')[0], 112, { orient: premiere.orientation })}
+        <span class="st-cardtxt"><b title="${esc(name)}">${esc(name)}</b>
+          <span class="muted small">${studies.length} études · ${esc(premiere.code)} à ${esc(studies.at(-1).code)}</span>
+          <span class="st-cardchaps">${studies.slice(0, 4).map((s) => `<span>${esc(s.name)}</span>`).join('')}</span></span>
+      </a></li>`;
+    }).join('')}</ul>`;
+    if (retour) $(`[data-groupe="${groupes.indexOf(groupeDe(retour))}"]`, sommaire).focus();
+  }
+
+  function afficherListe() {
+    const groupe = groupeDe(etude);
+    $('#eg-groupe-title', zone).textContent = groupe.name;
+    $('#eg-groupe-count', zone).textContent = `${groupe.studies.length} études`;
+    liste.innerHTML = groupe.studies.map((s) => {
+      const actif = s === etude;
+      return `<li class="${actif ? 'active' : ''}"><button type="button" class="st-chap" data-study="${esc(s.id)}" title="${esc(titre(s))}"${actif ? ' aria-current="true"' : ''}><span class="st-no">${esc(s.code)}</span><span class="st-chname">${esc(s.name)}</span></button></li>`;
+    }).join('');
+    const actif = $('li.active', liste);
+    liste.scrollTop = Math.max(0, actif.offsetTop - liste.offsetTop - liste.clientHeight / 2);
   }
 
   function suivant(n) {
@@ -100,52 +157,43 @@ export function monterCours(zone) {
   }
 
   function afficherCoups() {
-    const { nodes } = etude;
-    const boutons = [];
-    const ajouter = (n, variante = false) => {
-      const nom = esc(nodes[n].label);
-      boutons.push(`<button type="button" class="eg-cours-move" data-ply="${n}"${variante ? ' data-variant' : ''}${n === ply ? ' aria-current="step"' : ''}>${variante ? `(${nom})` : nom}</button>`);
-    };
-    ajouter(0);
-    for (let n = 0; nodes[n].children.length;) {
-      const favori = suivant(n);
-      ajouter(favori);
-      for (const enfant of nodes[n].children) {
-        if (enfant !== favori) ajouter(enfant, true);
-      }
-      n = favori;
+    moves.innerHTML = treeHtml(noeuds[0], {
+      move: (noeud, cls) => {
+        const { classe, html } = coupHtml(etude, noeud);
+        return `<button type="button" class="st-mv ${cls} ${classe}" data-ply="${noeud.id}">${html}</button>`;
+      },
+      comment: (noeud, commentaire) => `<span class="st-com" data-ply="${noeud.id}">${explication(commentaire)}</span>`,
+    });
+  }
+
+  function marquerCoup() {
+    let courant = null;
+    for (const b of $$('.st-mv', moves)) {
+      const actif = Number(b.dataset.ply) === ply;
+      b.classList.toggle('cur', actif);
+      if (actif) { b.setAttribute('aria-current', 'step'); courant = b; } else b.removeAttribute('aria-current');
     }
-    const garderFocus = moves.contains(document.activeElement);
-    moves.innerHTML = boutons.join('');
-    const courant = $('[aria-current]', moves);
-    if (garderFocus) courant.focus({ preventScroll: true });
-    const position = courant.getBoundingClientRect();
-    const cadre = moves.getBoundingClientRect();
-    if (position.bottom > cadre.bottom) moves.scrollTop += position.bottom - cadre.bottom;
-    if (position.top < cadre.top) moves.scrollTop -= cadre.top - position.top;
+    if (courant) showInList(moves, courant);
+    else moves.scrollTop = 0;
+  }
+
+  function afficherEmbranchement() {
+    const enfants = noeuds[ply].children;
+    forks.innerHTML = enfants.length > 1 ? enfants.map((n) => `<button type="button" data-ply="${n.id}"><span class="muted">${moveNo(n)}</span>${coupHtml(etude, n).html}</button>`).join('') : '';
   }
 
   function dessiner() {
-    const { fen, uci, comment, label: nom } = etude.nodes[ply];
-    const auTrait = fen.split(' ')[1] === 'w' ? 'Trait aux Blancs' : 'Trait aux Noirs';
+    const { fen, uci, comment } = etude.nodes[ply];
+    const blancs = fen.split(' ')[1] === 'w';
+    const auTrait = blancs ? 'Trait aux Blancs' : 'Trait aux Noirs';
     tour.textContent = auTrait;
+    pastille.className = `color-dot ${blancs ? 'w' : 'b'}`;
     boardEl.setAttribute('aria-label', `Échiquier de l’étude ${titre(etude)}. ${auTrait}.`);
-    board.setPosition(fen, { lastMove: uci ? [uci.slice(0, 2), uci.slice(2, 4)] : null, ...annotations(comment) });
-
-    const courant = texte(comment);
-    const [intro, ...rubriques] = (courant || texte(etude.nodes[0].comment)).split(/\b(VERDICT|RÈGLE CLÉ|PLAN|ATTENTION)\s*:\s*/g);
-    let explications = intro.trim() ? `<p>${esc(intro.trim())}</p>` : '';
-    for (let i = 0; i < rubriques.length; i += 2) {
-      explications += `<p><strong>${RUBRIQUES[rubriques[i]]}</strong>${esc(rubriques[i + 1].trim())}</p>`;
-    }
-    label.textContent = ply && courant ? nom : 'Position initiale';
-    if (notes.innerHTML !== explications) {
-      notes.innerHTML = explications;
-      notes.scrollTop = 0;
-    }
+    board.setPosition(fen, { lastMove: uci ? [uci.slice(0, 2), uci.slice(2, 4)] : null, ...dessins(comment) });
     controles.first.disabled = controles.back.disabled = ply === 0;
     controles.next.disabled = controles.last.disabled = suivant(ply) === undefined;
-    afficherCoups();
+    afficherEmbranchement();
+    marquerCoup();
   }
 
   function aller(n) {
@@ -162,6 +210,7 @@ export function monterCours(zone) {
 
   function afficherEtude(s, position) {
     etude = s;
+    noeuds = arbre(s);
     ply = 0;
     ligne = [0];
     index.hidden = true;
@@ -174,6 +223,8 @@ export function monterCours(zone) {
     etudeTitre.textContent = titre(s);
     controles['previous-study'].disabled = position === 0;
     controles['next-study'].disabled = position === etudes.length - 1;
+    afficherListe();
+    afficherCoups();
     dessiner();
     etudeTitre.focus({ preventScroll: true });
   }
@@ -192,14 +243,18 @@ export function monterCours(zone) {
     'next-study': () => { location.hash = lien(etudes[etudes.indexOf(etude) + 1]); },
   };
   reader.addEventListener('click', (e) => {
-    const bouton = e.target.closest('button');
-    if (!bouton) return;
-    if (bouton.dataset.ply !== undefined) aller(Number(bouton.dataset.ply));
-    else actions[bouton.dataset.action]();
+    const cible = e.target.closest('[data-action], [data-ply], [data-study]');
+    if (!cible) return;
+    const { action, ply: coup, study } = cible.dataset;
+    if (coup !== undefined) aller(Number(coup));
+    else if (study) location.hash = lien({ id: study });
+    else actions[action]();
   });
-  reader.addEventListener('keydown', (e) => {
-    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-    const action = { ArrowLeft: 'back', ArrowRight: 'next' }[e.key];
+  // Raccourcis valables sur tout l'écran de lecture, comme dans le module Étude.
+  document.addEventListener('keydown', (e) => {
+    if (document.body.dataset.view !== 'endgames' || !reader.offsetParent || document.querySelector('dialog[open]')) return;
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+    const action = { ArrowLeft: 'back', ArrowRight: 'next', ArrowUp: 'first', Home: 'first', ArrowDown: 'last', End: 'last', f: 'flip' }[e.key];
     if (!action) return;
     e.preventDefault();
     actions[action]();
