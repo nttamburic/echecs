@@ -201,7 +201,7 @@ function blocProgression(d) {
   if (m != null) html += jauge('Répertoires maîtrisés', `${m} %`, m, `${m} % des positions maîtrisées`);
   const w = d.woodpecker;
   if (w) html += jauge(`Woodpecker, cycle ${w.cycle} sur ${w.cycles}`, `${w.faits} / ${w.total}`, w.total ? Math.round((100 * w.faits) / w.total) : 0, `${w.faits} puzzles faits sur ${w.total}`, 'bleu');
-  return `<section class="ac-bloc ac-progres" aria-labelledby="ac-progres-t"><div class="ac-titre"><h2 id="ac-progres-t">Progression</h2></div><div class="ac-corps">${html || '<p class="muted small">Vos résultats apparaîtront ici.</p>'}</div></section>`;
+  return `<section class="ac-bloc ac-progres" aria-labelledby="ac-progres-t"><div class="ac-titre"><h2 id="ac-progres-t">Progression</h2><a class="small" href="#/stats">Statistiques</a></div><div class="ac-corps">${html || '<p class="muted small">Vos résultats apparaîtront ici.</p>'}</div></section>`;
 }
 
 // Les icônes sont celles du menu : une seule source.
@@ -215,6 +215,7 @@ function blocModules(d) {
     ['puzzles', 'Puzzles', 'Woodpecker, thèmes, recommandés'],
     ['strategy', 'Erreurs stratégiques', d.erreurs ? `${plural(d.erreurs, 'erreur')} sur les ${d.periode} derniers jours` : 'Les plans manqués dans vos parties'],
     ['endgames', 'Finales', '120 études, puzzles, vos finales'],
+    ['stats', 'Statistiques', 'Votre progression sur 30 ou 90 jours'],
     ['games', 'Historique des parties', 'Vos parties chess.com'],
   ];
   return `<section aria-labelledby="ac-modules-t"><h2 id="ac-modules-t" class="ac-h2">Tous les modules</h2>

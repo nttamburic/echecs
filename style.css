@@ -1645,3 +1645,64 @@ a.pz-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px;
 .rv-solution dd { margin: 2px 0 0; }
 .rv-solution .fig { width: 16px; height: 16px; }
 .coach-exo { margin-top: 8px; min-height: 44px; }
+
+/* ---- Statistiques ---- */
+.page .st ul { list-style: none; margin: 0; padding: 0; }
+.page .st li { margin: 0; }
+.st h2 { margin: 0 0 4px; font-size: var(--fs-h2); }
+.st h3 { margin: 14px 0 6px; font-size: 15px; }
+.st-filtres { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; margin: 0 0 var(--s-3); }
+.st-filtres .segctl { flex: 0 1 260px; }
+.st-filtres select { min-height: var(--tap); }
+.st-couv { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between; margin-bottom: var(--s-3); }
+.st-couv p { margin: 0; flex: 1 1 320px; }
+.st-tuiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--s-3); margin: 0 0 var(--s-2); }
+.st-tuile { display: flex; flex-direction: column; gap: 4px; background: var(--panel); border-radius: var(--r-lg); padding: 12px 14px; }
+.st-bloc .st-tuile { background: var(--bg); }
+.st-tuile b { font-size: var(--fs-title); line-height: var(--lh-title); }
+.st-tend { font-size: var(--fs-small); color: var(--muted); }
+.st-tend.mieux { color: var(--win); }
+.st-tend.moins { color: var(--loss); }
+.st-bloc { margin-top: var(--s-3); }
+.st-bloc > p { margin: 0 0 8px; }
+.st-fig { display: grid; grid-template-columns: 52px minmax(0, 1fr); column-gap: 8px; margin: 6px 0 0; }
+.st-axe { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; height: 160px; font-size: var(--fs-label); color: var(--muted); }
+.st-plot { height: 160px; touch-action: pan-y; cursor: crosshair; }
+.st-plot svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.st-plot path { fill: none; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
+.st-plot .st-grille { stroke: var(--border); stroke-width: 1; }
+.st-plot .st-ligne { stroke: var(--accent); stroke-width: 2; }
+.st-plot .st-point { stroke: var(--link); stroke-width: 8; }
+.st-plot .st-curseur { stroke: var(--text-soft); stroke-width: 1; }
+.st-dates { grid-column: 2; display: flex; justify-content: space-between; font-size: var(--fs-label); color: var(--muted); margin-top: 2px; }
+.st-lecture { grid-column: 2; min-height: var(--lh-small); margin-top: 4px; }
+.st-details { margin-top: 8px; }
+.st-details summary { cursor: pointer; min-height: var(--tap); display: flex; align-items: center; gap: 6px; color: var(--link); }
+.st-details summary::before { content: '▸'; }
+.st-details[open] summary::before { content: '▾'; }
+.st-table { width: 100%; border-collapse: collapse; font-size: var(--fs-small); }
+.st-table th, .st-table td { padding: 5px 6px; text-align: right; border-bottom: 1px solid var(--line-soft); }
+.st-table tr > :first-child { text-align: left; }
+.st-legende { display: flex; flex-wrap: wrap; gap: var(--s-4); }
+.st-legende i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+.st-win { background: var(--win); }
+.st-draw { background: var(--draw); }
+.st-loss { background: var(--loss); }
+.page .st .st-res li { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 170px; gap: var(--s-3); align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line-soft); }
+.st-barre { display: flex; gap: 2px; height: 10px; }
+.st-barre span { border-radius: 2px; }
+.st-chiffres { white-space: nowrap; }
+.page .st .st-phases li { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 4px var(--s-3); align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.st-phases .st-jauge { height: 10px; background: var(--bg); border-radius: 4px; }
+.st-phases .st-jauge span { display: block; height: 100%; background: var(--accent); border-radius: 0 4px 4px 0; }
+.st-phases .st-chiffres, .st-phases li > .small { grid-column: 2; white-space: normal; }
+@media (max-width: 760px) {
+  .page .st .st-res li { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .st-filtres .segctl, .st-filtres label, .st-filtres select { flex: 1 1 100%; width: 100%; }
+  .st-couv .btn { width: 100%; }
+  .st-filtres .segctl .chip { min-height: var(--tap); }
+  .st-fig { grid-template-columns: 40px minmax(0, 1fr); column-gap: 6px; }
+  .page .st .st-phases li { grid-template-columns: minmax(0, 1fr); }
+  .st-phases .st-chiffres, .st-phases li > .small { grid-column: 1; }
+  .st-table th, .st-table td { padding: 5px 3px; }
+}

@@ -22,9 +22,10 @@ import * as strategy from './modules/strategy.js';
 import * as endgames from './modules/endgames.js';
 import * as endgamePuzzles from './modules/endgames-puzzles.js';
 import * as revision from './modules/revision.js';
+import * as stats from './modules/stats.js';
 import { oublierSiAilleurs } from './core/puzzle-reprise.js';
 
-const VIEWS = ['accueil', 'home', 'game', 'play', 'free', 'setup', 'studies', 'study', 'openings', 'rep', 'train', 'model', 'puzzles', 'puzzle', 'puzzletheme', 'puzzlerec', 'strategy', 'endgames', 'endgame', 'endgamepz', 'revision', 'exercice', 'settings'];
+const VIEWS = ['accueil', 'home', 'game', 'play', 'free', 'setup', 'studies', 'study', 'openings', 'rep', 'train', 'model', 'puzzles', 'puzzle', 'puzzletheme', 'puzzlerec', 'strategy', 'endgames', 'endgame', 'endgamepz', 'revision', 'exercice', 'stats', 'settings'];
 const MODULES = []; // modules pas encore livrés
 
 export function showView(v, tab = v === 'home' || v === 'game' ? 'games' : v === 'setup' ? 'free' : v) {
@@ -40,7 +41,8 @@ function route() {
   oublierSiAilleurs(h);
   const m = /^#\/game\/(.+)$/.exec(h);
   if (!m) analyse.leave();
-  if (/^#\/(game|games|play|free|study|openings|puzzles|strategy|endgames|revision|settings)(\/|$)/.test(h)) accueil.leave();
+  if (/^#\/(game|games|play|free|study|openings|puzzles|strategy|endgames|revision|stats|settings)(\/|$)/.test(h)) accueil.leave();
+  if (h !== '#/stats') stats.leave();
   if (h !== '#/revision') revision.leave();
   if (h !== '#/revision/seance') revision.leaveSeance();
   if (!/^#\/study\/./.test(h)) study.leave();
@@ -98,6 +100,7 @@ function route() {
     if (sub === 'seance') { showView('exercice', 'revision'); revision.seance($('#exercice-view')); return; }
     showView('revision'); revision.show($('#revision-view')); return;
   }
+  if (name === 'stats') { showView('stats'); stats.show($('#stats-view')); return; }
   if (MODULES.includes(name)) { showView(name); soon($(`#${name}-view`), name); return; }
   if (name === 'settings') { showView('settings'); settings.render($('#settings-view'), sub); return; }
   if (name === 'games') { showView('home'); analyse.showHome(); return; }
