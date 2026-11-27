@@ -534,7 +534,7 @@ function movesOf(game) {
   try {
     const c = new Chess();
     c.loadPgn(game.pgn);
-    out = c.history({ verbose: true }).slice(0, 60).map((m) => ({ before: epd(m.before), uci: m.from + m.to + (m.promotion || '') }));
+    out = c.history({ verbose: true }).slice(0, 60).map((m) => ({ before: epd(m.before), uci: m.from + m.to + (m.promotion || ''), san: m.san }));
   } catch { out = []; }
   parsed.set(game.id, out);
   return out;
@@ -575,6 +575,58 @@ async function doScan(games, user, now) {
     }
   }
   return added;
+}
+
+// ------------------------------------------------------------------ explorateur « Mes parties »
+// Index de vos propres parties, toutes dates confondues, avec la couleur demandée : pour chaque
+// position (EPD, transpositions comprises), le nombre de parties qui y passent et leur résultat de
+// votre point de vue, et les coups joués depuis cette position. sets : [{ games, user }].
+// Renvoie Map EPD → { w, d, l, moves: Map uci → { uci, san, w, d, l } }.
+export function myGamesIndex(sets, color) {
+  const out = new Map();
+  const done = new Set();
+  for (const { games, user } of sets) {
+    if (!games) continue;
+    for (const g of games) {
+      if (!g || done.has(g.id) || !g.pgn) continue;
+      if (couleurJoueur(g, user) !== color) continue;
+      const s = gameScore(g, color);
+      if (s == null) continue;
+      const moves = movesOf(g);
+      if (!moves.length) continue;
+      done.add(g.id);
+      const k = s === 1 ? 'w' : s === 0 ? 'l' : 'd';
+      const seen = new Set();
+      for (const m of moves) {
+        if (seen.has(m.before)) continue; // position revue dans la même partie : comptée une fois
+        seen.add(m.before);
+        let st = out.get(m.before);
+        if (!st) { st = { w: 0, d: 0, l: 0, moves: new Map() }; out.set(m.before, st); }
+        st[k]++;
+        let mv = st.moves.get(m.uci);
+        if (!mv) { mv = { uci: m.uci, san: m.san, w: 0, d: 0, l: 0 }; st.moves.set(m.uci, mv); }
+        mv[k]++;
+      }
+    }
+  }
+  return out;
+}
+
+// Coups d'une position de l'index, du plus joué au moins joué : { w, d, l, moves: [{ uci, san, w, d, l }] }.
+// w, d, l comptent toutes les parties passées par la position (même celles qui s'y arrêtent).
+export function myGamesAt(index, pos) {
+  const st = index.get(pos);
+  if (!st) return { w: 0, d: 0, l: 0, moves: [] };
+  const n = (m) => m.w + m.d + m.l;
+  return { w: st.w, d: st.d, l: st.l, moves: [...st.moves.values()].sort((a, b) => n(b) - n(a) || a.san.localeCompare(b.san)) };
+}
+
+// Filtre « Occurrence » de l'explorateur : garde les coups joués dans au moins `min` (0 à 1) des
+// parties de la position. min = 0 : tous les coups.
+export const OCCURRENCES = [0, 0.3, 0.2, 0.1, 0.05, 0.01];
+export function filterOccurrence(moves, total, min, count = (m) => m.white + m.draws + m.black) {
+  if (!min || !total) return moves;
+  return moves.filter((m) => count(m) / total >= min);
 }
 
 // ------------------------------------------------------------------ performance par position

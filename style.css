@@ -528,6 +528,9 @@ a.btn { text-decoration: none; }
 .wdb .w { background: var(--explorer-white); color: #333; }
 .wdb .d { background: var(--explorer-draw); color: var(--text-strong); }
 .wdb .b { background: var(--explorer-black); color: var(--text); }
+.wdb .win { background: var(--ok-text); color: #fff; }
+.wdb .loss { background: var(--loss); color: #fff; }
+.exp-table .ehid td { color: var(--text-muted); font-size: 12px; font-style: italic; padding: 6px 8px; cursor: default; }
 .chk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
 .chk-grid label { display: flex; gap: 6px; align-items: center; font-size: 14px; cursor: pointer; }
 @media (max-width: 760px) {
@@ -1365,8 +1368,8 @@ input.sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 #rep-panel .oblock #exp-gear svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 @media (hover: hover) { #rep-panel .oblock #exp-gear:hover { color: var(--text); background: var(--hover); } }
 #rep-view .exp-head { gap: 8px; padding: 10px 12px; border-bottom: 0; flex-wrap: wrap; }
-#rep-view .exp-tabs { flex: 1 1 260px; min-width: 260px; background: var(--bg); border-radius: var(--r); padding: 3px; gap: 3px; }
-#rep-view .exp-tabs button { flex: 1; height: 34px; min-height: 34px; padding: 0 8px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text-soft); font-size: 13px; font-weight: 600; }
+#rep-view .exp-tabs { flex: 1 1 340px; min-width: 0; background: var(--bg); border-radius: var(--r); padding: 3px; gap: 3px; }
+#rep-view .exp-tabs button { flex: 1; height: 34px; min-height: 34px; padding: 0 8px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text-soft); font-size: 13px; font-weight: 600; white-space: nowrap; }
 #rep-view .exp-tabs button.on { background: var(--surface-1); color: var(--text-strong); font-weight: 700; }
 #rep-view .exp-sum { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
 @media (max-width: 760px) { #rep-view .exp-tabs button { min-height: 44px; height: 44px; } #rep-panel .oblock #exp-gear { min-height: 44px; width: 44px; height: 44px; top: 6px; right: 6px; } }

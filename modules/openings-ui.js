@@ -16,6 +16,7 @@ import {
   listEvents, computeMastery, masterySummary, scanGames, STATUS, EVT, REP, WINDOW_DAYS, MIN_SITUATIONS, THRESHOLD,
   computeCards, cardsSummary, NEW_PER_DAY,
   findSuggestions, applySuggestion, pathTo, SUGGEST_MIN, importPgn, computePerformance, openingResults,
+  myGamesIndex, myGamesAt, filterOccurrence, OCCURRENCES,
 } from './openings.js';
 import { Chess } from '../vendor/chess.js';
 import { coverageOf, cachedCoverage, covN, THRESHOLDS, pct, coverageKey } from './openings-coverage.js';
@@ -33,6 +34,9 @@ const RATINGS = [0, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500];
 const covPct = (n) => `${(100 / n).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} %`;
 const SPEEDS = [['ultraBullet', 'UltraBullet'], ['bullet', 'Bullet'], ['blitz', 'Blitz'], ['rapid', 'Rapide'], ['classical', 'Classique'], ['correspondence', 'Correspondance']];
 const LONG_PRESS = 2000;
+// Filtre « Occurrence » de l'explorateur (Masters, Lichess, Mes parties) : seuil de 0 à 1, 0 = tous les coups.
+const occLabel = (o) => `${Math.round(o * 100)} %`;
+const expOcc = () => { const v = Number(local.get('expOcc', '0')); return OCCURRENCES.includes(v) ? v : 0; };
 
 // État de l'éditeur : path = ligne suivie (arêtes depuis la racine), k = nombre de coups affichés.
 const E = { rep: null, path: [], k: 0, board: null, db: local.get('expDb', 'masters'), nodes: [], expSeq: 0, events: [], reps: [], mastery: new Map(), eng: null, engPending: null, engTimer: null };
@@ -609,7 +613,7 @@ function buildEditor(el) {
     <div id="rp-note" role="tabpanel" aria-labelledby="rt-note" class="tabpane hidden"><div id="rep-note"></div></div>
     <div id="rp-exp" role="tabpanel" aria-labelledby="rt-exp" class="tabpane exp">
       <div class="exp-head">
-        <div class="exp-tabs" role="radiogroup" aria-label="Source"><button type="button" role="radio" aria-checked="false" data-db="masters">Masters</button><button type="button" role="radio" aria-checked="false" data-db="lichess">Lichess</button><button type="button" role="radio" aria-checked="false" data-db="stockfish">Stockfish</button></div>
+        <div class="exp-tabs" role="radiogroup" aria-label="Source"><button type="button" role="radio" aria-checked="false" data-db="masters">Masters</button><button type="button" role="radio" aria-checked="false" data-db="lichess">Lichess</button><button type="button" role="radio" aria-checked="false" data-db="mine">Mes parties</button><button type="button" role="radio" aria-checked="false" data-db="stockfish">Stockfish</button></div>
         <span class="exp-sum" id="exp-sum"></span>
       </div>
       <div id="exp-body"></div>
@@ -624,16 +628,18 @@ function buildEditor(el) {
   <dialog id="exp-dlg" class="dlg"><form method="dialog">
     <div class="dlg-head"><button value="cancel" class="hb hb-x" aria-label="Fermer sans enregistrer">✕</button><h2>Réglages de l’éditeur</h2><button value="ok" class="hb hb-ok">OK</button></div>
     <div class="dtabs" role="tablist" aria-label="Réglages">
-      <button type="button" role="tab" data-pane="lichess" class="on" aria-selected="true">Lichess</button>
+      <button type="button" role="tab" data-pane="lichess" class="on" aria-selected="true">Explorateur</button>
       <button type="button" role="tab" data-pane="ui" aria-selected="false" tabindex="-1">Interface</button>
       <button type="button" role="tab" data-pane="eng" aria-selected="false" tabindex="-1">Moteur</button>
     </div>
     <div data-epane="lichess">
+      <fieldset id="exp-occ"><legend>Occurrence</legend><div class="pills">${OCCURRENCES.map((o) => `<label class="pill"><input type="radio" name="exp-occ" value="${o}"><span title="${o ? `Masquer les coups joués dans moins de ${occLabel(o)} des parties` : 'Afficher tous les coups'}">${o ? occLabel(o) : 'Tous'}</span></label>`).join('')}</div></fieldset>
+      <p class="muted small">Masque les coups joués dans moins de ce pourcentage des parties de la position. Vaut pour Masters, Lichess et Mes parties.</p>
       <fieldset id="exp-ratings"><legend>Niveau des joueurs</legend><div class="pills">${RATINGS.map((r) => `<label class="pill"><input type="checkbox" value="${r}"><span title="${r === 0 ? 'moins de 1000' : r === 2500 ? '2500 et plus' : `${r} à ${RATINGS[RATINGS.indexOf(r) + 1] - 1}`}">${r === 0 ? 400 : r}</span></label>`).join('')}</div></fieldset>
       <fieldset id="exp-speeds"><legend>Cadences</legend><div class="pills">${SPEEDS.map(([k, l]) => `<label class="pill"><input type="checkbox" value="${k}"><span>${l}</span></label>`).join('')}</div></fieldset>
       <label class="setrow"><span class="st"><span class="t">Seuil d’un « trou »</span><span class="d" id="rep-cov-d"></span></span><span class="chev" aria-hidden="true">›</span>
         <select id="rep-cov" aria-label="Seuil d’un trou : positions vues dans au moins">${THRESHOLDS.map((n) => `<option value="${n}">${covPct(n)} des parties (1 sur ${n})</option>`).join('')}</select></label>
-      <p class="muted small">Ces filtres ne concernent que l'onglet « Lichess ». La base Masters regroupe les parties de joueurs titrés et de plus de 2200 Elo.</p>
+      <p class="muted small">Niveau et cadences ne concernent que l'onglet « Lichess ». La base Masters regroupe les parties de joueurs titrés et de plus de 2200 Elo.</p>
     </div>
     <div data-epane="ui" class="hidden">
       <div class="frow"><label for="rep-arrow">Meilleur coup (flèche verte)</label><select id="rep-arrow"><option value="1">Activé</option><option value="0">Désactivé</option></select></div>
@@ -753,6 +759,7 @@ function buildEditor(el) {
     const rs = expRatings(), ss = expSpeeds();
     dlg.querySelectorAll('#exp-ratings input').forEach((i) => { i.checked = rs.includes(+i.value); });
     dlg.querySelectorAll('#exp-speeds input').forEach((i) => { i.checked = ss.includes(i.value); });
+    dlg.querySelectorAll('#exp-occ input').forEach((i) => { i.checked = +i.value === expOcc(); });
     $('#rep-arrow', el).value = repOn('repArrow') ? '1' : '0';
     $('#rep-bar', el).value = repOn('repBar') ? '1' : '0';
     $('#rep-cov', el).value = String(covN());
@@ -767,12 +774,16 @@ function buildEditor(el) {
     if (!e.submitter || e.submitter.value !== 'ok') return;
     const rs = [...dlg.querySelectorAll('#exp-ratings input:checked')].map((i) => +i.value);
     const ss = [...dlg.querySelectorAll('#exp-speeds input:checked')].map((i) => i.value);
+    const lichessBefore = JSON.stringify([expRatings(), expSpeeds()]);
     local.set('expRatings', JSON.stringify(rs.length ? rs : RATINGS));
     local.set('expSpeeds', JSON.stringify(ss.length ? ss : SPEEDS.map(([k]) => k)));
+    const occ = dlg.querySelector('#exp-occ input:checked');
+    local.set('expOcc', occ ? occ.value : '0');
     local.set('repArrow', $('#rep-arrow', el).value);
     local.set('repBar', $('#rep-bar', el).value);
     local.set('covThreshold', $('#rep-cov', el).value);
-    if (pane === 'lichess') { E.db = 'lichess'; local.set('expDb', E.db); }
+    // niveau ou cadences modifiés : on montre l'onglet Lichess, le seul qu'ils concernent
+    if (pane === 'lichess' && JSON.stringify([expRatings(), expSpeeds()]) !== lichessBefore) { E.db = 'lichess'; local.set('expDb', E.db); }
     if (engF) { await engF.save(); E.eng = null; E.engPending = null; }
     render();
   };
@@ -1349,6 +1360,7 @@ function barHtml(w, d, b) {
 // Résumé à droite des puces : filtres actifs de la source choisie.
 function expSummary() {
   if (E.db === 'masters') return 'Titrés · 2200+';
+  if (E.db === 'mine') return E.rep ? `avec ${E.rep.color === 'w' ? 'les Blancs' : 'les Noirs'}` : '';
   if (E.db === 'stockfish') { const d = analysisSettings().depth; return d ? `profondeur ${d}` : ''; }
   const rs = expRatings().slice().sort((a, b) => a - b), ss = expSpeeds();
   const lab = (r) => (r === 0 ? 400 : r);
@@ -1356,19 +1368,35 @@ function expSummary() {
   const sp = ss.length >= SPEEDS.length ? 'toutes cadences' : ss.length > 3 ? `${ss.length} cadences` : SPEEDS.filter(([k]) => ss.includes(k)).map(([, l]) => l.toLowerCase()).join(', ');
   return [lv, sp].filter(Boolean).join(' · ');
 }
+const occSummary = () => (expOcc() ? `≥ ${occLabel(expOcc())}` : '');
+
+// Explorateur « Mes parties » : vos parties chess.com et Lichess avec la couleur du répertoire,
+// indexées une fois (recalculées quand le nombre de parties ou la couleur change).
+const MINE = { key: '', index: null };
+function myIndex() {
+  const key = `${E.rep.color}|${getGames().length}|${LI.games.length}|${getPseudoLichess()}|${getUser()}`;
+  if (MINE.key !== key) { MINE.index = myGamesIndex(perfSets(), E.rep.color); MINE.key = key; }
+  return MINE.index;
+}
+// Barre Victoires / Nulles / Défaites (de votre point de vue), même forme que la barre Blancs / Nulle / Noirs.
+function wdlBarHtml(w, d, l) {
+  const t = w + d + l || 1;
+  const seg = (v, c) => { const p = (100 * v) / t; return `<span class="${c}" style="width:${p}%">${p >= 13 ? Math.round(p) + ' %' : ''}</span>`; };
+  return `<span class="wdb wdl" title="Victoires ${Math.round((100 * w) / t)} % · Nulles ${Math.round((100 * d) / t)} % · Défaites ${Math.round((100 * l) / t)} %">${seg(w, 'win')}${seg(d, 'd')}${seg(l, 'loss')}</span>`;
+}
 
 async function renderExplorer() {
   const body = $('#exp-body');
   document.querySelectorAll('.exp-tabs button').forEach((b) => { const on = b.dataset.db === E.db; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
-  $('#exp-sum').textContent = expSummary();
+  $('#exp-sum').textContent = E.db === 'stockfish' ? expSummary() : [expSummary(), occSummary()].filter(Boolean).join(' · ');
   const seq = ++E.expSeq;
   if (E.db === 'stockfish') { renderStockfish(body); return; }
+  if (E.db === 'mine') { renderMine(body); return; }
   if (!lichessCfg.connected) {
     body.innerHTML = '<p class="muted pad">Pour voir les statistiques des bases Masters et Lichess, enregistrez votre jeton Lichess dans <a href="#/settings/connection">Paramètres → Connexion</a>.</p>';
     return;
   }
   const p = curEpd();
-  const turn = p.split(' ')[1];
   // pendant le chargement, l'ancien tableau reste affiché mais grisé (pas de saut de mise en page)
   if (!body.querySelector('table')) body.innerHTML = '<p class="muted pad">Chargement…</p>';
   else body.classList.add('loading');
@@ -1386,19 +1414,46 @@ async function renderExplorer() {
   if (seq !== E.expSeq) return;
   body.classList.remove('loading');
   if (E.k && j.opening && j.opening.name && !openingName()) $('#rep-opening').textContent = openingHead(j.opening);
-  const total = j.white + j.draws + j.black;
   if (!j.moves.length) { body.innerHTML = '<p class="muted pad">Aucune partie de cette base n\'atteint cette position.</p>'; return; }
+  expTable(body, p, j, barHtml);
+}
+
+// Tableau commun aux explorateurs Masters, Lichess et Mes parties.
+// j : { white, draws, black, moves: [{ uci, san, white, draws, black }] } (pour Mes parties :
+// white = victoires, draws = nulles, black = défaites) ; bar(a, b, c) dessine la barre de résultats.
+function expTable(body, p, j, bar) {
+  const turn = p.split(' ')[1];
+  const total = j.white + j.draws + j.black;
+  const occ = expOcc();
+  const shown = filterOccurrence(j.moves, total, occ);
+  const hidden = j.moves.length - shown.length;
   const mine = new Set(childrenOf(E.rep, p).map((e) => e.uci));
-  const rows = j.moves.map((m) => {
+  const rows = shown.map((m) => {
     const n = m.white + m.draws + m.black;
     const inRep = mine.has(m.uci);
     return `<tr data-uci="${esc(m.uci)}" class="${inRep ? 'inrep' : ''}" title="${inRep ? 'Déjà dans le répertoire' : 'Cliquer pour ajouter ce coup au répertoire'}">
       <td class="emv">${figSan(m.san, turn)}${inRep ? '<span class="inrep-dot" aria-label="dans le répertoire">●</span>' : ''}</td>
-      <td class="epct">${Math.round((100 * n) / total)} %</td><td class="en">${fmtN(n)}</td><td class="ebar">${barHtml(m.white, m.draws, m.black)}</td></tr>`;
+      <td class="epct">${Math.round((100 * n) / total)} %</td><td class="en">${fmtN(n)}</td><td class="ebar">${bar(m.white, m.draws, m.black)}</td></tr>`;
   }).join('');
-  body.innerHTML = `<table class="exp-table"><tbody>${rows}
-    <tr class="etot"><td class="emv">Σ</td><td class="epct">100 %</td><td class="en">${fmtN(total)}</td><td class="ebar">${barHtml(j.white, j.draws, j.black)}</td></tr></tbody></table>`;
+  const more = hidden ? `<tr class="ehid"><td colspan="4">${plural(hidden, 'coup')} masqué${hidden > 1 ? 's' : ''} (joué${hidden > 1 ? 's' : ''} dans moins de ${occLabel(occ)} des parties)</td></tr>` : '';
+  body.innerHTML = `<table class="exp-table"><tbody>${rows}${more}
+    <tr class="etot"><td class="emv">Σ</td><td class="epct">100 %</td><td class="en">${fmtN(total)}</td><td class="ebar">${bar(j.white, j.draws, j.black)}</td></tr></tbody></table>`;
   body.querySelectorAll('tr[data-uci]').forEach((tr) => { tr.onclick = () => playMove(tr.dataset.uci); });
+}
+
+function renderMine(body) {
+  body.classList.remove('loading');
+  if (!aUnPseudo(getUser()) && !lichessCfg.user) {
+    body.innerHTML = '<p class="muted pad">Pour voir vos propres parties, renseignez votre pseudo chess.com ou Lichess dans <a href="#/settings/profile">Paramètres → Profil</a>.</p>';
+    return;
+  }
+  const p = curEpd();
+  const s = myGamesAt(myIndex(), p);
+  const side = E.rep.color === 'w' ? 'les Blancs' : 'les Noirs';
+  if (!(s.w + s.d + s.l)) { body.innerHTML = `<p class="muted pad">Aucune de vos parties avec ${side} n'atteint cette position.</p>`; return; }
+  const j = { white: s.w, draws: s.d, black: s.l, moves: s.moves.map((m) => ({ uci: m.uci, san: m.san, white: m.w, draws: m.d, black: m.l })) };
+  if (!j.moves.length) { body.innerHTML = `<p class="muted pad">Vos parties avec ${side} s'arrêtent à cette position (${plural(s.w + s.d + s.l, 'partie')}).</p>`; return; }
+  expTable(body, p, j, wdlBarHtml);
 }
 
 // ------------------------------------------------------------------ rendu
