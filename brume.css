@@ -29,7 +29,11 @@ html, body { font: var(--fs-body)/1.45 var(--font); -webkit-font-smoothing: anti
 /* ---- Barre latérale : pastilles, entrée active à l'encre ------------ */
 #sidebar { background: var(--sidebar); border-right: 1px solid var(--border); padding: 22px 0 16px; }
 #sidebar .brand { padding: 0 26px 22px; }
-.brand { font-family: var(--font-serif); font-weight: 400; font-size: 25px; letter-spacing: 0; color: var(--text-strong); }
+.brand { gap: 10px; font-family: var(--font-serif); font-weight: 400; font-size: 25px; letter-spacing: 0; color: var(--text-strong); }
+/* logo : cavalier à l'encre (glyphe en présentation texte) + nom en serif */
+.brand .kn { font-style: normal; font-family: "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols 2", "DejaVu Sans", serif; font-size: 26px; line-height: 1; color: var(--ink); }
+#topbar .brand { font-size: 21px; }
+#topbar .brand .kn { font-size: 22px; }
 #sidebar nav { padding: 0 14px; gap: 2px; }
 #sidebar nav a { min-height: var(--tap); padding: 0 14px; border-radius: var(--r-pill); color: var(--text); font-weight: 500; font-size: 14.5px; }
 #sidebar nav a svg { color: currentColor; }
