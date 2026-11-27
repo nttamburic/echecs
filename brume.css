@@ -202,3 +202,19 @@ input.sw:checked { background: var(--ink); }
 .board-picks button { border-radius: var(--r); background: var(--surface-1); }
 .board-picks button[aria-checked="true"] { border-color: var(--ink); background: var(--surface-2); }
 .board-picks .mini { border-radius: var(--r-sm); }
+
+/* ---- Corrections issues du test Playwright --------------------------- */
+/* La marge haute des pages ne traverse plus #content (sinon 28 px de défilement inutile). */
+#content { display: flow-root; }
+/* Boutons d'action : pastilles plates, sans le relief vert hérité de l'ancien thème. */
+.btn.big, .btn.big:active:not(:disabled), #play-start, #next-wrap .btn.big, .hist-head .btn.primary, .op-head .btn.primary,
+.train-mode.due-mode .btn.primary, .soon-cta .btn, #setup-ok, #train-panel .tactions .btn.primary, #model-panel .tactions .btn.primary,
+.dlg .row.end .btn.primary, .pstatus .result .btn.big { box-shadow: none; }
+/* Cibles tactiles ≥ 44 px pour les segments et onglets. */
+.segctl .chip, .ptabs button { min-height: var(--tap); }
+@media (max-width: 760px) {
+  .page { padding: 0 16px; }
+  .hist-filters.card { background: transparent; padding: 0; box-shadow: none; border-radius: 0; }
+}
+/* Mobile : la barre du haut est dans le flux, la page tient donc dans l'écran sans défiler. */
+@media (max-width: 760px) { #content { min-height: calc(100vh - var(--topbar) - env(safe-area-inset-top)); } }
