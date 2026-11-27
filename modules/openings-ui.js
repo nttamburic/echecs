@@ -580,6 +580,7 @@ function buildEditor(el) {
       <button id="rep-play" class="btn small" title="Jouer une partie contre Maia à partir de la position affichée, avec la couleur du répertoire">♟ Jouer contre Maia d'ici</button>
       <a id="rep-model" class="btn small" title="Rejouer une partie de maître qui passe par cette ligne, en devinant vos coups">📖 Parties modèles</a>
       <span class="muted small">Clic droit sur un coup (appui long de 2 s sur téléphone) pour le désactiver ou le supprimer. Votre note sur le coup affiché : sous la liste des coups.</span></div>
+    <section id="rep-under" class="card rep-under hidden" aria-label="Explorateur d'ouvertures"></section>
   </div>
   <div id="rep-resize" class="resizer" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Largeur du panneau" aria-valuemin="420" aria-valuemax="720" title="Glisser pour redimensionner le panneau"></div>
   <aside class="panel" id="rep-panel" aria-label="Répertoire">
@@ -647,7 +648,7 @@ function buildEditor(el) {
   $('#rep-flip', el).onclick = () => { E.board.flip(); render(); };
   $('#rep-suggest', el).onclick = (e) => {
     if (!e.target.closest('.sg-go')) return;
-    const t = $('#rt-exp', el); if (t) { t.click(); t.scrollIntoView({ block: 'nearest' }); t.focus(); }
+    E.showExplorer?.();
   };
   $('#rep-play', el).onclick = () => {
     if (!E.rep) return;
@@ -659,22 +660,52 @@ function buildEditor(el) {
   $('#rep-next', el).onclick = () => forward();
   $('#rep-last', el).onclick = () => { while (forward(false)); render(); };
   // onglets Explorateur / Couverture / Note
-  const rtabs = [...el.querySelectorAll('[data-rt]')];
-  const selRt = (k, focus) => rtabs.forEach((t) => {
-    const on = t.dataset.rt === k;
-    t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1;
-    $('#' + t.getAttribute('aria-controls'), el).classList.toggle('hidden', !on);
-    if (on && focus) t.focus();
-  });
-  rtabs.forEach((t, i) => {
+  // Sur grand écran (≥ 1280 px), l'explorateur quitte les onglets et se place sous l'échiquier.
+  const allTabs = [...el.querySelectorAll('[data-rt]')];
+  const expPane = $('#rp-exp', el), under = $('#rep-under', el), navbar = $('#rep-panel .navbar', el);
+  let docked = false;
+  const tabs = () => allTabs.filter((t) => !(docked && t.dataset.rt === 'exp'));
+  const selRt = (k, focus) => {
+    const list = tabs();
+    if (!list.some((t) => t.dataset.rt === k)) k = list[0].dataset.rt;
+    list.forEach((t) => {
+      const on = t.dataset.rt === k;
+      t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1;
+      $('#' + t.getAttribute('aria-controls'), el).classList.toggle('hidden', !on);
+      if (on && focus) t.focus();
+    });
+  };
+  allTabs.forEach((t) => {
     t.onclick = () => { selRt(t.dataset.rt); local.set('repTab', t.dataset.rt); };
     t.onkeydown = (e) => {
+      const list = tabs(), i = list.indexOf(t);
       const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
-      if (d) { e.preventDefault(); const n = rtabs[(i + d + rtabs.length) % rtabs.length]; selRt(n.dataset.rt, true); local.set('repTab', n.dataset.rt); }
-      else if (e.key === 'Home') { e.preventDefault(); selRt('exp', true); } else if (e.key === 'End') { e.preventDefault(); selRt('note', true); }
+      if (d) { e.preventDefault(); const n = list[(i + d + list.length) % list.length]; selRt(n.dataset.rt, true); local.set('repTab', n.dataset.rt); }
+      else if (e.key === 'Home') { e.preventDefault(); selRt(list[0].dataset.rt, true); } else if (e.key === 'End') { e.preventDefault(); selRt('note', true); }
     };
   });
-  selRt(['exp', 'cov', 'note'].includes(local.get('repTab')) ? local.get('repTab') : 'exp');
+  const savedTab = () => (['exp', 'cov', 'note'].includes(local.get('repTab')) ? local.get('repTab') : 'exp');
+  const wide = matchMedia('(min-width: 1280px)');
+  const placeExplorer = () => {
+    docked = wide.matches;
+    const tab = $('#rt-exp', el);
+    tab.classList.toggle('hidden', docked);
+    if (docked) {
+      tab.setAttribute('aria-selected', 'false'); tab.tabIndex = -1;
+      under.append(expPane); expPane.classList.remove('hidden');
+      expPane.removeAttribute('role'); expPane.removeAttribute('aria-labelledby');
+    } else {
+      navbar.before(expPane); expPane.setAttribute('role', 'tabpanel'); expPane.setAttribute('aria-labelledby', 'rt-exp');
+    }
+    under.classList.toggle('hidden', !docked);
+    selRt(savedTab());
+  };
+  wide.addEventListener('change', placeExplorer);
+  placeExplorer();
+  E.showExplorer = () => {
+    if (docked) { under.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); $('.exp-tabs button.on', under)?.focus(); return; }
+    const t = $('#rt-exp', el); t.click(); t.scrollIntoView({ block: 'nearest' }); t.focus();
+  };
   // largeur du panneau : 420–720 px (grand écran), glisser ou flèches
   const rz = $('#rep-resize', el);
   const setW = (w) => { w = Math.max(420, Math.min(720, Math.round(w))); el.style.setProperty('--panel-w', w + 'px'); rz.setAttribute('aria-valuenow', w); local.set('repPanelW', w); };
@@ -841,7 +872,7 @@ function moveMenu(n) {
     else if (v === 'add') {
       // se place après ce coup et invite à jouer le coup à ajouter (échiquier ou explorateur)
       E.path = [...line]; E.k = line.length; E.addHere = curEpd(); render();
-      const tab = $('#rt-exp'); if (tab) tab.click();
+      if (!matchMedia('(min-width: 1280px)').matches) $('#rt-exp')?.click(); // grand écran : explorateur déjà sous l'échiquier
       window.scrollTo({ top: 0 });
     }
     else if (v === 'delete') await deleteNode(n);

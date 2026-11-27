@@ -25,7 +25,7 @@ export function applyBoardPrefs() {
   let theme = '', coords = '1';
   try { theme = localStorage.getItem('cj-board') || ''; coords = localStorage.getItem('cj-coords') || '1'; } catch { /* stockage indisponible */ }
   const h = document.documentElement;
-  if (theme && theme !== 'tournoi') h.dataset.board = theme; else delete h.dataset.board;
+  if (theme && theme !== 'brume') h.dataset.board = theme; else delete h.dataset.board;
   h.classList.toggle('no-coords', coords === '0');
 }
 

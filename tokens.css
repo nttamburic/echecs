@@ -1,5 +1,5 @@
 /* =====================================================================
-   Chess Journey — tokens.css (refonte v1, thème sombre unique)
+   Chess Journey — tokens.css (refonte Brume, thème clair)
    À charger AVANT style.css dans index.html.
    - Les noms déjà utilisés par style.css (--bg, --panel, --panel2, --muted,
      --warn, --side-bg…) sont conservés : ils pointent vers les nouvelles
@@ -11,138 +11,156 @@
    ===================================================================== */
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
   /* ---- Surfaces ---------------------------------------------------- */
-  --bg:          #262421;   /* fond de page */
-  --sidebar:     #1f1e1c;   /* barre latérale, rail, barre du haut mobile */
-  --surface-1:   #302e2b;   /* cartes, panneaux */
-  --surface-2:   #3a3835;   /* champs, boutons secondaires, survol de carte */
-  --surface-3:   #4a4743;   /* survol de bouton secondaire */
-  --hover:       #2a2926;   /* survol de ligne sur --bg */
-  --active:      #34322f;   /* entrée de navigation active */
-  --cur:         #4b4847;   /* coup courant dans la liste */
-  --border:      #454340;
-  --line:        #34322f;   /* séparateurs de lignes */
-  --line-soft:   #2c2a27;
-  --overlay:     rgba(0, 0, 0, .7);   /* voile des modales et tiroirs */
+  --bg:          #EEF1F4;   /* fond de page (brume) */
+  --sidebar:     #F6F8FA;   /* barre latérale, rail, barre du haut mobile */
+  --surface-1:   #FFFFFF;   /* cartes, panneaux */
+  --surface-2:   #F6F8FA;   /* champs, boutons secondaires, survol de carte */
+  --surface-3:   #E3E8EE;   /* survol de bouton secondaire, piste des segments */
+  --hover:       #E3E8EE;   /* survol de ligne */
+  --active:      #E3E8EE;   /* entrée de navigation secondaire active */
+  --cur:         #DCE6F3;   /* coup courant dans la liste */
+  --border:      #DCE1E7;
+  --border-strong: #C5CDD7;
+  --line:        #E3E8EE;   /* séparateurs de lignes */
+  --line-soft:   #EEF1F4;
+  --overlay:     rgba(27, 36, 51, .45);   /* voile des modales et tiroirs */
+  --ink:         #1B2433;   /* encre : bouton plein sombre, entrée active */
+  --on-ink:      #FFFFFF;
+  --bubble:      #F6F8FA;   /* bulle du coach */
 
   /* ---- Texte ------------------------------------------------------- */
-  --text:        #e8e6e1;
-  --text-strong: #ffffff;
-  --text-soft:   #c9c6c1;   /* navigation non active */
-  --text-muted:  #a6a39d;   /* 6,2:1 sur --bg, 5,5:1 sur --surface-1 (était #9b9893) */
-  --text-zero:   #9a968f;   /* compteurs à zéro, tirets « — » dans les tableaux */
+  --text:        #1B2433;
+  --text-strong: #1B2433;
+  --text-soft:   #3A4556;   /* navigation non active */
+  --text-muted:  #5B6676;   /* 5,9:1 sur blanc, 5,2:1 sur --bg */
+  --text-zero:   #6B7585;   /* compteurs à zéro, tirets « — » */
 
   /* ---- Accent et états --------------------------------------------- */
-  --accent:        #81b64c;
-  --accent-hover:  #95c95f;
-  --accent-press:  #5d8a32;   /* ombre portée du gros bouton « Suivant » */
-  --on-accent:     #14200a;   /* texte sur bouton vert */
-  --link:          #8fc3ff;
-  --link-hover:    #b9daff;
-  --focus:         #8fc3ff;   /* anneau 2 px, décalé de 2 px */
-  --danger:        #fa412d;   /* fonds, points, pastille Gaffe */
-  --danger-text:   #ff7f6e;   /* texte rouge sur fond sombre (était #ff8a80 / #ff6a58) */
-  --danger-bg:     #4a2a26;   /* survol du bouton danger secondaire */
-  --warning:       #f7c045;
-  --on-warning:    #241a02;
+  --cta:           #C8452C;   /* bouton d'action principal (terre cuite) */
+  --cta-hover:     #B23A22;
+  --on-cta:        #FFFFFF;
+  --accent:        #1F6F5C;   /* positif : réussite, maîtrise, coche */
+  --accent-hover:  #14503F;
+  --accent-press:  #14503F;
+  --on-accent:     #FFFFFF;
+  --link:          #B23A22;
+  --link-hover:    #8F2B16;
+  --on-link:       #FFFFFF;
+  --focus:         #3466A3;   /* anneau 2 px, décalé de 2 px */
+  --danger:        #B23A22;
+  --danger-text:   #B23A22;
+  --danger-bg:     #FBE3DC;
+  --danger-border: #E9B8AC;
+  --warning:       #E0A43A;
+  --on-warning:    #2A1D02;
+
+  /* Bandeaux teintés (texte AA sur leur fond) */
+  --ok-bg:   #DDEDE7;  --ok-bg-hover:  #CBE3DA;  --ok-text:   #14503F;
+  --bad-bg:  #FBE3DC;  --bad-bg-hover: #F6D0C4;  --bad-text:  #8F2B16;
+  --warn-bg: #F6E7C4;  --warn-text: #6B4A08;
+  --info-bg: #E7EEF7;  --info-bg-strong: #DCE6F3;  --info-text: #244E80;
+  --opening: #7A5A35;   /* nom de l'ouverture */
 
   /* Résultats de partie */
-  --win:  #81b64c;
-  --draw: #a6a39d;
-  --loss: #ff7f6e;
+  --win:  #1F6F5C;
+  --draw: #5B6676;
+  --loss: #B23A22;
 
   /* Explorateur d'ouvertures : barre Blancs / nulle / Noirs */
-  --explorer-white: #ebe9e4;
-  --explorer-draw:  #66635d;
-  --explorer-black: #1f1e1c;
+  --explorer-white: #FFFFFF;
+  --explorer-draw:  #AEB9C8;
+  --explorer-black: #1B2433;
 
-  /* ---- Classes de coups — ordre et clés de CLASSES (analysis.js) ---- */
-  --cls-brillant:    #1baaa6;   /* !!  brilliant  */
-  --cls-tresbon:     #5c8bb0;   /* !   great      */
-  --cls-meilleur:    #81b64c;   /* ★   best       */
-  --cls-excellent:   #96bc4b;   /* ✦   excellent  (remplace l'emoji 👍) */
-  --cls-bon:         #95b776;   /* ✓   good       */
-  --cls-theorie:     #a88865;   /* T   book       (remplace l'emoji 📖) */
-  --cls-imprecision: #f7c631;   /* ?!  inaccuracy */
-  --cls-erreur:      #ffa459;   /* ?   mistake    */
-  --cls-manquee:     #ff7769;   /* ✗   miss       */
-  --cls-gaffe:       #fa412d;   /* ??  blunder    */
-  --cls-on:          #161512;   /* symbole sur la pastille */
-  /* Pastille posée sur l'échiquier : double anneau blanc + sombre,
-     indispensable (Théorie sur Vert tournoi = 1,03:1 sans lui). */
-  --badge-ring: 0 0 0 2px #ffffff, 0 0 0 3.5px rgba(22, 21, 18, .7), 0 2px 4px rgba(0, 0, 0, .4);
+  /* ---- Classes de coups — ordre et clés de CLASSES (analysis.js) ----
+     Teintes Brume : symbole blanc AA sur chaque pastille ; le symbole
+     accompagne toujours la couleur. */
+  --cls-brillant:    #0E7C86;   /* !!  brilliant  */
+  --cls-tresbon:     #3466A3;   /* !   great      */
+  --cls-meilleur:    #1F6F5C;   /* ★   best       */
+  --cls-excellent:   #3F7D4E;   /* ✦   excellent  */
+  --cls-bon:         #5E7A55;   /* ✓   good       */
+  --cls-theorie:     #7A6347;   /* T   book       */
+  --cls-imprecision: #9A6A10;   /* ?!  inaccuracy */
+  --cls-erreur:      #B4501A;   /* ?   mistake    */
+  --cls-manquee:     #A53A5C;   /* ✗   miss       */
+  --cls-gaffe:       #B23A22;   /* ??  blunder    */
+  --cls-on:          #FFFFFF;   /* symbole sur la pastille */
+  --badge-ring: 0 0 0 2px #ffffff, 0 2px 4px rgba(27, 36, 51, .3);
 
   /* ---- Maîtrise (répertoires) -------------------------------------- */
-  --mastery-ok:      #81b64c;   /* ✓ maîtrisé */
-  --mastery-wip:     #f7c045;   /* ◐ en cours */
-  --mastery-ko:      #ff7769;   /* ✗ non maîtrisé */
-  --mastery-new:     #6f6c67;   /* ○ jamais revu (symbole en blanc) */
-  --mastery-off:     #8fc3ff;   /* – non compté */
+  --mastery-ok:      #1F6F5C;   /* ✓ maîtrisé */
+  --mastery-wip:     #9A6A10;   /* ◐ en cours */
+  --mastery-ko:      #B23A22;   /* ✗ non maîtrisé */
+  --mastery-new:     #5B6676;   /* ○ jamais revu */
+  --mastery-off:     #3466A3;   /* – non compté */
 
   /* ---- Échiquier ----------------------------------------------------
-     Thème par défaut : Vert tournoi. Les autres via
-     <html data-board="ardoise|sable|graphite|sauge">.            */
-  --sq-light:      #ebecd0;
-  --sq-dark:       #779556;
-  --sq-last-light: #f5f682;
-  --sq-last-dark:  #b9ca43;
-  --sq-check:      #e5665a;
-  --sq-red-light:  #f2a99f;   /* surlignage clic droit */
-  --sq-red-dark:   #d4705f;
-  --sq-blue-light: #bcd8f5;
-  --sq-blue-dark:  #6f9fc8;
-  --sq-dot:        rgba(0, 0, 0, .2);   /* point de coup légal, anneau de prise */
-  --sq-ring:       rgba(255, 255, 255, .8);
-  --arrow-best:    #81b64c;   /* meilleur coup / coup prévu (remplace #4caf50) */
-  --arrow-threat:  #ffa459;   /* menace */
-  --arrow-alt:     #8fc3ff;   /* variante utilisateur / alternative (remplace #3b82f6) */
-  --eval-white:    #f1f1f1;
-  --eval-black:    #403d39;
+     Thème par défaut : Brume. Les autres via
+     <html data-board="tournoi|ardoise|sable|graphite|sauge">.      */
+  --sq-light:      #F1F3F6;
+  --sq-dark:       #AEB9C8;
+  --sq-last-light: #F9D9CF;
+  --sq-last-dark:  #E3A897;
+  --sq-check:      #E5665A;
+  --sq-red-light:  #F2A99F;   /* surlignage clic droit */
+  --sq-red-dark:   #D4705F;
+  --sq-blue-light: #CFE0F3;
+  --sq-blue-dark:  #7FA3CC;
+  --sq-dot:        rgba(27, 36, 51, .22);   /* point de coup légal, anneau de prise */
+  --sq-ring:       rgba(255, 255, 255, .85);
+  --arrow-best:    #1F6F5C;   /* meilleur coup / coup prévu */
+  --arrow-threat:  #B4501A;   /* menace */
+  --arrow-alt:     #3466A3;   /* variante utilisateur / alternative */
+  --eval-white:    #FFFFFF;
+  --eval-black:    #1B2433;
 
   /* ---- Typographie ------------------------------------------------- */
-  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, Menlo, Consolas, monospace;
-  --fs-display: 28px;  --lh-display: 34px;   /* titre de page bureau */
-  --fs-title:   24px;  --lh-title:   30px;   /* titre de page mobile, gros chiffres */
-  --fs-h2:      18px;  --lh-h2:      24px;
-  --fs-body:    15px;  --lh-body:    22px;
+  --font: "Instrument Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: "Instrument Serif", Georgia, "Times New Roman", serif;   /* titres */
+  --font-mono: "Fragment Mono", ui-monospace, Menlo, Consolas, monospace; /* chiffres, étiquettes */
+  --fs-display: 46px;  --lh-display: 48px;   /* titre de page bureau (serif) */
+  --fs-title:   32px;  --lh-title:   36px;   /* titre de page mobile (serif) */
+  --fs-h2:      24px;  --lh-h2:      28px;   /* titre de carte (serif) */
+  --fs-body:    14.5px; --lh-body:   21px;
   --fs-small:   13px;  --lh-small:   18px;
-  --fs-label:   12px;  --lh-label:   16px;   /* majuscules, +0,04em */
+  --fs-label:   11.5px; --lh-label:  16px;   /* mono, majuscules, +0,1em */
 
   /* ---- Espacements (base 4) ---------------------------------------- */
   --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
   --s-5: 24px; --s-6: 32px; --s-7: 48px;
 
   /* ---- Formes ------------------------------------------------------ */
-  --r-sm: 3px;  --r: 6px;  --r-lg: 8px;  --r-sheet: 14px;
-  --tap: 44px;              /* cible tactile minimale, partout sous 1280 px */
+  --r-sm: 6px;  --r: 12px;  --r-lg: 18px;  --r-sheet: 22px;  --r-pill: 999px;
+  --tap: 44px;              /* cible tactile minimale */
   --icon: 24px; --icon-stroke: 1.8;
-  --shadow-pop:   0 8px 24px rgba(0, 0, 0, .4);
-  --shadow-sheet: 0 -8px 24px rgba(0, 0, 0, .45);
+  --shadow-card:  0 1px 2px rgba(27, 36, 51, .07), 0 10px 28px -16px rgba(27, 36, 51, .18);
+  --shadow-pop:   0 2px 4px rgba(27, 36, 51, .08), 0 18px 40px -14px rgba(27, 36, 51, .35);
+  --shadow-sheet: 0 -8px 24px rgba(27, 36, 51, .18);
 
   /* ---- Mise en page ------------------------------------------------ */
-  --side: 220px;            /* barre latérale ≥ 1280 px */
-  --rail: 72px;             /* rail d'icônes 761–1279 px paysage */
-  --topbar: 52px;           /* barre du haut mobile et tablette portrait */
+  --side: 236px;            /* barre latérale ≥ 1280 px */
+  --rail: 76px;             /* rail d'icônes 761–1279 px paysage */
+  --topbar: 56px;           /* barre du haut mobile et tablette portrait */
   --panel-w: clamp(340px, 30vw, 480px);
   --chrome-v: 112px;        /* 2 barres joueurs + marges (bureau) */
-  --chrome-h: calc(var(--side) + var(--panel-w) + 28px + 64px);  /* nav + panneau + éval. + marges */
+  --chrome-h: calc(var(--side) + var(--panel-w) + 28px + 64px);
   --board: clamp(288px, min(100dvh - var(--chrome-v), 100vw - var(--chrome-h)), 840px);
 
   /* ---- Mouvement --------------------------------------------------- */
-  --dur-fast: 120ms;        /* survols, fondu de prise */
-  --dur-move: 180ms;        /* déplacement d'une pièce */
-  --dur-base: 200ms;        /* toasts, menus */
-  --dur-flash: 300ms;       /* coup illégal */
-  --dur-slow: 320ms;        /* feuilles, tiroir */
+  --dur-fast: 120ms;
+  --dur-move: 180ms;
+  --dur-base: 200ms;
+  --dur-flash: 300ms;
+  --dur-slow: 320ms;
   --ease: cubic-bezier(.2, .8, .2, 1);
 
   /* ---- Empilement -------------------------------------------------- */
   --z-sidebar: 50; --z-sheet: 80; --z-modal: 90; --z-toast: 100;
 
-  /* ---- Alias de compatibilité avec style.css actuel ---------------- */
+  /* ---- Alias de compatibilité avec style.css ----------------------- */
   --panel:   var(--surface-1);
   --panel2:  var(--surface-2);
   --muted:   var(--text-muted);
@@ -153,6 +171,7 @@
 }
 
 /* ---- Thèmes d'échiquier (Paramètres › Interface) ------------------- */
+[data-board="tournoi"]  { --sq-light: #ebecd0; --sq-dark: #779556; --sq-last-light: #f5f682; --sq-last-dark: #b9ca43; }
 [data-board="ardoise"]  { --sq-light: #dee3e6; --sq-dark: #8ca2ad; --sq-last-light: #e4ea9c; --sq-last-dark: #a8b86d; }
 [data-board="sable"]    { --sq-light: #f0d9b5; --sq-dark: #b58863; --sq-last-light: #f3e27a; --sq-last-dark: #cdac4c; }
 [data-board="graphite"] { --sq-light: #d4d6d1; --sq-dark: #7d837b; --sq-last-light: #e6e8a4; --sq-last-dark: #a6ad6f; }

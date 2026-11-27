@@ -27,7 +27,7 @@
 .ac-ligne { position: relative; display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-top: 1px solid var(--border); }
 .ac-num { width: 52px; flex: none; text-align: center; font-size: var(--fs-title); line-height: var(--lh-title); color: var(--text-strong); font-variant-numeric: tabular-nums; }
 .ac-ligne .ac-texte { flex: 1; }
-.ac-action { display: flex; align-items: center; justify-content: center; flex: none; min-width: 124px; min-height: 44px; padding: 0 14px; box-sizing: border-box; border: 0; border-radius: var(--r); background: var(--surface-2); box-shadow: inset 0 0 0 1px #55524d; color: var(--text); font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; }
+.ac-action { display: flex; align-items: center; justify-content: center; flex: none; min-width: 124px; min-height: 44px; padding: 0 14px; box-sizing: border-box; border: 0; border-radius: var(--r); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border-strong); color: var(--text); font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; }
 .ac-action.primaire { background: var(--accent); box-shadow: 0 3px 0 var(--accent-press); color: var(--on-accent); }
 @media (hover: hover) {
   .ac-action:hover { background: var(--surface-3); color: var(--text-strong); }

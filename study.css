@@ -31,7 +31,7 @@
 #st-board { flex: 1; min-width: 0; }
 .st-player { min-height: 26px; padding: 2px 2px 2px calc(var(--eval-w) + 8px); display: flex; align-items: center; gap: 6px; font-size: 14px; }
 .st-player:empty { min-height: 6px; padding-top: 0; padding-bottom: 0; }
-.st-ptitle { color: #d59120; }
+.st-ptitle { color: var(--warn-text); }
 
 /* chapitres */
 .st-side { width: var(--st-side-w); flex: none; background: var(--sidebar); border-radius: var(--r-lg); display: flex; flex-direction: column; position: sticky; top: 12px; max-height: calc(100dvh - 24px); overflow: hidden; }
@@ -76,7 +76,7 @@
 .st-mv .gl { margin-left: 2px; }
 .st-mv.inline { padding: 1px 4px; border-radius: var(--r-sm); font-weight: 400; color: var(--text-soft); }
 @media (hover: hover) { .st-mv:hover { background: var(--surface-3); } }
-.st-mv.cur, .st-mv.cur:hover { background: #2c5a85; color: #fff; }
+.st-mv.cur, .st-mv.cur:hover { background: var(--ink); color: #fff; }
 .g-good, .st-mv.g-good { color: var(--st-g-good); }
 .g-mistake, .st-mv.g-mistake { color: var(--st-g-mistake); }
 .g-brilliant, .st-mv.g-brilliant { color: var(--st-g-brilliant); }

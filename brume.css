@@ -1,0 +1,200 @@
+/* =====================================================================
+   Chess Journey — brume.css : couche de composants de la refonte Brume.
+   Chargée en dernier (après home.css). Elle ne change ni la structure
+   ni le comportement : seulement l'apparence des composants partagés.
+   Couleurs : uniquement des jetons de tokens.css.
+   ===================================================================== */
+
+/* ---- Polices Brume (SIL OFL 1.1, voir fonts/OFL-*.txt), hébergées ici : la CSP n'autorise que 'self' ---- */
+@font-face { font-family: 'Instrument Sans'; font-style: normal; font-weight: 400 700; font-display: swap; src: url(fonts/instrument-sans.woff2) format('woff2'); }
+@font-face { font-family: 'Instrument Serif'; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/instrument-serif.woff2) format('woff2'); }
+@font-face { font-family: 'Fragment Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/fragment-mono.woff2) format('woff2'); }
+
+html, body { font: var(--fs-body)/1.45 var(--font); -webkit-font-smoothing: antialiased; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* ---- Titres : serif pour les titres de page et de carte ------------ */
+.page-title, .page > h1, .hist-head h1, .page > header h1 {
+  font-family: var(--font-serif); font-weight: 400; font-size: var(--fs-display); line-height: var(--lh-display);
+  letter-spacing: -.02em; color: var(--text-strong); margin: 8px 0 20px;
+}
+.card > h2, .card > div > h2, .card header h2, .dlg h2 {
+  font-family: var(--font-serif); font-weight: 400; font-size: var(--fs-h2); line-height: var(--lh-h2); letter-spacing: -.01em;
+}
+.lbl-up, .dlg legend, #games th {
+  font-family: var(--font-mono); font-weight: 400; font-size: var(--fs-label); letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted);
+}
+.mono, .acc, .lscore, .clk { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* ---- Barre latérale : pastilles, entrée active à l'encre ------------ */
+#sidebar { background: var(--sidebar); border-right: 1px solid var(--border); padding: 22px 0 16px; }
+#sidebar .brand { padding: 0 26px 22px; }
+.brand { font-family: var(--font-serif); font-weight: 400; font-size: 25px; letter-spacing: 0; color: var(--text-strong); }
+#sidebar nav { padding: 0 14px; gap: 2px; }
+#sidebar nav a { min-height: var(--tap); padding: 0 14px; border-radius: var(--r-pill); color: var(--text); font-weight: 500; font-size: 14.5px; }
+#sidebar nav a svg { color: currentColor; }
+@media (hover: hover) {
+  #sidebar nav a:hover { background: var(--surface-3); color: var(--text-strong); }
+  #sidebar nav a:hover svg { color: currentColor; }
+}
+#sidebar nav a.active { background: var(--ink); color: var(--on-ink); font-weight: 600; }
+#sidebar nav a.active svg, #sidebar nav a.active:hover svg { color: var(--on-ink); }
+@media (hover: hover) { #sidebar nav a.active:hover { background: var(--ink); color: var(--on-ink); } }
+#sidebar nav a.active::before { display: none; }
+#tabs-bottom { border-top: 1px solid var(--border); }
+#sidebar a[data-sync]::after, #menu-btn[data-sync]::after { box-shadow: 0 0 0 2px var(--sidebar); }
+#topbar { background: var(--sidebar); border-bottom: 1px solid var(--border); }
+#topbar h1, #topbar-title { font-family: var(--font-serif); font-weight: 400; font-size: 22px; }
+
+/* ---- Cartes ---------------------------------------------------------- */
+.card, .rep-card, .free-card { background: var(--surface-1); border-radius: var(--r-lg); box-shadow: var(--shadow-card); border: 0; }
+.card { padding: 20px 22px; margin-bottom: 16px; }
+.page { margin-top: 28px; }
+
+/* ---- Boutons : pastilles 44 px ------------------------------------- */
+.btn {
+  min-height: var(--tap); padding: 0 20px; border-radius: var(--r-pill); border: 1px solid var(--border);
+  background: var(--surface-1); color: var(--text); font: 600 14px/1.2 var(--font);
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-shadow: none;
+}
+@media (hover: hover) { .btn:hover:not(:disabled) { background: var(--surface-2); border-color: var(--border-strong); } }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.small { min-height: 36px; padding: 0 14px; font-size: 13px; }
+.btn.primary, .btn.big.primary, .ac-action.primaire, #batch-progress #batch-pause[aria-pressed="true"] {
+  background: var(--cta); border-color: var(--cta); color: var(--on-cta); box-shadow: none;
+}
+@media (hover: hover) {
+  .btn.primary:hover:not(:disabled), .ac-action.primaire:hover { background: var(--cta-hover); border-color: var(--cta-hover); color: var(--on-cta); }
+}
+.btn.ink { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
+.btn.danger, .hist-head .btn.danger { background: var(--surface-1); color: var(--danger-text); border-color: var(--danger-border); }
+@media (hover: hover) { .btn.danger:hover:not(:disabled) { background: var(--danger-bg); } }
+.btn.big { min-height: 52px; border-radius: var(--r-pill); font-size: 17px; font-weight: 600; box-shadow: none; }
+.btn.big:active:not(:disabled) { transform: translateY(1px); box-shadow: none; }
+.hist-head .btn, .hist-head .btn.primary { box-shadow: none; }
+.icon-btn { border-radius: var(--r-pill); min-width: var(--tap); min-height: var(--tap); align-items: center; justify-content: center; }
+@media (hover: hover) { .icon-btn:hover { background: var(--surface-3); } }
+.ac-action { border-radius: var(--r-pill); box-shadow: none; }
+
+/* ---- Champs et listes déroulantes en pastille ----------------------- */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(.sw), select {
+  min-height: var(--tap); border: 1px solid var(--border); border-radius: var(--r-pill); padding: 0 18px;
+  background-color: var(--surface-1); color: var(--text); font: 14px var(--font);
+}
+textarea { border: 1px solid var(--border); border-radius: var(--r); background: var(--surface-1); color: var(--text); padding: 12px 14px; font: 14px/1.45 var(--font); }
+select {
+  appearance: none; -webkit-appearance: none; padding-right: 42px; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235B6676' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center; background-size: 18px 18px;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-color: var(--focus); }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--ink); width: 18px; height: 18px; }
+input[type="range"] { accent-color: var(--cta); }
+.hist-filters input, .hist-filters select, .settings-body input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .settings-body select, .free-fen input {
+  border-radius: var(--r-pill); background-color: var(--surface-1); border-color: var(--border);
+}
+
+/* ---- Interrupteurs : encre quand actif ------------------------------ */
+.switch { width: 44px; height: 26px; }
+.switch span { background: var(--border-strong); border-radius: var(--r-pill); }
+.switch span::after { width: 20px; height: 20px; left: 3px; top: 3px; box-shadow: 0 1px 2px rgba(27, 36, 51, .25); }
+.switch input:checked + span { background: var(--ink); }
+.switch input:checked + span::after { transform: translateX(18px); }
+input.sw { background: var(--border-strong); }
+input.sw:checked { background: var(--ink); }
+
+/* ---- Puces, segments et onglets en pastille ------------------------- */
+.chip { border-radius: var(--r-pill); background: var(--surface-1); border: 1px solid var(--border); color: var(--text); font-weight: 500; }
+@media (hover: hover) { .chip:hover { background: var(--surface-2); } }
+.chip[aria-pressed="true"], .chip[aria-checked="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); font-weight: 600; }
+.segctl, .exp-tabs, #rep-panel .exp-tabs { background: var(--surface-3); border-radius: var(--r-pill); padding: 4px; gap: 2px; }
+.segctl .chip, #rep-panel .exp-tabs button { border: 0; border-radius: var(--r-pill); background: transparent; color: var(--text); }
+.segctl .chip[aria-pressed="true"], .segctl .chip[aria-checked="true"], .pgn-tabs .chip[aria-selected="true"],
+#setup-turn-seg .chip[aria-checked="true"], #rep-panel .exp-tabs button.on {
+  background: var(--surface-1); color: var(--text-strong); font-weight: 600; box-shadow: 0 1px 2px rgba(27, 36, 51, .12);
+}
+@media (hover: hover) { .segctl .chip:hover { background: rgba(255, 255, 255, .6); } .segctl .chip[aria-pressed="true"]:hover { background: var(--surface-1); } }
+.ptabs { gap: 2px; margin: 0 12px; padding: 4px; border: 0; border-radius: var(--r-pill); background: var(--surface-3); }
+.ptabs button { min-height: 40px; border: 0; border-radius: var(--r-pill); color: var(--text); font-weight: 500; flex: 1; padding: 0 12px; }
+.ptabs button[aria-selected="true"] { background: var(--surface-1); color: var(--text-strong); font-weight: 600; border: 0; box-shadow: 0 1px 2px rgba(27, 36, 51, .12); }
+.rpill { border-radius: var(--r-pill); }
+.rpill.win { background: var(--ok-bg); color: var(--ok-text); }
+.rpill.draw { background: var(--surface-3); color: var(--text); }
+.rpill.loss { background: var(--bad-bg); color: var(--bad-text); }
+
+/* ---- Paramètres : menu secondaire en pastilles ---------------------- */
+.settings-nav a { border-radius: var(--r-pill); color: var(--text); font-weight: 500; padding: 0 16px; box-shadow: none; }
+.settings-nav a.active { background: var(--surface-1); color: var(--text-strong); font-weight: 600; box-shadow: 0 1px 2px rgba(27, 36, 51, .1); }
+@media (hover: hover) { .settings-nav a:hover { background: var(--surface-3); color: var(--text-strong); } }
+
+/* ---- Tableaux -------------------------------------------------------- */
+#games th, #games td { border-bottom: 1px solid var(--line); }
+#games th { padding: 8px 10px; }
+#games td { padding: 10px; }
+#games tbody tr:last-child td { border-bottom: 0; }
+@media (hover: hover) { #games tbody tr[data-id]:hover { background: var(--surface-2); } }
+#games tbody tr[data-id]:focus-visible { outline-color: var(--focus); background: var(--surface-2); }
+.color-dot { border-radius: 50%; border-color: var(--ink); }
+.color-dot.b { background: var(--ink); }
+
+/* ---- Fenêtres, menus, toasts ---------------------------------------- */
+.dlg { background: var(--surface-1); border: 0; border-radius: var(--r-sheet); box-shadow: var(--shadow-pop); padding: 22px; }
+.dlg::backdrop { background: var(--overlay); }
+.dlg fieldset { border: 1px solid var(--border); border-radius: var(--r); }
+.toast { background: var(--ink); color: var(--on-ink); border: 0; border-radius: var(--r); box-shadow: var(--shadow-pop); }
+.toast .ta { color: var(--on-ink); border-color: rgba(255, 255, 255, .35); border-radius: var(--r-pill); }
+
+/* ---- Table de jeu : échiquier, barre d'évaluation, panneau ---------- */
+.board { border-radius: var(--r); }
+#evalbar, .evalbar { border-radius: var(--r-pill); box-shadow: inset 0 0 0 1.5px var(--ink); }
+#evalbar .label, .evalbar .label { font-family: var(--font-mono); font-weight: 500; font-size: 11px; }
+#evalbar .label.on-white, .evalbar .label.on-white { color: var(--ink); }
+#evalbar .label.on-black, .evalbar .label.on-black { color: var(--on-ink); }
+.panel { background: var(--surface-1); box-shadow: var(--shadow-card); border: 0; }
+.navbar { background: var(--surface-1); border-top: 1px solid var(--line); }
+.navbar .btn { border-radius: var(--r-pill); min-height: var(--tap); }
+@media (hover: hover) { .navbar .btn:hover:not(:disabled) { background: var(--surface-3); } }
+.navbar #next { background: var(--ink); color: var(--on-ink); }
+@media (hover: hover) { .navbar #next:hover:not(:disabled) { background: var(--ink); opacity: .9; } }
+.bubble { border: 1px solid var(--border); }
+.bubble .btn, .coach-btns .cb { border-radius: var(--r-pill); }
+#opening, #rep-panel .popening { font-family: var(--font-serif); font-weight: 400; font-size: 19px; }
+
+/* ---- Barres de progression ------------------------------------------ */
+#progress .bar, #batch-progress .bs-bar { background: var(--surface-3); border-radius: var(--r-pill); overflow: hidden; }
+#progress .fill { background: var(--cta); border-radius: var(--r-pill); }
+
+/* ---- Étude : liste verticale des chapitres à gauche ----------------- */
+.st-side { background: var(--surface-1); box-shadow: var(--shadow-card); border-radius: var(--r-lg); }
+.st-sidehead { padding: 14px 8px 6px 18px; border-bottom: 0; }
+.st-sidehead h2 { font-family: var(--font-serif); font-weight: 400; font-size: 21px; line-height: 25px; }
+.st-count { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: .1em; border-bottom: 0; padding: 0 18px 10px; }
+.st-chapters { border-top: 0; padding: 0 8px; display: flex; flex-direction: column; gap: 2px; }
+.st-chapters li { border-bottom: 0; border-radius: var(--r-pill); min-height: var(--tap); }
+@media (hover: hover) { .st-chapters li:not(.active):hover { background: var(--surface-2); } }
+.st-chapters li.active { background: var(--ink); }
+.st-chapters li.active .st-chap, .st-chapters li.active .st-chedit, .st-chapters li.active .st-no { color: var(--on-ink); }
+.st-chap { padding-left: 4px; }
+.st-no { font-family: var(--font-mono); font-size: 12px; }
+.st-chedit { border-radius: var(--r-pill); }
+.st-addchap { margin: 10px; min-height: var(--tap); border: 1px dashed var(--border-strong); border-radius: var(--r-pill); color: var(--text); text-align: center; }
+@media (hover: hover) { .st-addchap:hover { background: var(--surface-2); } }
+.st-mv.cur, .st-mv.cur:hover { border-radius: var(--r-sm); }
+
+/* ---- Répertoire : barre d'évaluation | échiquier | arbre, explorateur dessous */
+.rep-under { margin: 16px 0 0; padding: 0; overflow: hidden; }
+.rep-under .tabpane.exp { display: block; }
+.rep-under .exp-head { padding: 14px 16px 10px; }
+@media (min-width: 1280px) {
+  #rep-moves.rtree { max-height: none; flex: 1 1 auto; min-height: 180px; }
+}
+#rep-view .board-opts #rep-train { box-shadow: none; }
+
+/* ---- Paramètres : menu secondaire à gauche, sections en cartes ------- */
+@media (min-width: 761px) { .settings { grid-template-columns: 220px minmax(0, 1fr); gap: 24px; } }
+@media (max-width: 760px) { .settings.is-list .settings-nav a { border-radius: var(--r); background: var(--surface-1); box-shadow: var(--shadow-card); } }
+.settings-body .card h2 { font-family: var(--font-serif); font-weight: 400; font-size: var(--fs-h2); line-height: var(--lh-h2); }
+.settings-body .btn.primary { box-shadow: none; }
+.board-picks button { border-radius: var(--r); background: var(--surface-1); }
+.board-picks button[aria-checked="true"] { border-color: var(--ink); background: var(--surface-2); }
+.board-picks .mini { border-radius: var(--r-sm); }

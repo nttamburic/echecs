@@ -1,10 +1,10 @@
 // Service worker : permet d'installer l'appli et de l'ouvrir hors connexion.
 // - code de l'appli : réseau d'abord (toujours la dernière version), cache si hors ligne ;
 // - gros fichiers qui ne changent pas (moteur, pièces, ouvertures) : cache d'abord.
-const VERSION = 'v117';
+const VERSION = 'v119';
 const CACHE = 'echecs-' + VERSION;
 const SHELL = [
-  './', 'index.html', 'tokens.css', 'style.css', 'study.css', 'home.css', 'main.js', 'manifest.webmanifest',
+  './', 'index.html', 'tokens.css', 'style.css', 'study.css', 'home.css', 'brume.css', 'fonts/instrument-sans.woff2', 'fonts/instrument-serif.woff2', 'fonts/fragment-mono.woff2', 'main.js', 'manifest.webmanifest',
   'analysis.js', 'explain.js', 'board.js',
   'core/ui.js', 'core/format.js', 'core/sheet.js', 'core/engine.js', 'core/store.js', 'core/sync.js', 'core/chesscom.js', 'core/srs.js', 'core/lichess.js', 'core/puzzle-data.js', 'core/puzzle-stats.js', 'core/puzzle-themes.js', 'core/puzzle-mine.js', 'core/puzzle-cards.js', 'core/puzzle-queue.js', 'modules/puzzles.js', 'modules/puzzles-woodpecker.js', 'core/woodpecker.js', 'modules/puzzles-theme.js', 'modules/puzzles-recommend.js', 'modules/puzzles-engine.js', 'modules/puzzles-analyse.js', 'core/puzzle-reprise.js',
   'core/backup.js', 'core/pgn-export.js', 'modules/settings-backup.js',

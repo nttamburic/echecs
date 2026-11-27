@@ -20,7 +20,7 @@ const SECTIONS = [
   ['backup', 'Sauvegarde', 'Télécharger, restaurer, PGN'],
   ['app', 'Application', 'Installation, hors ligne, crédits'],
 ];
-const BOARDS = [['tournoi', 'Vert tournoi', '#ebecd0', '#779556'], ['ardoise', 'Ardoise', '#dee3e6', '#8ca2ad'], ['sable', 'Sable', '#f0d9b5', '#b58863'],
+const BOARDS = [['brume', 'Brume', '#F1F3F6', '#AEB9C8'], ['tournoi', 'Vert tournoi', '#ebecd0', '#779556'], ['ardoise', 'Ardoise', '#dee3e6', '#8ca2ad'], ['sable', 'Sable', '#f0d9b5', '#b58863'],
   ['graphite', 'Graphite', '#d4d6d1', '#7d837b'], ['sauge', 'Sauge', '#e6e9dd', '#9aab8f']];
 const CHEV = '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
 
@@ -250,7 +250,7 @@ function engine(el) {
 function interfaceTab(el) {
   const get = (k, d) => { try { return localStorage.getItem(k) || d; } catch { return d; } };
   const put = (k, v) => { try { localStorage.setItem(k, v); } catch { /* */ } };
-  const theme = get('cj-board', 'tournoi');
+  const theme = get('cj-board', 'brume');
   el.innerHTML = `
   <section class="card if-card">
     <div><h2>Interface</h2>
@@ -296,7 +296,7 @@ function app(el) {
   </section>
   <section class="card">
     <h2>Crédits</h2>
-    <p class="muted">Moteur : Stockfish. Bot : Maia. Pièces : cburnett (CC BY-SA 3.0). Statistiques d'ouvertures : Lichess.</p>
+    <p class="muted">Moteur : Stockfish. Bot : Maia. Pièces : cburnett (CC BY-SA 3.0). Polices : Instrument Sans, Instrument Serif, Fragment Mono (SIL OFL 1.1). Statistiques d'ouvertures : Lichess.</p>
   </section>`;
   const b = $('#install', el);
   b.onclick = async () => { if (installEvent) { installEvent.prompt(); installEvent = null; b.classList.add('hidden'); } };
