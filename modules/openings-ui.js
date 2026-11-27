@@ -25,6 +25,9 @@ import { miniBoard } from './setup.js';
 import { frOpening } from './opening-names.js';
 import { fillGap, fillStyle, setFillStyle, CRITERIA, STYLE_POINTS, autoEdges, repertoireScores } from './openings-autofill.js';
 
+// Échiquier et panneau côte à côte (même condition que la mise en page de style.css).
+const SIDE_BY_SIDE = '(min-width: 1280px), (min-width: 761px) and (orientation: landscape)';
+
 const SVG_GEAR = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
 const RATINGS = [0, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500];
 const covPct = (n) => `${(100 / n).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} %`;
@@ -579,8 +582,8 @@ function buildEditor(el) {
       <a id="rep-train" class="btn small primary" title="S'entraîner sur ce répertoire">▶ S'entraîner sur cette ligne</a>
       <button id="rep-play" class="btn small" title="Jouer une partie contre Maia à partir de la position affichée, avec la couleur du répertoire">♟ Jouer contre Maia d'ici</button>
       <a id="rep-model" class="btn small" title="Rejouer une partie de maître qui passe par cette ligne, en devinant vos coups">📖 Parties modèles</a>
-      <span class="muted small">Clic droit sur un coup (appui long de 2 s sur téléphone) pour le désactiver ou le supprimer. Votre note sur le coup affiché : sous la liste des coups.</span></div>
-    <section id="rep-under" class="card rep-under hidden" aria-label="Explorateur d'ouvertures"></section>
+      <span class="muted small">Clic droit sur un coup (appui long de 2 s sur téléphone) pour le désactiver ou le supprimer. Votre note sur le coup affiché : onglet « Note ».</span></div>
+    <section id="rep-under" class="card rep-under hidden" aria-label="Couverture et note"></section>
   </div>
   <div id="rep-resize" class="resizer" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Largeur du panneau" aria-valuemin="420" aria-valuemax="720" title="Glisser pour redimensionner le panneau"></div>
   <aside class="panel" id="rep-panel" aria-label="Répertoire">
@@ -660,9 +663,11 @@ function buildEditor(el) {
   $('#rep-next', el).onclick = () => forward();
   $('#rep-last', el).onclick = () => { while (forward(false)); render(); };
   // onglets Explorateur / Couverture / Note
-  // Sur grand écran (≥ 1280 px), l'explorateur quitte les onglets et se place sous l'échiquier.
+  // Quand l'échiquier et le panneau sont côte à côte, l'explorateur quitte les onglets et reste sous l'arbre des coups ;
+  // les onglets Couverture / Note passent sous l'échiquier.
   const allTabs = [...el.querySelectorAll('[data-rt]')];
   const expPane = $('#rp-exp', el), under = $('#rep-under', el), navbar = $('#rep-panel .navbar', el);
+  const tablist = $('#rep-panel .ptabs', el), covPane = $('#rp-cov', el), notePane = $('#rp-note', el);
   let docked = false;
   const tabs = () => allTabs.filter((t) => !(docked && t.dataset.rt === 'exp'));
   const selRt = (k, focus) => {
@@ -685,17 +690,19 @@ function buildEditor(el) {
     };
   });
   const savedTab = () => (['exp', 'cov', 'note'].includes(local.get('repTab')) ? local.get('repTab') : 'exp');
-  const wide = matchMedia('(min-width: 1280px)');
+  const wide = matchMedia(SIDE_BY_SIDE);
   const placeExplorer = () => {
     docked = wide.matches;
     const tab = $('#rt-exp', el);
     tab.classList.toggle('hidden', docked);
     if (docked) {
       tab.setAttribute('aria-selected', 'false'); tab.tabIndex = -1;
-      under.append(expPane); expPane.classList.remove('hidden');
+      under.append(tablist, covPane, notePane);
+      navbar.before(expPane); expPane.classList.remove('hidden');
       expPane.removeAttribute('role'); expPane.removeAttribute('aria-labelledby');
     } else {
-      navbar.before(expPane); expPane.setAttribute('role', 'tabpanel'); expPane.setAttribute('aria-labelledby', 'rt-exp');
+      navbar.before(tablist, covPane, notePane, expPane);
+      expPane.setAttribute('role', 'tabpanel'); expPane.setAttribute('aria-labelledby', 'rt-exp');
     }
     under.classList.toggle('hidden', !docked);
     selRt(savedTab());
@@ -703,7 +710,7 @@ function buildEditor(el) {
   wide.addEventListener('change', placeExplorer);
   placeExplorer();
   E.showExplorer = () => {
-    if (docked) { under.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); $('.exp-tabs button.on', under)?.focus(); return; }
+    if (docked) { expPane.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); $('.exp-tabs button.on', expPane)?.focus(); return; }
     const t = $('#rt-exp', el); t.click(); t.scrollIntoView({ block: 'nearest' }); t.focus();
   };
   // largeur du panneau : 420–720 px (grand écran), glisser ou flèches
@@ -872,7 +879,7 @@ function moveMenu(n) {
     else if (v === 'add') {
       // se place après ce coup et invite à jouer le coup à ajouter (échiquier ou explorateur)
       E.path = [...line]; E.k = line.length; E.addHere = curEpd(); render();
-      if (!matchMedia('(min-width: 1280px)').matches) $('#rt-exp')?.click(); // grand écran : explorateur déjà sous l'échiquier
+      if (!matchMedia(SIDE_BY_SIDE).matches) $('#rt-exp')?.click(); // échiquier et panneau côte à côte : explorateur toujours visible sous l'arbre
       window.scrollTo({ top: 0 });
     }
     else if (v === 'delete') await deleteNode(n);

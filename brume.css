@@ -185,12 +185,14 @@ input.sw:checked { background: var(--ink); }
 @media (hover: hover) { .st-addchap:hover { background: var(--surface-2); } }
 .st-mv.cur, .st-mv.cur:hover { border-radius: var(--r-sm); }
 
-/* ---- Répertoire : barre d'évaluation | échiquier | arbre, explorateur dessous */
-.rep-under { margin: 16px 0 0; padding: 0; overflow: hidden; }
-.rep-under .tabpane.exp { display: block; }
-.rep-under .exp-head { padding: 14px 16px 10px; }
-@media (min-width: 1280px) {
-  #rep-moves.rtree { max-height: none; flex: 1 1 auto; min-height: 180px; }
+/* ---- Répertoire : échiquier avec couverture/note dessous | arbre avec explorateur dessous */
+.rep-under { margin: 16px 0 0; padding: 12px 0 4px; overflow: hidden; }
+.rep-under .ptabs { margin: 0 12px 8px; }
+.rep-under .tabpane { overflow: visible; }
+.rep-under #rep-coverage { border-bottom: 0; }
+.rep-under #rep-note { border-top: 0; }
+@media (min-width: 1280px), (min-width: 761px) and (orientation: landscape) {
+  #rep-moves.rtree { max-height: 38vh; flex: none; }
 }
 #rep-view .board-opts #rep-train { box-shadow: none; }
 
